@@ -35,10 +35,15 @@ describe("managed Git workspace", () => {
 
     expect(workspace.config.defaultBranch).toBe("main");
     expect(workspace.config).toMatchObject({
-      schemaVersion: 1,
-      gitDir: "repo.git",
-      envDir: ".wt/env",
-      remote: "origin",
+      schemaVersion: 2,
+      mode: "managed",
+      gitDir: "../repo.git",
+      envDir: "env",
+      worktreeDir: "..",
+      remote: {
+        name: "origin",
+        fetchRefspec: "+refs/heads/*:refs/remotes/origin/*",
+      },
     });
     expect(await fs.stat(workspace.gitDir)).toSatisfy((stat) => stat.isDirectory());
     expect(await fs.stat(workspace.envDir)).toSatisfy((stat) => stat.isDirectory());
@@ -49,6 +54,9 @@ describe("managed Git workspace", () => {
     );
     expect(remoteMain).toBe(true);
     expect(await worktrees.list(workspace)).toEqual([]);
+
+    const repeated = await workspaces.inspectAdoption(workspace.root);
+    expect(repeated.existingWorkspace).toMatchObject({ configPath: workspace.configPath });
   });
 
   it("finds the workspace from inside a linked worktree", async () => {

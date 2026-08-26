@@ -74,4 +74,61 @@ describe("CLI smoke flow", () => {
     expect(removed.exitCode, removed.stderr).toBe(0);
     expect(removed.stdout).toContain("Removed main");
   });
+
+  it("adopts an existing checkout through explicit non-TTY options", async () => {
+    const worktreeDir = path.join(temporaryRoot, "adopted-worktrees");
+    const configPath = path.join(repository.source, ".git", "config");
+    const configBefore = await fs.readFile(configPath, "utf8");
+
+    const implicit = await execa(process.execPath, cliArguments("init"), {
+      cwd: repository.source,
+      reject: false,
+    });
+    expect(implicit.exitCode).toBe(1);
+    expect(implicit.stderr).toContain("requires --adopt and --yes");
+
+    const adopted = await execa(
+      process.execPath,
+      cliArguments(
+        "init",
+        "--adopt",
+        repository.source,
+        "--yes",
+        "--worktrees-dir",
+        worktreeDir,
+        "--remote",
+        "origin",
+        "--default-branch",
+        "main",
+      ),
+      { cwd: temporaryRoot, reject: false },
+    );
+    expect(adopted.exitCode, adopted.stderr).toBe(0);
+    expect(adopted.stdout).toContain("Adopted repository");
+    expect(await fs.readFile(configPath, "utf8")).toBe(configBefore);
+
+    const listed = await execa(process.execPath, cliArguments("list", "--json"), {
+      cwd: repository.source,
+      reject: false,
+    });
+    expect(listed.exitCode, listed.stderr).toBe(0);
+    expect(JSON.parse(listed.stdout)).toEqual([
+      expect.objectContaining({ branch: "main", name: "source", role: "primary" }),
+    ]);
+
+    const refused = await execa(process.execPath, cliArguments("remove", "source", "--force"), {
+      cwd: repository.source,
+      reject: false,
+    });
+    expect(refused.exitCode).toBe(1);
+    expect(refused.stderr).toContain("primary checkout cannot be removed");
+
+    const repeated = await execa(
+      process.execPath,
+      cliArguments("init", "--adopt", repository.source, "--yes"),
+      { cwd: temporaryRoot, reject: false },
+    );
+    expect(repeated.exitCode, repeated.stderr).toBe(0);
+    expect(repeated.stdout).toContain("already initialized");
+  });
 });

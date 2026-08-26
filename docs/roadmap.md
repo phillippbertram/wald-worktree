@@ -58,12 +58,7 @@ Allow parallel application stacks without manual port editing:
 - Provide unique Compose project names.
 - Keep generated values separate from shared secrets in `.wt/env`.
 
-## Future: broader adoption and distribution
-
-### Adopt existing repositories
-
-Add a safe migration path for normal Git checkouts instead of requiring a newly managed bare
-workspace. Adoption must preserve the existing checkout, branches, remotes, and uncommitted files.
+## Future: platform and distribution
 
 ### Windows support
 

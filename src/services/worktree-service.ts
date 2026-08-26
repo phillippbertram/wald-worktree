@@ -5,7 +5,7 @@ import type { Workspace, Worktree, WorktreeState } from "../domain/types.js";
 import type { GitClient } from "../infrastructure/git-client.js";
 import { isPathInside } from "../infrastructure/path-utils.js";
 
-type ParsedWorktree = Omit<Worktree, "name" | "state"> & { bare: boolean };
+export type ParsedWorktree = Omit<Worktree, "name" | "role" | "state"> & { bare: boolean };
 
 export type AddWorktreeOptions = {
   branch: string;
@@ -19,6 +19,7 @@ export type RemovalInspection = {
   dirty: boolean;
   merged: boolean;
   blockers: string[];
+  hardBlockers: string[];
 };
 
 export class WorktreeService {
@@ -36,6 +37,11 @@ export class WorktreeService {
         return {
           ...worktree,
           name: path.basename(worktree.path),
+          role:
+            workspace.primaryWorktree &&
+            (await canonicalPath(worktree.path)) === workspace.primaryWorktree
+              ? "primary"
+              : "linked",
           state,
         };
       }),
@@ -47,21 +53,22 @@ export class WorktreeService {
     const directoryName = options.name ?? slugifyBranch(options.branch);
     validateWorktreeName(directoryName);
 
-    const target = path.resolve(workspace.root, directoryName);
-    if (!isPathInside(workspace.root, target)) {
-      throw new WtError("Worktree directory must stay inside the workspace root.");
+    const target = path.resolve(workspace.worktreeDir, directoryName);
+    if (!isPathInside(workspace.worktreeDir, target)) {
+      throw new WtError("Worktree directory must stay inside the configured worktree root.");
     }
     if (target === workspace.gitDir || target.startsWith(`${workspace.envDir}${path.sep}`)) {
       throw new WtError(`Reserved worktree directory: ${directoryName}`);
     }
-    if (options.fetch !== false) {
-      await this.git.run(["fetch", "--prune", workspace.config.remote], {
+    const remote = workspace.config.remote;
+    if (options.fetch !== false && remote) {
+      await this.git.run(["fetch", "--prune", "--tags", remote.name, remote.fetchRefspec], {
         gitDir: workspace.gitDir,
       });
     }
 
     const branchRef = `refs/heads/${options.branch}`;
-    const remoteRef = `refs/remotes/${workspace.config.remote}/${options.branch}`;
+    const remoteRef = remote ? `refs/remotes/${remote.name}/${options.branch}` : null;
     const worktrees = await this.list(workspace);
     const existingCheckout = worktrees.find((worktree) => worktree.branchRef === branchRef);
     if (existingCheckout) {
@@ -74,13 +81,13 @@ export class WorktreeService {
     }
 
     const localExists = await this.refExists(workspace, branchRef);
-    const remoteExists = await this.refExists(workspace, remoteRef);
+    const remoteExists = remoteRef ? await this.refExists(workspace, remoteRef) : false;
 
     if (localExists) {
       await this.git.run(["worktree", "add", target, options.branch], {
         gitDir: workspace.gitDir,
       });
-    } else if (remoteExists) {
+    } else if (remoteExists && remote) {
       await this.git.run(
         [
           "worktree",
@@ -89,7 +96,7 @@ export class WorktreeService {
           "-b",
           options.branch,
           target,
-          `${workspace.config.remote}/${options.branch}`,
+          `${remote.name}/${options.branch}`,
         ],
         { gitDir: workspace.gitDir },
       );
@@ -153,8 +160,14 @@ export class WorktreeService {
   async inspectRemoval(workspace: Workspace, identifier: string): Promise<RemovalInspection> {
     const worktree = await this.resolve(workspace, identifier);
     const dirty = worktree.state === "modified";
-    const merged = await this.isMergedIntoDefault(workspace, worktree);
+    const merged =
+      worktree.role === "primary" || (await this.isMergedIntoDefault(workspace, worktree));
     const blockers: string[] = [];
+    const hardBlockers: string[] = [];
+
+    if (worktree.role === "primary") {
+      hardBlockers.push("the primary checkout cannot be removed by wt");
+    }
 
     if (dirty) {
       blockers.push("the worktree contains staged, unstaged, or untracked changes");
@@ -166,10 +179,13 @@ export class WorktreeService {
       blockers.push("the worktree is locked");
     }
 
-    return { worktree, dirty, merged, blockers };
+    return { worktree, dirty, merged, blockers, hardBlockers };
   }
 
   async remove(workspace: Workspace, worktree: Worktree, force: boolean): Promise<void> {
+    if (worktree.role === "primary") {
+      throw new WtError(`Refusing to remove the primary checkout: ${worktree.path}`);
+    }
     const args = ["worktree", "remove"];
     if (force) {
       args.push("--force", "--force");
@@ -195,9 +211,12 @@ export class WorktreeService {
       return requestedBase;
     }
 
-    const remoteDefault = `${workspace.config.remote}/${workspace.config.defaultBranch}`;
-    if (await this.commitExists(workspace, remoteDefault)) {
-      return remoteDefault;
+    const remote = workspace.config.remote;
+    if (remote) {
+      const remoteDefault = `${remote.name}/${workspace.config.defaultBranch}`;
+      if (await this.commitExists(workspace, remoteDefault)) {
+        return remoteDefault;
+      }
     }
     if (await this.commitExists(workspace, workspace.config.defaultBranch)) {
       return workspace.config.defaultBranch;
@@ -242,10 +261,14 @@ export class WorktreeService {
       return false;
     }
 
-    const remoteDefault = `${workspace.config.remote}/${workspace.config.defaultBranch}`;
-    const defaultReference = (await this.commitExists(workspace, remoteDefault))
-      ? remoteDefault
+    const remote = workspace.config.remote;
+    const remoteDefault = remote
+      ? `${remote.name}/${workspace.config.defaultBranch}`
       : workspace.config.defaultBranch;
+    const defaultReference =
+      remote && (await this.commitExists(workspace, remoteDefault))
+        ? remoteDefault
+        : workspace.config.defaultBranch;
     return await this.git.succeeds(
       ["merge-base", "--is-ancestor", worktree.branchRef, defaultReference],
       { gitDir: workspace.gitDir },

@@ -1,9 +1,19 @@
+export type WorkspaceMode = "managed" | "adopted";
+
+export type WorkspaceRemote = {
+  name: string;
+  fetchRefspec: string;
+};
+
 export type WorkspaceConfig = {
-  schemaVersion: 1;
+  schemaVersion: 2;
+  mode: WorkspaceMode;
   gitDir: string;
   envDir: string;
-  remote: string;
+  worktreeDir: string;
+  remote: WorkspaceRemote | null;
   defaultBranch: string;
+  primaryWorktree: string | null;
 };
 
 export type Workspace = {
@@ -11,6 +21,8 @@ export type Workspace = {
   configPath: string;
   gitDir: string;
   envDir: string;
+  worktreeDir: string;
+  primaryWorktree: string | null;
   config: WorkspaceConfig;
 };
 
@@ -18,6 +30,7 @@ export type WorktreeState = "clean" | "modified" | "locked" | "missing";
 
 export type Worktree = {
   name: string;
+  role: "primary" | "linked";
   path: string;
   head: string | null;
   branch: string | null;

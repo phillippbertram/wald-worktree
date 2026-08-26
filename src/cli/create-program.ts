@@ -8,23 +8,38 @@ import type {
 } from "../domain/types.js";
 import { GitClient } from "../infrastructure/git-client.js";
 import { EnvironmentService } from "../services/environment-service.js";
-import { WorkspaceService } from "../services/workspace-service.js";
+import {
+  type AdoptionInspection,
+  type AdoptionOptions,
+  WorkspaceService,
+} from "../services/workspace-service.js";
 import { WorktreeService } from "../services/worktree-service.js";
 import {
   confirm,
   isInteractiveTerminal,
   printCandidateTable,
   printEnvironmentTable,
+  printKeyValueTable,
   printStatus,
   printWorktreeTable,
+  promptText,
   runTask,
   selectEnvironmentFiles,
+  selectValue,
   selectWorktree,
 } from "../ui/terminal.js";
 
 type Output = {
   stdout: NodeJS.WritableStream;
   stderr: NodeJS.WritableStream;
+};
+
+type InitOptions = {
+  adopt?: string | boolean;
+  worktreesDir?: string;
+  remote?: string | false;
+  defaultBranch?: string;
+  yes?: boolean;
 };
 
 export function createProgram(
@@ -49,19 +64,40 @@ export function createProgram(
 
   program
     .command("init")
-    .description("Create a managed bare-repository workspace")
-    .argument("<repository>", "Git remote URL or local repository path")
+    .description("Create a workspace or adopt an existing Git repository")
+    .argument("[repository]", "Git remote URL or local repository path")
     .argument("[directory]", "Workspace directory")
-    .action(async (repository: string, directory?: string) => {
-      const workspace = await runTask("Initializing workspace", () =>
-        workspaceService.initialize(repository, directory),
-      );
-      await success(`Initialized workspace at ${workspace.root}`, output);
-      writeLine(
-        output.stdout,
-        `Next: cd ${shellQuote(workspace.root)} && wt add ${workspace.config.defaultBranch}`,
-      );
-    });
+    .option("--adopt [path]", "Adopt an existing repository; defaults to the current directory")
+    .option("--worktrees-dir <path>", "Directory for newly created worktrees")
+    .option("--remote <name>", "Remote used for fetching and branch resolution")
+    .option("--no-remote", "Adopt as a local-only repository")
+    .option("--default-branch <branch>", "Default branch used for new branches and merge checks")
+    .option("--yes", "Accept detected adoption settings without prompting")
+    .action(
+      async (
+        repository: string | undefined,
+        directory: string | undefined,
+        options: InitOptions,
+      ) => {
+        if (!repository) {
+          await initializeAdoptedWorkspace(workspaceService, options, output);
+          return;
+        }
+        if (hasAdoptionOptions(options)) {
+          throw new WtError(
+            "Adoption options cannot be combined with clone mode. Use wt init --adopt [path].",
+          );
+        }
+        const workspace = await runTask("Initializing workspace", () =>
+          workspaceService.initialize(repository, directory),
+        );
+        await success(`Initialized workspace at ${workspace.root}`, output);
+        writeLine(
+          output.stdout,
+          `Next: cd ${shellQuote(workspace.root)} && wt add ${workspace.config.defaultBranch}`,
+        );
+      },
+    );
 
   program
     .command("add")
@@ -69,7 +105,7 @@ export function createProgram(
     .argument("<branch>", "Branch to check out or create")
     .option("--from <commit-ish>", "Base for a new branch")
     .option("--name <directory>", "Override the worktree directory name")
-    .option("--no-fetch", "Do not fetch origin before resolving the branch")
+    .option("--no-fetch", "Do not fetch the configured remote before resolving the branch")
     .option("--no-env", "Do not synchronize shared environment files")
     .action(
       async (
@@ -124,6 +160,12 @@ export function createProgram(
     .action(async (identifier: string, options: { force?: boolean }) => {
       const workspace = await workspaceService.find();
       const inspection = await worktreeService.inspectRemoval(workspace, identifier);
+
+      if (inspection.hardBlockers.length > 0) {
+        throw new WtError(
+          `Refusing to remove ${inspection.worktree.name}:\n${inspection.hardBlockers.map((item) => `- ${item}`).join("\n")}`,
+        );
+      }
 
       if (inspection.blockers.length > 0 && !options.force) {
         throw new WtError(
@@ -330,13 +372,150 @@ async function printSyncWarnings(result: EnvironmentSyncResult, output: Output):
 }
 
 function printPlainWorktrees(worktrees: Worktree[], stream: NodeJS.WritableStream): void {
-  writeLine(stream, "NAME\tBRANCH\tSTATUS\tPATH");
+  writeLine(stream, "NAME\tBRANCH\tROLE\tSTATUS\tPATH");
   for (const worktree of worktrees) {
     writeLine(
       stream,
-      `${worktree.name}\t${worktree.branch ?? "detached"}\t${worktree.state}\t${worktree.path}`,
+      `${worktree.name}\t${worktree.branch ?? "detached"}\t${worktree.role}\t${worktree.state}\t${worktree.path}`,
     );
   }
+}
+
+async function initializeAdoptedWorkspace(
+  workspaces: WorkspaceService,
+  options: InitOptions,
+  output: Output,
+): Promise<void> {
+  const explicitAdoption = options.adopt !== undefined;
+  if (!isInteractiveTerminal() && (!explicitAdoption || !options.yes)) {
+    throw new WtError("Non-interactive adoption requires --adopt and --yes.");
+  }
+
+  const source = typeof options.adopt === "string" ? options.adopt : ".";
+  const requested: AdoptionOptions = {
+    worktreeDir: options.worktreesDir,
+    remote: options.remote === false ? null : options.remote,
+    defaultBranch: options.defaultBranch,
+  };
+
+  let inspection: AdoptionInspection;
+  try {
+    inspection = await runTask("Inspecting repository", () =>
+      workspaces.inspectAdoption(source, requested),
+    );
+  } catch (error) {
+    if (!explicitAdoption && error instanceof WtError && error.message.startsWith("Not a Git")) {
+      throw new WtError(
+        "No Git repository detected. Use wt init <repository> [directory] to create a new workspace.",
+      );
+    }
+    throw error;
+  }
+
+  if (inspection.existingWorkspace) {
+    await success(`Workspace already initialized at ${inspection.existingWorkspace.root}`, output);
+    return;
+  }
+
+  if (inspection.remoteSelectionRequired) {
+    if (!isInteractiveTerminal() || options.yes) {
+      throw new WtError("Multiple remotes found. Select one with --remote or use --no-remote.");
+    }
+    const selected = await selectValue("Select the remote wt should use:", [
+      ...inspection.remotes.map((remote) => ({ label: remote, value: remote })),
+      { label: "No remote (local only)", value: "__none__" },
+    ]);
+    if (!selected) {
+      throw new WtError("No remote selected.");
+    }
+    requested.remote = selected === "__none__" ? null : selected;
+    inspection = await workspaces.inspectAdoption(source, requested);
+  }
+
+  if (!inspection.defaultBranch) {
+    if (!isInteractiveTerminal() || options.yes) {
+      throw new WtError("Could not determine the default branch. Use --default-branch.");
+    }
+
+    const customValue = "__custom__";
+    const selected =
+      inspection.defaultBranchCandidates.length > 0
+        ? await selectValue("Select the default branch:", [
+            ...inspection.defaultBranchCandidates.map((branch) => ({
+              label: branch,
+              value: branch,
+            })),
+            { label: "Enter another branch", value: customValue },
+          ])
+        : customValue;
+    if (!selected) {
+      throw new WtError("No default branch selected.");
+    }
+    requested.defaultBranch =
+      selected === customValue ? await promptText("Default branch:") : selected;
+    if (!requested.defaultBranch) {
+      throw new WtError("Default branch cannot be empty.");
+    }
+    inspection = await workspaces.inspectAdoption(source, requested);
+  }
+
+  if (inspection.worktreeDirSelectionRequired) {
+    if (!isInteractiveTerminal() || options.yes) {
+      throw new WtError("Could not select a safe worktree directory. Use --worktrees-dir.");
+    }
+    requested.worktreeDir = await promptText(
+      "Directory for new worktrees:",
+      inspection.worktreeDir,
+    );
+    if (!requested.worktreeDir) {
+      throw new WtError("Worktree directory cannot be empty.");
+    }
+    inspection = await workspaces.inspectAdoption(source, requested);
+  }
+
+  if (isInteractiveTerminal() && !options.yes) {
+    await printKeyValueTable(adoptionSummary(inspection));
+    const accepted = await confirm(
+      "Adopt this repository? Existing Git configuration and worktree files will be preserved.",
+    );
+    if (!accepted) {
+      writeLine(output.stdout, "Cancelled.");
+      return;
+    }
+  }
+
+  const workspace = await runTask("Adopting repository", () => workspaces.adopt(inspection));
+  await success(`Adopted repository at ${workspace.root}`, output);
+  writeLine(output.stdout, `Worktrees: ${workspace.worktreeDir}`);
+  writeLine(output.stdout, "Next: wt list");
+  if (workspace.primaryWorktree) {
+    writeLine(output.stdout, "Optional: wt env import");
+  }
+}
+
+function hasAdoptionOptions(options: InitOptions): boolean {
+  return (
+    options.adopt !== undefined ||
+    options.worktreesDir !== undefined ||
+    options.remote !== undefined ||
+    options.defaultBranch !== undefined ||
+    options.yes !== undefined
+  );
+}
+
+function adoptionSummary(inspection: AdoptionInspection): Array<[string, string]> {
+  return [
+    ["Repository", inspection.primaryWorktree ?? inspection.gitDir],
+    ["Git directory", inspection.gitDir],
+    ["Repository type", inspection.bare ? "bare" : "working tree"],
+    [
+      "Existing worktrees",
+      String(inspection.worktrees.filter((worktree) => !worktree.bare).length),
+    ],
+    ["New worktrees", inspection.worktreeDir],
+    ["Remote", inspection.remoteName ?? "none (local only)"],
+    ["Default branch", inspection.defaultBranch ?? "unresolved"],
+  ];
 }
 
 async function success(message: string, output: Output): Promise<void> {

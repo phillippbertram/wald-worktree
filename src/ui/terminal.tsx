@@ -1,4 +1,4 @@
-import { ConfirmInput, MultiSelect, Select, Spinner, StatusMessage } from "@inkjs/ui";
+import { ConfirmInput, MultiSelect, Select, Spinner, StatusMessage, TextInput } from "@inkjs/ui";
 import { Box, render, Text, useApp } from "ink";
 import { useEffect, useRef } from "react";
 import type {
@@ -100,6 +100,55 @@ export async function selectWorktree(worktrees: Worktree[]): Promise<Worktree | 
   return selected;
 }
 
+export async function selectValue(
+  question: string,
+  options: Array<{ label: string; value: string }>,
+): Promise<string | null> {
+  let selected: string | null = null;
+
+  function ValueSelect(): React.JSX.Element {
+    const { exit } = useApp();
+    return (
+      <Box flexDirection="column">
+        <Text>{question}</Text>
+        <Select
+          options={options}
+          onChange={(value) => {
+            selected = value;
+            exit();
+          }}
+        />
+      </Box>
+    );
+  }
+
+  await render(<ValueSelect />).waitUntilExit();
+  return selected;
+}
+
+export async function promptText(question: string, defaultValue?: string): Promise<string> {
+  let answer = "";
+
+  function Prompt(): React.JSX.Element {
+    const { exit } = useApp();
+    return (
+      <Box flexDirection="column">
+        <Text>{question}</Text>
+        <TextInput
+          defaultValue={defaultValue}
+          onSubmit={(value) => {
+            answer = value;
+            exit();
+          }}
+        />
+      </Box>
+    );
+  }
+
+  await render(<Prompt />).waitUntilExit();
+  return answer.trim();
+}
+
 export async function selectEnvironmentFiles(
   candidates: EnvironmentImportCandidate[],
 ): Promise<string[]> {
@@ -137,10 +186,15 @@ export async function printWorktreeTable(worktrees: Worktree[]): Promise<void> {
   const rows = worktrees.map((worktree) => [
     worktree.name,
     worktree.branch ?? "detached",
+    worktree.role,
     worktree.state,
     worktree.path,
   ]);
-  await renderOnce(<Table headers={["NAME", "BRANCH", "STATUS", "PATH"]} rows={rows} />);
+  await renderOnce(<Table headers={["NAME", "BRANCH", "ROLE", "STATUS", "PATH"]} rows={rows} />);
+}
+
+export async function printKeyValueTable(rows: Array<[string, string]>): Promise<void> {
+  await renderOnce(<Table headers={["SETTING", "VALUE"]} rows={rows} />);
 }
 
 export async function printEnvironmentTable(

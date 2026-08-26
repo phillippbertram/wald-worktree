@@ -1,7 +1,7 @@
 # worktree-cli
 
-`wt` is a small workspace manager built on top of Git worktrees. It keeps the bare repository,
-linked worktrees, and shared local environment files in one predictable workspace.
+`wt` is a small workspace manager built on top of Git worktrees. It can create a dedicated bare
+workspace or adopt an existing Git repository without moving its checkout.
 
 ```text
 my-project/
@@ -52,7 +52,43 @@ pnpm dev -- --help
 
 ## Quickstart
 
-Create a workspace from a remote URL or local Git repository:
+### Adopt an existing repository
+
+Run `init` inside an existing checkout and confirm the detected settings:
+
+```sh
+cd ~/dev/project
+wt init
+```
+
+For scripts and non-interactive terminals, make the adoption explicit:
+
+```sh
+wt init --adopt ~/dev/project --yes \
+  --worktrees-dir ~/dev/project-worktrees \
+  --remote origin \
+  --default-branch main
+```
+
+Repositories without a remote are supported with `--no-remote`. Existing worktrees, branches,
+remotes, Git configuration, and uncommitted files are preserved. New worktrees use the detected or
+configured worktree directory:
+
+```text
+~/dev/
+├── project/                  # existing primary checkout
+│   └── .git/wt/              # local wt config and environment store
+└── project-worktrees/
+    ├── .wt -> ../project/.git/wt
+    └── feature-payment/
+```
+
+No environment files are imported automatically. Run `wt env import` separately after reviewing
+the candidates.
+
+### Create a dedicated workspace
+
+Create a new bare workspace from a remote URL or local Git repository:
 
 ```sh
 wt init git@github.com:example/project.git ~/dev/project
@@ -74,7 +110,9 @@ Use `--name` to override it.
 
 | Command | Purpose |
 | --- | --- |
-| `wt init <repository> [directory]` | Create a managed bare workspace. |
+| `wt init` | Interactively adopt the current Git repository. |
+| `wt init --adopt [path]` | Adopt an existing checkout or bare repository. |
+| `wt init <repository> [directory]` | Create a new managed bare workspace. |
 | `wt add <branch>` | Check out or create a branch in a sibling worktree. |
 | `wt list` | Show branch, state, and path for every managed worktree. |
 | `wt remove <worktree>` | Safely remove a worktree without deleting its branch. |
@@ -108,8 +146,8 @@ content are conflicts and are preserved. Synchronization never overwrites regula
 symlinks are only replaced with `wt env sync --repair`.
 
 > [!WARNING]
-> `.wt/env` contains plaintext secrets outside Git. Protect the workspace directory, keep backups as
-> appropriate for your environment, and never publish it.
+> `.wt/env` or `.git/wt/env` contains plaintext secrets outside Git. Protect the workspace
+> directory, keep backups as appropriate for your environment, and never publish it.
 
 ## Removal safety
 
@@ -118,6 +156,9 @@ default branch, or the worktree is locked. Interactive removal requires confirma
 removal requires `--force`.
 
 `--force` can discard worktree files. It still does not delete the Git branch or `.wt/env`.
+
+For adopted non-bare repositories, the original checkout is marked as `primary` in `wt list`. It
+cannot be removed by `wt`, even with `--force`.
 
 ## Architecture
 
@@ -133,14 +174,17 @@ Git CLI + filesystem
 
 Command parsing and terminal rendering are adapters. Workspace rules are independent of Commander
 and Ink, while all repository operations go through the installed Git CLI. Worktree discovery uses
-`git worktree list --porcelain -z`; no derived worktree registry is maintained.
+`git worktree list --porcelain -z`; no derived worktree registry is maintained. Adopted repositories
+are associated through their shared Git directory, so commands work from the primary checkout, any
+linked worktree, and the configured worktree container.
 
 ## Troubleshooting
 
 ### No managed workspace found
 
-Run the command from the workspace root or anywhere inside one of its worktrees. A managed workspace
-is identified by `.wt/config.json`.
+Run the command from the workspace root or anywhere inside one of its worktrees. Dedicated
+workspaces are identified by `.wt/config.json`; adopted repositories also use
+`<git-common-dir>/wt/config.json`.
 
 ### A branch is already checked out
 
@@ -154,8 +198,8 @@ replaces wrong symlinks only; it intentionally never replaces a regular file.
 
 ### Offline branch creation
 
-`wt add` fetches by default. Use `wt add <branch> --no-fetch` to work with the refs already available
-in `repo.git`.
+`wt add` fetches the configured remote by default. Use `wt add <branch> --no-fetch` to work with the
+refs already available locally. Local-only adopted repositories skip fetching automatically.
 
 ## Development
 
