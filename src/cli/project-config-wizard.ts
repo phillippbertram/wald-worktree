@@ -57,6 +57,7 @@ export async function initializeProjectConfiguration(
       ["Install hook", templateOptions.install ? "yes" : "no"],
       ["Environment copy", templateOptions.copyEnvironment ? "yes" : "no"],
       ["Verify scripts", templateOptions.scripts.join(", ") || "none"],
+      ["Development task", templateOptions.development ? "dev" : "none"],
       ["Default tool", templateOptions.tool ?? "none"],
     ]);
     writeLine(context.output.stdout, "");
@@ -71,8 +72,12 @@ export async function initializeProjectConfiguration(
     context.configs.writeProjectConfig(inspection.root, config, { overwrite }),
   );
   await success(`Created ${document.path}`, context.output);
+  writeLine(
+    context.output.stdout,
+    `Next: review and commit ${projectConfigFileName} on the branch used to create future worktrees.`,
+  );
   if (document.requiresTrust) {
-    writeLine(context.output.stdout, "Next: wt config trust");
+    writeLine(context.output.stdout, "Then: wt config trust");
   }
   return document;
 }
@@ -87,11 +92,17 @@ async function promptForTemplate(
   const copyEnvironment = inspection.environmentExample
     ? await confirm(`Copy ${inspection.environmentExample} to .env after creation?`, true)
     : false;
+  const development = inspection.developmentScript
+    ? await confirm("Create a 'dev' task from the detected package script?", true)
+    : false;
+  const verificationScripts = inspection.scripts.filter(
+    (script) => script !== inspection.developmentScript,
+  );
   const scripts =
-    inspection.scripts.length > 0
+    verificationScripts.length > 0
       ? await selectManyValues(
           "Select package scripts for the verify task:",
-          inspection.scripts.map((script) => ({
+          verificationScripts.map((script) => ({
             label: script,
             value: script,
             checked: inspection.recommendedScripts.includes(script),
@@ -112,6 +123,7 @@ async function promptForTemplate(
     install,
     copyEnvironment,
     scripts,
+    development,
     tool: selectedTool && selectedTool !== "__none__" ? selectedTool : undefined,
   };
 }
@@ -122,6 +134,7 @@ function detectedDefaults(inspection: ProjectSetupInspection): ProjectConfigTemp
     install: Boolean(inspection.installCommand),
     copyEnvironment: Boolean(inspection.environmentExample),
     scripts: inspection.recommendedScripts,
+    development: Boolean(inspection.developmentScript),
   };
 }
 

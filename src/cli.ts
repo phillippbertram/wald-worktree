@@ -15,6 +15,11 @@ async function main(): Promise<void> {
       return;
     }
 
+    if (error instanceof WtError && error.exitCode === 130) {
+      process.exitCode = 130;
+      return;
+    }
+
     process.stderr.write(`${pc.red(pc.bold("Error:"))} ${toErrorMessage(error)}\n`);
     process.exitCode = error instanceof WtError ? error.exitCode : 1;
   }

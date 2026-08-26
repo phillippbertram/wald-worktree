@@ -24,6 +24,12 @@ the workflow model.
 - Verify global installation across the supported Node and operating-system matrix.
 - Add completion fixtures for bash, zsh, and fish releases.
 
+### Additional project detectors
+
+- Add Flutter, iOS, Rust, or other setup detection only after concrete repositories establish safe
+  defaults.
+- Keep manually authored `.wt.yml` commands as the universal fallback.
+
 ## Later, based on demonstrated need
 
 - Optional removal of an already merged branch with a separate explicit confirmation.

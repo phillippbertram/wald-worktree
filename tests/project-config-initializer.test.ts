@@ -15,7 +15,9 @@ describe("project configuration initialization", () => {
     await fs.writeFile(path.join(root, ".env.example"), "API_URL=\n", "utf8");
     await fs.writeFile(
       path.join(root, "package.json"),
-      JSON.stringify({ scripts: { build: "tsc", lint: "biome check .", test: "vitest" } }),
+      JSON.stringify({
+        scripts: { build: "tsc", dev: "vite", lint: "biome check .", test: "vitest" },
+      }),
       "utf8",
     );
   });
@@ -30,6 +32,7 @@ describe("project configuration initialization", () => {
       packageManager: "pnpm",
       installCommand: ["pnpm", "install", "--frozen-lockfile"],
       recommendedScripts: ["lint", "test"],
+      developmentScript: "dev",
       environmentExample: ".env.example",
     });
 
@@ -37,7 +40,8 @@ describe("project configuration initialization", () => {
       fetch: true,
       install: true,
       copyEnvironment: true,
-      scripts: inspection.recommendedScripts,
+      scripts: [...inspection.recommendedScripts, "dev"],
+      development: true,
       tool: "codex",
     });
 
@@ -56,6 +60,9 @@ describe("project configuration initialization", () => {
     expect(config.tasks.verify?.steps).toEqual([
       expect.objectContaining({ argv: ["pnpm", "run", "lint"] }),
       expect.objectContaining({ argv: ["pnpm", "run", "test"] }),
+    ]);
+    expect(config.tasks.dev?.steps).toEqual([
+      expect.objectContaining({ argv: ["pnpm", "run", "dev"] }),
     ]);
 
     const configs = new ConfigService();

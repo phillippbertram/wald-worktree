@@ -11,7 +11,7 @@ export type ListInput = z.output<typeof listInputSchema>;
 export function registerListCommand(program: Command, context: CliContext): void {
   program
     .command("list")
-    .description("List worktrees")
+    .description("List worktrees with branch, role, status, and path")
     .option("--json", "Emit machine-readable JSON")
     .action(async (options: unknown) => {
       await listWorktrees(parseCliInput(listInputSchema, options), context);

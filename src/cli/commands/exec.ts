@@ -20,10 +20,11 @@ const execInputSchema = z
 export function registerExecCommand(program: Command, context: CliContext): void {
   program
     .command("exec")
-    .description("Execute a command inside a worktree")
+    .description("Run an ad-hoc command inside a worktree")
     .argument("[worktree]", "Worktree name, branch, or path")
     .argument("[command...]", "Command and arguments after --")
     .allowUnknownOption(true)
+    .addHelpText("after", "\nExample:\n  wt exec feature-payment -- pnpm test\n")
     .action(async (worktree: unknown, command: unknown) => {
       const input = parseCliInput(execInputSchema, { worktree, command });
       const workspace = await context.workspaces.find();

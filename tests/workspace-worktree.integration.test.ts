@@ -104,6 +104,18 @@ describe("managed Git workspace", () => {
     ).rejects.toThrow(/already checked out/u);
   });
 
+  it("suggests --name when branch slugs collide", async () => {
+    const workspace = await workspaces.initialize(
+      repository.remote,
+      path.join(temporaryRoot, "slug-workspace"),
+    );
+    await worktrees.add(workspace, { branch: "feature/a-b", fetch: false });
+
+    await expect(worktrees.add(workspace, { branch: "feature-a/b", fetch: false })).rejects.toThrow(
+      /Choose another directory with --name <directory>/u,
+    );
+  });
+
   it("reports modifications and blocks unsafe removal", async () => {
     const workspace = await workspaces.initialize(
       repository.remote,

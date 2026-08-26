@@ -12,6 +12,11 @@ wt create <branch>
 wt create <new-branch> --from <commit-ish>
 ```
 
+Use `--cd` to enter the new worktree through shell integration, or `--tool <profile>` to open an
+editor or agent. These destinations cannot be combined. When run inside a worktree, an explicit
+`--from HEAD` uses that worktree's current commit; without `--from`, new branches use the configured
+default branch.
+
 Fetching follows the `.wt.yml` default. Override it only when the task requires it with
 `--fetch` or `--no-fetch`. Use `--tool <profile>` to open an editor or agent after setup.
 

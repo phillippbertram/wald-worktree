@@ -25,7 +25,7 @@ const initializationInputSchema = z
 export function registerConfigCommand(program: Command, context: CliContext): void {
   const config = program
     .command("config")
-    .description("Create, show, and trust YAML configuration")
+    .description("Show configuration or manage repository-owned .wt.yml behavior")
     .action(async () => showConfiguration(context));
 
   config

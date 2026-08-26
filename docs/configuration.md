@@ -28,16 +28,35 @@ managed/adopted layout boundaries before using them.
 
 ## Project configuration
 
-Generate a starting point interactively:
+Generate a starting point interactively from detected Node package conventions:
 
 ```sh
 wt config init [worktree]
 ```
 
-The wizard detects a package manager, package scripts, and files such as `.env.example`. It can add
-an install hook, an environment copy step, a `verify` task, and a default tool. For scripts, use
-`wt config init --yes`; use `--force` separately when an existing file may be replaced. Interactive
-`wt init` offers the same wizard immediately after adopting a working repository.
+The wizard detects npm, pnpm, Yarn, or Bun, package scripts, and files such as `.env.example`. It can
+add an install hook, an environment copy step, a `verify` task, a separate `dev` task for an exact
+`dev` package script, and a default tool. The long-running `dev` script is never added to the
+one-shot `verify` task.
+
+For scripts, use `wt config init --yes`; use `--force` separately when an existing file may be
+replaced. Interactive `wt init` offers the same wizard immediately after adopting a working
+repository. Automatic project detection currently covers Node package managers; other ecosystems
+use manually configured commands.
+
+`.wt.yml` is repository-owned behavior. Review and commit it on the branch used as the base for
+future worktrees before expecting those worktrees to use it:
+
+```sh
+wt config init
+git diff -- .wt.yml
+git add .wt.yml
+git commit -m "chore: configure worktree setup"
+wt config trust
+```
+
+`wt` never commits or pushes this file automatically. Trust is semantic, so committing the reviewed
+file without changing its behavior does not invalidate an already recorded hash.
 
 The repository-owned `.wt.yml` supports this top-level schema:
 
@@ -245,6 +264,10 @@ tools:
 Run these with `wt run verify [worktree]` and `wt open [worktree] --tool app-agent`. Tool arguments
 may contain `{path}`; the selected worktree is also the process working directory. `mode` is
 `foreground` or `detached`.
+
+Long-running tasks such as `wt run dev` stream their output in the foreground. `Ctrl-C` stops the
+child process and exits with status 130 without reporting the interruption as a configuration
+failure.
 
 Built-in profiles are `code`, `cursor`, `zed`, `codex`, `codex-app`, and `claude`; unavailable
 commands are omitted from interactive selection.

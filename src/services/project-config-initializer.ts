@@ -18,6 +18,7 @@ export type ProjectSetupInspection = {
   installCommand: string[] | null;
   scripts: string[];
   recommendedScripts: string[];
+  developmentScript: "dev" | null;
   environmentExample: string | null;
 };
 
@@ -26,6 +27,7 @@ export type ProjectConfigTemplateOptions = {
   install: boolean;
   copyEnvironment: boolean;
   scripts: string[];
+  development: boolean;
   tool?: string;
 };
 
@@ -42,6 +44,7 @@ export class ProjectConfigInitializer {
         : null,
       scripts,
       recommendedScripts: recommendedScripts(scripts),
+      developmentScript: scripts.includes("dev") ? "dev" : null,
       environmentExample: await detectEnvironmentExample(canonicalRoot),
     };
   }
@@ -72,8 +75,37 @@ export class ProjectConfigInitializer {
       });
     }
 
-    const selectedScripts = options.scripts.filter((script) => inspection.scripts.includes(script));
+    const selectedScripts = options.scripts.filter(
+      (script) => script !== inspection.developmentScript && inspection.scripts.includes(script),
+    );
     const taskRunner = inspection.packageManager ?? "npm";
+    const tasks: ProjectConfig["tasks"] = {};
+    if (selectedScripts.length > 0) {
+      tasks.verify = {
+        description: "Run the detected project checks",
+        steps: selectedScripts.map((script) => ({
+          type: "command",
+          argv: [taskRunner, "run", script],
+          cwd: "target",
+          env: {},
+          continueOnError: false,
+        })),
+      };
+    }
+    if (options.development && inspection.developmentScript) {
+      tasks.dev = {
+        description: "Start the detected development process",
+        steps: [
+          {
+            type: "command",
+            argv: [taskRunner, "run", inspection.developmentScript],
+            cwd: "target",
+            env: {},
+            continueOnError: false,
+          },
+        ],
+      };
+    }
     return {
       version: 1,
       defaults: {
@@ -86,21 +118,7 @@ export class ProjectConfigInitializer {
         pre_remove: [],
         post_remove: [],
       },
-      tasks:
-        selectedScripts.length > 0
-          ? {
-              verify: {
-                description: "Run the detected project checks",
-                steps: selectedScripts.map((script) => ({
-                  type: "command" as const,
-                  argv: [taskRunner, "run", script],
-                  cwd: "target" as const,
-                  env: {},
-                  continueOnError: false,
-                })),
-              },
-            }
-          : {},
+      tasks,
       tools: {},
     };
   }

@@ -20,26 +20,40 @@ export async function runMainMenu(program: Command, context: CliContext): Promis
   const workspace = await findWorkspaceOrNull(context);
   if (!workspace) {
     const action = await searchSelect("No wt workspace found. Choose an action:", [
-      { label: "Initialize current repository", value: "init" },
+      { label: "Set up current Git repository", value: "init" },
+      { label: "Clone repository into a new workspace", value: "clone" },
       { label: "Exit", value: "exit" },
     ]);
     if (action === "init") await initializeWorkspace({}, context);
+    if (action === "clone") {
+      const repository = await promptText("Repository URL or local path:");
+      if (!repository) return;
+      const directory = await promptText("Workspace directory (optional):");
+      await initializeWorkspace({ repository, directory: directory || undefined }, context);
+    }
     return;
   }
 
   const current = await context.worktrees.current(workspace);
-  const action = await searchSelect("What do you want to do?", [
+  const worktrees = await context.worktrees.list(workspace);
+  const hasWorktrees = worktrees.length > 0;
+  const actions = [
     { label: "Create worktree", value: "create" },
-    { label: "Open worktree", value: "open" },
-    { label: "Run project task", value: "run" },
-    { label: "Run worktree setup", value: "setup" },
-    { label: "Execute command", value: "exec" },
     { label: "List worktrees", value: "list" },
-    { label: "Remove worktree", value: "remove" },
-    { label: "Create project configuration", value: "config-init" },
+    ...(hasWorktrees
+      ? [
+          { label: "Open worktree", value: "open" },
+          { label: "Run project task", value: "run" },
+          { label: "Run worktree setup", value: "setup" },
+          { label: "Execute command", value: "exec" },
+          { label: "Remove worktree", value: "remove" },
+          { label: "Create project configuration", value: "config-init" },
+        ]
+      : []),
     { label: "Configuration", value: "config" },
     { label: "Exit", value: "exit" },
-  ]);
+  ];
+  const action = await searchSelect("What do you want to do?", actions);
 
   switch (action) {
     case "create":

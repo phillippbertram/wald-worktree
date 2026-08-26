@@ -41,8 +41,10 @@ export class WorktreeWorkflowService {
   async planCreate(workspace: Workspace, options: AddWorktreeOptions): Promise<CreatePlan> {
     const context = await this.readWorktreeContext(workspace);
     const sourceDocument = await this.readSourceProjectConfig(workspace, context);
+    const from = await this.resolveRequestedBase(options.from, context.current);
     const prepared = await this.worktrees.prepareAdd(workspace, {
       ...options,
+      from,
       fetch: options.fetch ?? sourceDocument?.config.defaults.fetch ?? true,
     });
     const project = await this.configs.readProjectConfigAtRevision(
@@ -227,6 +229,19 @@ export class WorktreeWorkflowService {
       ? `${workspace.config.remote.name}/${workspace.config.defaultBranch}`
       : workspace.config.defaultBranch;
     return await this.configs.readProjectConfigAtRevision(this.git, workspace, revision);
+  }
+
+  private async resolveRequestedBase(
+    requestedBase: string | undefined,
+    current: Worktree | null,
+  ): Promise<string | undefined> {
+    if (requestedBase !== "HEAD" || !current) {
+      return requestedBase;
+    }
+    const result = await this.git.run(["rev-parse", "--verify", "HEAD^{commit}"], {
+      cwd: current.path,
+    });
+    return result.stdout;
   }
 
   private async ensureTrusted(

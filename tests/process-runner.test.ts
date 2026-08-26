@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { WtError } from "../src/domain/errors.js";
 import { ProcessRunner } from "../src/infrastructure/process-runner.js";
 
 describe("process execution", () => {
@@ -40,5 +41,18 @@ describe("process execution", () => {
         timeoutMs: 20,
       }),
     ).rejects.toThrow(/timed out after 20ms/u);
+  });
+
+  it("reports SIGINT as a conventional interruption", async () => {
+    const interruption = runner.runArgv(
+      [process.execPath, "-e", "process.kill(process.pid, 'SIGINT')"],
+      { cwd: temporaryRoot },
+    );
+
+    await expect(interruption).rejects.toMatchObject({
+      message: "Command interrupted.",
+      exitCode: 130,
+      name: WtError.name,
+    });
   });
 });

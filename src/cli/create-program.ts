@@ -20,10 +20,15 @@ export function createProgram(
   const context = createCliContext(output);
   const program = new Command()
     .name("wt")
-    .description("A configurable, safe Git worktree and agent workflow CLI.")
+    .description("Create and work in isolated Git checkouts safely.")
     .version("1.0.0")
     .showSuggestionAfterError()
     .showHelpAfterError();
+
+  program.addHelpText(
+    "after",
+    "\nStart here:\n  cd ~/dev/project && wt init\n  wt create feature/payment --cd\n  wt create feature/review --tool codex\n",
+  );
 
   program.configureOutput({
     writeOut: (text) => output.stdout.write(text),

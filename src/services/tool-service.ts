@@ -37,6 +37,10 @@ const builtInTools: Record<string, ToolProfile> = {
   },
 };
 
+export const builtInToolNames = Object.keys(builtInTools).sort((left, right) =>
+  left.localeCompare(right),
+);
+
 export class ToolService {
   constructor(private readonly processes = new ProcessRunner()) {}
 

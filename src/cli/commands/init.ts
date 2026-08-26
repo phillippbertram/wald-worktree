@@ -34,16 +34,20 @@ export type InitInput = z.output<typeof initInputSchema>;
 export function registerInitCommand(program: Command, context: CliContext): void {
   program
     .command("init")
-    .description("Create a managed workspace or adopt an existing Git repository")
-    .argument("[repository]", "Git remote URL or local repository path")
+    .description("Set up the current repository or clone into a managed workspace")
+    .argument("[repository]", "Remote URL or local repository to clone when provided")
     .argument("[directory]", "Workspace directory")
-    .option("--adopt [path]", "Adopt an existing repository; defaults to the current directory")
+    .option("--adopt [path]", "Use an existing repository; defaults to the current directory")
     .option("--worktrees-dir <path>", "Directory for newly created worktrees")
     .option("--remote <name>", "Remote used for fetching and branch resolution")
     .option("--no-remote", "Adopt as a local-only repository")
     .option("--default-branch <branch>", "Default branch used for creation and merge checks")
     .option("--config", "Create a detected .wt.yml after adopting a working repository")
     .option("--yes", "Accept detected adoption settings without prompting")
+    .addHelpText(
+      "after",
+      "\nExamples:\n  cd ~/dev/project && wt init\n  wt init git@github.com:example/project.git ~/dev/project\n  wt init --adopt . --yes --config\n",
+    )
     .action(async (repository: unknown, directory: unknown, options: unknown) => {
       const input = parseCliInput(initInputSchema, {
         repository,
@@ -66,10 +70,10 @@ export async function initializeWorkspace(input: InitInput, context: CliContext)
     context.workspaces.initialize(input.repository as string, input.directory),
   );
   await success(`Initialized workspace at ${workspace.root}`, context.output);
-  writeLine(context.output.stdout, `Next: wt create ${shellQuote(workspace.config.defaultBranch)}`);
+  writeLine(context.output.stdout, `Next: cd ${shellQuote(workspace.root)}`);
   writeLine(
     context.output.stdout,
-    `Then: wt config init ${shellQuote(workspace.config.defaultBranch)}`,
+    `Then: wt create ${shellQuote(workspace.config.defaultBranch)} --cd`,
   );
 }
 
@@ -90,6 +94,13 @@ async function initializeAdoptedWorkspace(input: InitInput, context: CliContext)
       `Workspace already initialized at ${inspection.existingWorkspace.root}`,
       context.output,
     );
+    if (input.config) {
+      await maybeInitializeProjectConfig(
+        inspection.existingWorkspace.primaryWorktree,
+        input,
+        context,
+      );
+    }
     return;
   }
   if (inspection.remoteSelectionRequired) {
@@ -140,6 +151,7 @@ async function initializeAdoptedWorkspace(input: InitInput, context: CliContext)
   await success(`Adopted repository at ${workspace.root}`, context.output);
   writeLine(context.output.stdout, `Worktrees: ${workspace.worktreeDir}`);
   await maybeInitializeProjectConfig(workspace.primaryWorktree, input, context);
+  writeLine(context.output.stdout, "Create another worktree: wt create <branch> --cd");
 }
 
 async function maybeInitializeProjectConfig(

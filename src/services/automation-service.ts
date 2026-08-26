@@ -52,6 +52,9 @@ export class AutomationService {
       try {
         await this.runStep(step, context);
       } catch (error) {
+        if (error instanceof WtError && error.exitCode === 130) {
+          throw error;
+        }
         if (step.continueOnError) {
           writeLine(
             context.output ?? process.stderr,

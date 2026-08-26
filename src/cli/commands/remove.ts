@@ -20,7 +20,7 @@ export type RemoveInput = z.output<typeof removeInputSchema>;
 export function registerRemoveCommand(program: Command, context: CliContext): void {
   program
     .command("remove")
-    .description("Safely remove one or more worktrees")
+    .description("Safely remove worktrees without deleting their branches")
     .argument("[worktrees...]", "Worktree names, branches, or paths")
     .option("--force", "Bypass dirty, unmerged, and lock safeguards")
     .option("--yes", "Confirm removal without prompting")

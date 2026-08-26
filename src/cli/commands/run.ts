@@ -18,9 +18,13 @@ export type RunInput = z.output<typeof runInputSchema>;
 export function registerRunCommand(program: Command, context: CliContext): void {
   program
     .command("run")
-    .description("Run a named project task")
+    .description("Run a named .wt.yml project task in a worktree")
     .argument("[task]", "Task name from .wt.yml")
     .argument("[worktree]", "Worktree name, branch, or path")
+    .addHelpText(
+      "after",
+      "\nExamples:\n  wt run verify feature-payment\n  wt run dev feature-payment\n",
+    )
     .action(async (task: unknown, worktree: unknown) => {
       await runProjectTask(parseCliInput(runInputSchema, { task, worktree }), context);
     });

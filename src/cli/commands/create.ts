@@ -2,6 +2,7 @@ import { type Command, Option } from "commander";
 import { z } from "zod";
 import { toErrorMessage, WtError } from "../../domain/errors.js";
 import type { Worktree } from "../../domain/types.js";
+import { builtInToolNames } from "../../services/tool-service.js";
 import { runTask } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
 import {
@@ -26,23 +27,36 @@ const createInputSchema = z
     tool: nonEmptyCliString.optional(),
     printPath: z.boolean().default(false),
   })
-  .strict();
+  .strict()
+  .superRefine((input, context) => {
+    if (input.cd && (input.open || input.tool)) {
+      context.addIssue({
+        code: "custom",
+        path: ["cd"],
+        message: "Cannot be combined with --open or --tool; choose one destination.",
+      });
+    }
+  });
 
 export type CreateInput = z.output<typeof createInputSchema>;
 
 export function registerCreateCommand(program: Command, context: CliContext): void {
   program
     .command("create")
-    .description("Create a worktree for an existing or new branch")
+    .description("Create and prepare a worktree for an existing or new branch")
     .argument("[branch]", "Branch to check out or create")
-    .option("--from <commit-ish>", "Base for a new branch")
+    .option("--from <commit-ish>", "Base commit for a new branch only")
     .option("--name <directory>", "Override the worktree directory name")
     .option("--fetch", "Fetch before resolving the branch")
     .option("--no-fetch", "Do not fetch before resolving the branch")
-    .option("--cd", "Enter the created worktree when shell integration is enabled")
-    .option("--open", "Open the created worktree in an editor or agent")
+    .option("--cd", "Enter after creation; requires shell integration")
+    .option("--open", "Open after creation with the configured or selected tool")
     .option("--tool <profile>", "Tool profile to open; implies --open")
     .addOption(new Option("--print-path").hideHelp())
+    .addHelpText(
+      "after",
+      `\nBuilt-in tools: ${builtInToolNames.join(", ")}\n\nExamples:\n  wt create feature/payment --cd\n  wt create hotfix/payment --from release/1.x --cd\n  wt create feature/review --tool codex\n`,
+    )
     .action(
       async (
         branch: unknown,
@@ -101,12 +115,15 @@ export async function createWorktree(input: CreateInput, context: CliContext): P
     writeLine(context.output.stdout, created.path);
   } else {
     await success(`Created ${created.name} at ${created.path}`, context.output);
-    writeLine(
-      context.output.stdout,
-      input.cd
-        ? "Shell integration will enter the new worktree."
-        : `Next: wt cd ${shellQuote(created.name)}`,
-    );
+    if (input.cd) {
+      writeLine(
+        context.output.stdout,
+        `Shell integration is not active for this invocation. Enter with: cd ${shellQuote(created.path)}`,
+      );
+    } else if (!input.open && !input.tool) {
+      writeLine(context.output.stdout, `Next: wt cd ${shellQuote(created.name)}`);
+      writeLine(context.output.stdout, `Without shell integration: cd ${shellQuote(created.path)}`);
+    }
   }
   return created;
 }

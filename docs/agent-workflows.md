@@ -23,6 +23,9 @@ wt create feature/payment --tool codex
 wt run verify feature/payment
 ```
 
+Choose one destination while creating: `--tool` opens the agent, while `--cd` enters the worktree
+through shell integration. They are intentionally not combined.
+
 Agents should use `wt list --json` and `wt cd <worktree>` for discovery instead of deriving paths.
 They should run configured project actions through `wt run`, because those actions share the same
 validation and trust boundary as lifecycle hooks.

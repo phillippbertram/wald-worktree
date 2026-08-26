@@ -2,6 +2,7 @@ import type { Command } from "commander";
 import { z } from "zod";
 import { toErrorMessage, WtError } from "../../domain/errors.js";
 import type { ProjectConfigDocument, Worktree } from "../../domain/types.js";
+import { builtInToolNames } from "../../services/tool-service.js";
 import { isInteractiveTerminal, searchSelect } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
 import { ensureTrusted, resolveWorktree, success } from "../helpers.js";
@@ -20,6 +21,10 @@ export function registerOpenCommand(program: Command, context: CliContext): void
     .description("Open a worktree in an editor, app, or agent tool")
     .argument("[worktree]", "Worktree name, branch, or path")
     .option("--tool <profile>", "Tool profile from built-ins or .wt.yml")
+    .addHelpText(
+      "after",
+      `\nBuilt-in tools: ${builtInToolNames.join(", ")}\n\nExamples:\n  wt open feature-payment --tool code\n  wt open feature-payment --tool codex\n`,
+    )
     .action(async (worktree: unknown, options: unknown) => {
       const input = parseCliInput(openInputSchema, { worktree, ...(options as object) });
       const workspace = await context.workspaces.find();

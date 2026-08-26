@@ -11,8 +11,9 @@ export type SetupInput = z.output<typeof setupInputSchema>;
 export function registerSetupCommand(program: Command, context: CliContext): void {
   program
     .command("setup")
-    .description("Run the configured post-create setup again")
+    .description("Re-run the configured .wt.yml post_create steps")
     .argument("[worktree]", "Worktree name, branch, or path")
+    .addHelpText("after", "\nExample:\n  wt setup feature-payment\n")
     .action(async (worktree: unknown) => {
       const input = parseCliInput(setupInputSchema, { worktree });
       await setupWorktree(input, context);

@@ -35,6 +35,9 @@ export class ProcessRunner {
     }).catch((error: unknown) => {
       throw new WtError(`Could not start command: ${command}`, { cause: error });
     });
+    if (result.signal === "SIGINT" || result.exitCode === 130) {
+      throw new WtError("Command interrupted.", { exitCode: 130 });
+    }
     if (result.exitCode !== 0) {
       throw new WtError(`Command failed with exit code ${result.exitCode}: ${argv.join(" ")}`, {
         exitCode: result.exitCode ?? 1,
@@ -84,6 +87,9 @@ export class ProcessRunner {
       throw new WtError(
         `Command timed out after ${options.timeoutMs ?? 0}ms: ${[command, ...args].join(" ")}`,
       );
+    }
+    if (result.signal === "SIGINT" || result.exitCode === 130) {
+      throw new WtError("Command interrupted.", { exitCode: 130 });
     }
     if (result.exitCode !== 0) {
       const outcome =

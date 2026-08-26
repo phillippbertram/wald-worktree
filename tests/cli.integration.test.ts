@@ -39,6 +39,8 @@ describe("CLI smoke flow", () => {
     );
     expect(initialized.exitCode, initialized.stderr).toBe(0);
     expect(initialized.stdout).toContain("Initialized workspace");
+    expect(initialized.stdout).toContain(`Next: cd '${await fs.realpath(workspace)}'`);
+    expect(initialized.stdout).toContain("Then: wt create 'main' --cd");
 
     const added = await execa(process.execPath, cliArguments("create", "main", "--no-fetch"), {
       cwd: workspace,
@@ -46,15 +48,28 @@ describe("CLI smoke flow", () => {
     });
     expect(added.exitCode, added.stderr).toBe(0);
     expect(added.stdout).toContain("Created main");
+    expect(added.stdout).toContain("Without shell integration: cd");
+
+    const directCd = await execa(
+      process.execPath,
+      cliArguments("create", "feature/direct-cd", "--no-fetch", "--cd"),
+      { cwd: workspace, reject: false },
+    );
+    expect(directCd.exitCode, directCd.stderr).toBe(0);
+    expect(directCd.stdout).toContain("Shell integration is not active");
+    expect(directCd.stdout).toContain("Enter with: cd");
 
     const listed = await execa(process.execPath, cliArguments("list", "--json"), {
       cwd: workspace,
       reject: false,
     });
     expect(listed.exitCode, listed.stderr).toBe(0);
-    expect(JSON.parse(listed.stdout)).toEqual([
-      expect.objectContaining({ branch: "main", name: "main", state: "clean" }),
-    ]);
+    expect(JSON.parse(listed.stdout)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ branch: "main", name: "main", state: "clean" }),
+        expect.objectContaining({ branch: "feature/direct-cd", name: "feature-direct-cd" }),
+      ]),
+    );
 
     const configured = await execa(
       process.execPath,
@@ -63,6 +78,7 @@ describe("CLI smoke flow", () => {
     );
     expect(configured.exitCode, configured.stderr).toBe(0);
     expect(configured.stdout).toContain("Created");
+    expect(configured.stdout).toContain("review and commit .wt.yml");
     await expect(fs.readFile(path.join(workspace, "main", ".wt.yml"), "utf8")).resolves.toContain(
       "version: 1",
     );
@@ -120,16 +136,14 @@ describe("CLI smoke flow", () => {
         "origin",
         "--default-branch",
         "main",
-        "--config",
       ),
       { cwd: temporaryRoot, reject: false },
     );
     expect(adopted.exitCode, adopted.stderr).toBe(0);
     expect(adopted.stdout).toContain("Adopted repository");
-    expect(adopted.stdout).toContain("Created");
-    await expect(fs.readFile(path.join(repository.source, ".wt.yml"), "utf8")).resolves.toContain(
-      "version: 1",
-    );
+    await expect(fs.stat(path.join(repository.source, ".wt.yml"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
     expect(await fs.readFile(configPath, "utf8")).toBe(configBefore);
 
     const listed = await execa(process.execPath, cliArguments("list", "--json"), {
@@ -154,11 +168,46 @@ describe("CLI smoke flow", () => {
 
     const repeated = await execa(
       process.execPath,
-      cliArguments("init", "--adopt", repository.source, "--yes"),
+      cliArguments("init", "--adopt", repository.source, "--yes", "--config"),
       { cwd: temporaryRoot, reject: false },
     );
     expect(repeated.exitCode, repeated.stderr).toBe(0);
     expect(repeated.stdout).toContain("already initialized");
+    expect(repeated.stdout).toContain("review and commit .wt.yml");
+    await expect(fs.readFile(path.join(repository.source, ".wt.yml"), "utf8")).resolves.toContain(
+      "version: 1",
+    );
+  });
+
+  it("uses the current worktree HEAD as an explicit base", async () => {
+    const workspace = path.join(temporaryRoot, "head-workspace");
+    await execa(process.execPath, cliArguments("init", repository.remote, workspace), {
+      cwd: temporaryRoot,
+    });
+    await execa(process.execPath, cliArguments("create", "main", "--no-fetch"), {
+      cwd: workspace,
+    });
+    await execa(
+      process.execPath,
+      cliArguments("create", "feature/base", "--from", "main", "--no-fetch"),
+      { cwd: workspace },
+    );
+    const basePath = path.join(workspace, "feature-base");
+    await fs.writeFile(path.join(basePath, "stacked.txt"), "base\n", "utf8");
+    await execa("git", ["add", "stacked.txt"], { cwd: basePath });
+    await execa("git", ["commit", "-m", "add stacked base"], { cwd: basePath });
+    const baseHead = (await execa("git", ["rev-parse", "HEAD"], { cwd: basePath })).stdout;
+
+    const stacked = await execa(
+      process.execPath,
+      cliArguments("create", "feature/stacked", "--from", "HEAD", "--no-fetch"),
+      { cwd: basePath, reject: false },
+    );
+    expect(stacked.exitCode, stacked.stderr).toBe(0);
+    expect(
+      (await execa("git", ["rev-parse", "HEAD"], { cwd: path.join(workspace, "feature-stacked") }))
+        .stdout,
+    ).toBe(baseHead);
   });
 
   it("trusts project automation before the first checkout and exposes task and exec commands", async () => {
@@ -176,6 +225,10 @@ tasks:
     steps:
       - type: command
         argv: [node, -e, "require('node:fs').writeFileSync('task.log', process.env.WT_EVENT)"]
+  interrupt:
+    steps:
+      - type: command
+        argv: [node, -e, "process.kill(process.pid, 'SIGINT')"]
 tools:
   fixture-agent:
     description: Fixture foreground tool
@@ -242,6 +295,14 @@ tools:
     });
     expect(task.exitCode, task.stderr).toBe(0);
     expect(await fs.readFile(path.join(workspace, "main", "task.log"), "utf8")).toBe("task:verify");
+
+    const interrupted = await execa(process.execPath, cliArguments("run", "interrupt", "main"), {
+      cwd: workspace,
+      reject: false,
+    });
+    expect(interrupted.exitCode).toBe(130);
+    expect(interrupted.stderr).not.toContain("Error:");
+    expect(interrupted.stdout).not.toContain("Completed task interrupt");
 
     const executed = await execa(
       process.execPath,

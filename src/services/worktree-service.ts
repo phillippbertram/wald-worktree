@@ -101,7 +101,9 @@ export class WorktreeService {
       );
     }
     if (await pathExists(target)) {
-      throw new WtError(`Worktree directory already exists: ${target}`);
+      throw new WtError(
+        `Worktree directory already exists: ${target}. Choose another directory with --name <directory>.`,
+      );
     }
 
     const localExists = await this.refExists(workspace, branchRef);
