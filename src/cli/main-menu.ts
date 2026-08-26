@@ -5,6 +5,7 @@ import { createWorktree } from "./commands/create.js";
 import { initializeWorkspace } from "./commands/init.js";
 import { listWorktrees } from "./commands/list.js";
 import { openSelectedWorktree } from "./commands/open.js";
+import { pruneWorktrees } from "./commands/prune.js";
 import { removeWorktrees } from "./commands/remove.js";
 import { runProjectTask } from "./commands/run.js";
 import { setupWorktree } from "./commands/setup.js";
@@ -29,6 +30,7 @@ export async function runMainMenu(program: Command, context: CliContext): Promis
   const actions = [
     { label: "Create worktree", value: "create" },
     { label: "List worktrees", value: "list" },
+    { label: "Prune stale worktree metadata", value: "prune" },
     ...(hasWorktrees
       ? [
           { label: "Open worktree", value: "open" },
@@ -50,6 +52,9 @@ export async function runMainMenu(program: Command, context: CliContext): Promis
       break;
     case "list":
       await listWorktrees({ json: false }, context);
+      break;
+    case "prune":
+      await pruneWorktrees({ apply: true, yes: false }, context);
       break;
     case "remove":
       await removeWorktrees({ worktrees: [], force: false, yes: false }, context);

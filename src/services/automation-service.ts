@@ -125,7 +125,6 @@ export class AutomationService {
     }
 
     const source = resolveRelativePath(sourceRoot, step.from, "Source path");
-    const target = resolveRelativePath(context.targetPath, step.to, "Target path");
     const sourceStat = await lstatOrNull(source);
     if (!sourceStat) {
       if (step.optional) {
@@ -137,6 +136,19 @@ export class AutomationService {
       await assertSharedDirectory(context.workspace);
     }
     await assertRealPathInside(sourceRoot, source, "Source path");
+
+    if (step.glob) {
+      await runGlobFileStep(
+        { ...step, glob: step.glob },
+        sourceRoot,
+        source,
+        sourceStat,
+        context.targetPath,
+      );
+      return;
+    }
+
+    const target = resolveRelativePath(context.targetPath, step.to, "Target path");
     await assertDestinationInside(context.targetPath, target);
 
     const targetStat = await lstatOrNull(target);
@@ -155,6 +167,102 @@ export class AutomationService {
 
     const realSource = await fs.realpath(source);
     await fs.symlink(path.relative(path.dirname(target), realSource), target);
+  }
+}
+
+type FileStep = Extract<AutomationStep, { type: "copy" | "symlink" }>;
+
+type PlannedFileOperation = {
+  source: string;
+  realSource: string;
+  target: string;
+};
+
+async function runGlobFileStep(
+  step: FileStep & { glob: string },
+  sourceRoot: string,
+  sourceDirectory: string,
+  sourceStat: Awaited<ReturnType<typeof fs.lstat>>,
+  targetRoot: string,
+): Promise<void> {
+  if (!sourceStat.isDirectory() || sourceStat.isSymbolicLink()) {
+    throw new WtError(`Glob source must be a directory: ${sourceDirectory}`);
+  }
+
+  const targetDirectory = resolveRelativePath(targetRoot, step.to, "Target path");
+  if (path.resolve(targetDirectory) !== path.resolve(targetRoot)) {
+    await assertDestinationInside(targetRoot, targetDirectory);
+  }
+  const targetDirectoryStat = await statOrNull(targetDirectory);
+  if (targetDirectoryStat && !targetDirectoryStat.isDirectory()) {
+    throw new WtError(`Glob target must be a directory: ${targetDirectory}`);
+  }
+
+  const matches: string[] = [];
+  for await (const match of fs.glob(step.glob, { cwd: sourceDirectory })) {
+    matches.push(match);
+  }
+  matches.sort((left, right) => left.localeCompare(right));
+
+  const operations: PlannedFileOperation[] = [];
+  const targets = new Set<string>();
+  for (const match of matches) {
+    const candidate = resolveRelativePath(sourceDirectory, match, "Glob match");
+    const candidateStat = await lstatOrNull(candidate);
+    if (!candidateStat || candidateStat.isDirectory()) {
+      continue;
+    }
+
+    await assertRealPathInside(sourceRoot, candidate, "Glob match");
+    const resolvedStat = candidateStat.isSymbolicLink() ? await fs.stat(candidate) : candidateStat;
+    if (!resolvedStat.isFile()) {
+      continue;
+    }
+    if (step.type === "copy" && candidateStat.isSymbolicLink()) {
+      throw new WtError(`Copy source contains a symbolic link: ${candidate}`);
+    }
+
+    const relativeMatch = path.relative(sourceDirectory, candidate);
+    const target = resolveRelativePath(
+      targetRoot,
+      path.join(step.to, relativeMatch),
+      "Target path",
+    );
+    if (targets.has(target)) {
+      throw new WtError(`Glob produces the same target more than once: ${target}`);
+    }
+    targets.add(target);
+    operations.push({ source: candidate, realSource: await fs.realpath(candidate), target });
+  }
+
+  if (operations.length === 0) {
+    if (step.optional) {
+      return;
+    }
+    throw new WtError(`Glob did not match any files: ${step.glob}`);
+  }
+
+  for (const operation of operations) {
+    await assertDestinationInside(targetRoot, operation.target);
+    const targetStat = await lstatOrNull(operation.target);
+    if (targetStat && !step.overwrite) {
+      throw new WtError(`Target path already exists: ${operation.target}`);
+    }
+  }
+
+  for (const operation of operations) {
+    if (await lstatOrNull(operation.target)) {
+      await fs.rm(operation.target, { force: true, recursive: true });
+    }
+    await fs.mkdir(path.dirname(operation.target), { recursive: true });
+    if (step.type === "copy") {
+      await copyWithoutSymlinks(operation.source, operation.target);
+    } else {
+      await fs.symlink(
+        path.relative(path.dirname(operation.target), operation.realSource),
+        operation.target,
+      );
+    }
   }
 }
 
@@ -241,6 +349,10 @@ async function assertDestinationInside(root: string, candidate: string): Promise
     }
     parent = next;
   }
+  const parentStat = await fs.stat(parent);
+  if (!parentStat.isDirectory()) {
+    throw new WtError(`Target parent is not a directory: ${parent}`);
+  }
   const realParent = await fs.realpath(parent);
   if (!isPathInsideOrEqual(realRoot, realParent)) {
     throw new WtError("Target path resolves outside its worktree.");
@@ -276,6 +388,17 @@ async function assertDirectory(directory: string, label: string): Promise<void> 
 async function lstatOrNull(target: string): Promise<Awaited<ReturnType<typeof fs.lstat>> | null> {
   try {
     return await fs.lstat(target);
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
+}
+
+async function statOrNull(target: string): Promise<Awaited<ReturnType<typeof fs.stat>> | null> {
+  try {
+    return await fs.stat(target);
   } catch (error) {
     if (error instanceof Error && "code" in error && error.code === "ENOENT") {
       return null;

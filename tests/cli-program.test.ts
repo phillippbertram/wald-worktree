@@ -17,12 +17,22 @@ describe("CLI contract", () => {
       "run",
       "setup",
       "remove",
+      "prune",
       "config",
       "shell-init",
       "completion",
     ]);
     expect(program.commands.find((command) => command.name() === "config")?.commands).toHaveLength(
       3,
+    );
+  });
+
+  it("requires --apply when prune confirmation is passed", async () => {
+    const output = new PassThrough();
+    const program = createProgram({ stdout: output, stderr: output });
+
+    await expect(program.parseAsync(["node", "wt", "prune", "--yes"])).rejects.toThrow(
+      /--yes: Requires --apply/u,
     );
   });
 

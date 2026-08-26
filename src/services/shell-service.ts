@@ -12,6 +12,7 @@ const commands = [
   "run",
   "setup",
   "remove",
+  "prune",
   "config",
   "shell-init",
 ];

@@ -185,8 +185,9 @@ hooks:
       optional: true
     - type: symlink
       source: shared
-      from: env/.env
-      to: .env
+      from: env
+      glob: "**/.env*"
+      to: .
       optional: true
 
   pre_remove:
@@ -286,6 +287,12 @@ workspace there may also be no source worktree, so repository-local helper scrip
   source: primary
   from: .local/cache
   to: .local/cache
+
+- type: symlink
+  source: shared
+  from: env
+  glob: "**/.env*"
+  to: .
 ```
 
 | Source | Resolves to | Typical use |
@@ -299,15 +306,25 @@ workspace there may also be no source worktree, so repository-local helper scrip
 | --- | --- | --- |
 | `type` | required | `copy` creates an independent snapshot; `symlink` keeps one live central file. |
 | `source` | `default` | Selects one of the roots above. |
-| `from` | required | Relative path below the selected source root. |
-| `to` | required | Relative path below the target worktree. |
-| `optional` | `false` | Skip the step when its source is missing. |
+| `from` | required | Relative file/directory, or the source directory used with `glob`. |
+| `glob` | none | One positive relative pattern evaluated below `from`; matched file paths are preserved below `to`. |
+| `to` | required | Exact target without `glob`; target directory with `glob`. |
+| `optional` | `false` | Skip a missing exact source or a glob with no file matches. |
 | `overwrite` | `false` | Replace an existing target only when explicitly enabled. |
 | `continue_on_error` | `false` | Warn and continue after a failed file step. |
 
 Source and target paths must be relative and remain inside their configured roots after resolving
 symlinks. Copy rejects symlinks anywhere inside a copied tree. Generated symlinks use relative
 targets, so a complete workspace remains relocatable.
+
+Without `glob`, `from` and `to` retain their exact file-or-directory behavior. With `glob`, `from`
+must be a directory and only matches that resolve to files are processed. The pattern cannot be
+absolute, negated, or contain a `..` path segment. Directories are not independent matches.
+
+All matches and destinations are sorted and validated before the first target is changed. Existing
+targets therefore fail the complete step unless `overwrite: true` is set. A glob `copy` rejects
+matched source symlinks; a glob `symlink` may resolve a source symlink only when its target is a file
+inside the configured source root. `continue_on_error` applies to the complete multi-file step.
 
 For centrally edited monorepo environment files, preserve their repository-relative structure:
 
@@ -316,22 +333,16 @@ hooks:
   post_create:
     - type: symlink
       source: shared
-      from: env/.env
-      to: .env
-    - type: symlink
-      source: shared
-      from: env/apps/api/.env
-      to: apps/api/.env
-    - type: symlink
-      source: shared
-      from: env/apps/web/.env.local
-      to: apps/web/.env.local
+      from: env
+      glob: "**/.env*"
+      to: .
 ```
 
-Editing a shared source updates every symlink immediately. A copied target changes only after the
-corresponding named task or `wt setup` runs again. Existing targets fail safely unless
-`overwrite: true` is present. Because file steps can expose local data, they participate in the
-same project-configuration trust hash as commands.
+The source-relative portion below `env` becomes the target-relative path, producing `.env`,
+`apps/api/.env`, and `apps/web/.env.local`. Editing a shared source updates every symlink
+immediately. A copied target changes only after the corresponding named task or `wt setup` runs
+again. Because file steps can expose local data, their exact paths and glob patterns participate in
+the same project-configuration trust hash as commands.
 
 ### Lifecycle
 

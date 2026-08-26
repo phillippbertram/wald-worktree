@@ -76,6 +76,11 @@ const commandStepFileSchema = z
 const fileStepShape = {
   source: z.enum(["current", "default", "primary", "shared"]).default("default"),
   from: z.string().min(1),
+  glob: z
+    .string()
+    .min(1)
+    .refine(isSafeGlobPattern, "must be a positive relative pattern without '..' segments")
+    .optional(),
   to: z.string().min(1),
   optional: z.boolean().default(false),
   overwrite: z.boolean().default(false),
@@ -428,6 +433,7 @@ function fromAutomationStepFile(step: AutomationStepFile): AutomationStep {
     type: step.type,
     source: step.source,
     from: step.from,
+    glob: step.glob,
     to: step.to,
     optional: step.optional,
     overwrite: step.overwrite,
@@ -451,6 +457,7 @@ function toAutomationStepFile(step: AutomationStep): AutomationStepFile {
     type: step.type,
     source: step.source,
     from: step.from,
+    glob: step.glob,
     to: step.to,
     optional: step.optional,
     overwrite: step.overwrite,
@@ -498,7 +505,21 @@ function describeStep(step: AutomationStep): string {
   if (step.type === "command") {
     return step.argv?.join(" ") ?? step.shell ?? "command";
   }
-  return `${step.type} ${step.source}:${step.from} -> ${step.to}`;
+  const source = step.glob ? path.posix.join(step.from, step.glob) : step.from;
+  return `${step.type} ${step.source}:${source} -> ${step.to}`;
+}
+
+function isSafeGlobPattern(pattern: string): boolean {
+  if (
+    pattern.startsWith("!") ||
+    pattern.includes("\0") ||
+    path.isAbsolute(pattern) ||
+    path.posix.isAbsolute(pattern) ||
+    path.win32.isAbsolute(pattern)
+  ) {
+    return false;
+  }
+  return !pattern.split(/[\\/]/u).includes("..");
 }
 
 function isNotFound(error: unknown): boolean {

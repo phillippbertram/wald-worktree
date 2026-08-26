@@ -1,8 +1,8 @@
 # Roadmap
 
-The configurable v1 lifecycle, YAML model, interactive CLI, shell integration, tool profiles, and
-portable Agent Skill are implemented. The next work should strengthen operations before broadening
-the workflow model.
+The configurable v1 lifecycle, YAML model, interactive CLI, shell integration, tool profiles,
+preview-first metadata pruning, and portable Agent Skill are implemented. The next work should
+strengthen diagnostics before broadening the workflow model.
 
 ## Next
 
@@ -11,12 +11,6 @@ the workflow model.
 - Validate local and project YAML, repository references, hooks, configured file steps, and tools.
 - Detect stale or inconsistent Git worktree metadata.
 - Print safe repair commands without exposing environment-file contents.
-
-### `wt prune`
-
-- Preview stale Git metadata by default.
-- Preserve directories and locked worktrees.
-- Require confirmation before changing metadata.
 
 ### Release readiness
 

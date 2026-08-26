@@ -212,6 +212,36 @@ describe("managed Git workspace", () => {
     );
   });
 
+  it("prunes missing metadata immediately while preserving locked registrations", async () => {
+    const workspace = await workspaces.initialize(
+      repository.remote,
+      path.join(temporaryRoot, "prune-workspace"),
+    );
+    const stale = await worktrees.add(workspace, { branch: "feature/stale", fetch: false });
+    const locked = await worktrees.add(workspace, { branch: "feature/locked", fetch: false });
+    const git = new GitClient();
+    await git.run(["worktree", "lock", "--reason", "offline fixture", locked.path], {
+      gitDir: workspace.gitDir,
+    });
+    await fs.rm(stale.path, { recursive: true });
+    await fs.rm(locked.path, { recursive: true });
+
+    await expect(worktrees.listPrunable(workspace)).resolves.toEqual([
+      expect.objectContaining({ path: stale.path, prunable: true, state: "missing" }),
+    ]);
+    await worktrees.prune(workspace);
+
+    const remaining = await worktrees.list(workspace, { expire: "now" });
+    expect(remaining).toEqual([
+      expect.objectContaining({ path: locked.path, locked: true, state: "missing" }),
+    ]);
+    expect(
+      await git.succeeds(["show-ref", "--verify", "--quiet", "refs/heads/feature/stale"], {
+        gitDir: workspace.gitDir,
+      }),
+    ).toBe(true);
+  });
+
   it("reports modifications and blocks unsafe removal", async () => {
     const workspace = await workspaces.initialize(
       repository.remote,

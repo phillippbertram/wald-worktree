@@ -111,6 +111,77 @@ describe("CLI smoke flow", () => {
     expect(removed.stdout).toContain("Removed main");
   });
 
+  it("previews and explicitly prunes only stale worktree metadata", async () => {
+    const workspace = path.join(temporaryRoot, "prune-workspace");
+    await execa(process.execPath, cliArguments("init", repository.remote, workspace), {
+      cwd: temporaryRoot,
+    });
+    await execa(process.execPath, cliArguments("create", "main", "--no-fetch"), {
+      cwd: workspace,
+    });
+    await execa(process.execPath, cliArguments("create", "feature/stale", "--no-fetch"), {
+      cwd: workspace,
+    });
+    const stalePath = path.join(workspace, "feature-stale");
+    await fs.rm(stalePath, { recursive: true });
+
+    const preview = await execa(process.execPath, cliArguments("prune"), {
+      cwd: workspace,
+      reject: false,
+    });
+    expect(preview.exitCode, preview.stderr).toBe(0);
+    expect(preview.stdout).toContain("Stale worktree metadata:");
+    expect(preview.stdout).toContain("feature-stale");
+    expect(preview.stdout).toContain("Preview only");
+    const metadataBefore = await execa(
+      "git",
+      [`--git-dir=${path.join(workspace, "repo.git")}`, "worktree", "list", "--porcelain"],
+      { cwd: workspace },
+    );
+    expect(metadataBefore.stdout).toContain(stalePath);
+
+    const confirmationRequired = await execa(process.execPath, cliArguments("prune", "--apply"), {
+      cwd: workspace,
+      reject: false,
+    });
+    expect(confirmationRequired.exitCode).toBe(1);
+    expect(confirmationRequired.stderr).toContain("requires --apply --yes");
+
+    const applied = await execa(process.execPath, cliArguments("prune", "--apply", "--yes"), {
+      cwd: workspace,
+      reject: false,
+    });
+    expect(applied.exitCode, applied.stderr).toBe(0);
+    expect(applied.stdout).toContain("Pruned 1 stale worktree registration");
+    const metadataAfter = await execa(
+      "git",
+      [`--git-dir=${path.join(workspace, "repo.git")}`, "worktree", "list", "--porcelain"],
+      { cwd: workspace },
+    );
+    expect(metadataAfter.stdout).not.toContain(stalePath);
+    await expect(fs.stat(path.join(workspace, "main"))).resolves.toSatisfy((stat) =>
+      stat.isDirectory(),
+    );
+    const branch = await execa(
+      "git",
+      [
+        `--git-dir=${path.join(workspace, "repo.git")}`,
+        "show-ref",
+        "--verify",
+        "refs/heads/feature/stale",
+      ],
+      { cwd: workspace, reject: false },
+    );
+    expect(branch.exitCode).toBe(0);
+
+    const repeated = await execa(process.execPath, cliArguments("prune"), {
+      cwd: workspace,
+      reject: false,
+    });
+    expect(repeated.exitCode, repeated.stderr).toBe(0);
+    expect(repeated.stdout).toContain("No stale worktree metadata found");
+  });
+
   it("adopts an existing checkout through explicit non-TTY options", async () => {
     const worktreeDir = path.join(temporaryRoot, "adopted-worktrees");
     const configPath = path.join(repository.source, ".git", "config");

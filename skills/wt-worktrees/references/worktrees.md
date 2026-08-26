@@ -39,3 +39,12 @@ state:
 ```sh
 wt remove <worktree> --yes
 ```
+
+`wt prune` is different from removal: it previews stale Git registrations for worktree directories
+that are already missing. To apply that metadata-only cleanup non-interactively, use:
+
+```sh
+wt prune --apply --yes
+```
+
+Pruning never deletes a branch or directory and leaves locked registrations untouched.

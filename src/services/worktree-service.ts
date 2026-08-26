@@ -31,6 +31,10 @@ export type BranchCandidate = {
   label: string;
 };
 
+export type ListWorktreeOptions = {
+  expire?: string;
+};
+
 export type RemovalInspection = {
   worktree: Worktree;
   dirty: boolean;
@@ -42,8 +46,12 @@ export type RemovalInspection = {
 export class WorktreeService {
   constructor(private readonly git: GitClient) {}
 
-  async list(workspace: Workspace): Promise<Worktree[]> {
-    const result = await this.git.run(["worktree", "list", "--porcelain", "-z"], {
+  async list(workspace: Workspace, options: ListWorktreeOptions = {}): Promise<Worktree[]> {
+    const args = ["worktree", "list", "--porcelain", "-z"];
+    if (options.expire) {
+      args.push("--expire", options.expire);
+    }
+    const result = await this.git.run(args, {
       gitDir: workspace.gitDir,
     });
     const parsed = parseWorktreePorcelain(result.stdout).filter((worktree) => !worktree.bare);
@@ -63,6 +71,18 @@ export class WorktreeService {
         };
       }),
     );
+  }
+
+  async listPrunable(workspace: Workspace): Promise<Worktree[]> {
+    return (await this.list(workspace, { expire: "now" })).filter(
+      (worktree) => worktree.prunable && !worktree.locked && worktree.state === "missing",
+    );
+  }
+
+  async prune(workspace: Workspace): Promise<void> {
+    await this.git.run(["worktree", "prune", "--expire", "now"], {
+      gitDir: workspace.gitDir,
+    });
   }
 
   async add(workspace: Workspace, options: AddWorktreeOptions): Promise<Worktree> {

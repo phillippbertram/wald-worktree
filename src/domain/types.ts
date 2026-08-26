@@ -63,6 +63,7 @@ export type CopyStep = StepBase & {
   type: "copy";
   source: StepSource;
   from: string;
+  glob?: string;
   to: string;
   optional: boolean;
   overwrite: boolean;
@@ -72,6 +73,7 @@ export type SymlinkStep = StepBase & {
   type: "symlink";
   source: StepSource;
   from: string;
+  glob?: string;
   to: string;
   optional: boolean;
   overwrite: boolean;

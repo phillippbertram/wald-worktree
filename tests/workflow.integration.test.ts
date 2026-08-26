@@ -263,6 +263,170 @@ tasks:
       /Shared path must be a directory, not a link/u,
     );
   });
+
+  it("expands file globs deterministically and preserves relative directory structure", async () => {
+    await commitProjectConfig(
+      repository,
+      `version: 1
+defaults:
+  fetch: false
+hooks:
+  post_create:
+    - type: symlink
+      source: shared
+      from: env
+      glob: "**/.env*"
+      to: .
+tasks:
+  snapshot-env:
+    steps:
+      - type: copy
+        source: shared
+        from: env
+        glob: "**/.env*"
+        to: .snapshots
+  optional-empty:
+    steps:
+      - type: copy
+        source: shared
+        from: env
+        glob: "**/*.missing"
+        to: optional
+        optional: true
+  required-empty:
+    steps:
+      - type: copy
+        source: shared
+        from: env
+        glob: "**/*.missing"
+        to: required
+  preflight-conflict:
+    steps:
+      - type: copy
+        source: shared
+        from: fixtures
+        glob: "**/*.json"
+        to: generated
+  overwrite-fixtures:
+    steps:
+      - type: copy
+        source: shared
+        from: fixtures
+        glob: "**/*.json"
+        to: generated
+        overwrite: true
+  source-must-be-directory:
+    steps:
+      - type: copy
+        source: shared
+        from: fixtures/a.json
+        glob: "**/*.json"
+        to: invalid
+  directories-only:
+    steps:
+      - type: copy
+        source: shared
+        from: directories
+        glob: "**"
+        to: directory-output
+  glob-escape:
+    steps:
+      - type: copy
+        source: shared
+        from: unsafe
+        glob: "**/*"
+        to: unsafe-output
+  target-traversal:
+    steps:
+      - type: copy
+        source: shared
+        from: fixtures
+        glob: "**/*.json"
+        to: ../outside-target
+`,
+    );
+    const workspace = await workspaces.initialize(
+      repository.remote,
+      path.join(temporaryRoot, "glob-workspace"),
+    );
+    await fs.mkdir(path.join(workspace.sharedDir, "env", "apps", "api"), { recursive: true });
+    await fs.mkdir(path.join(workspace.sharedDir, "env", "apps", "web"), { recursive: true });
+    await fs.mkdir(path.join(workspace.sharedDir, "fixtures"), { recursive: true });
+    await fs.mkdir(path.join(workspace.sharedDir, "directories", "nested"), { recursive: true });
+    await fs.mkdir(path.join(workspace.sharedDir, "unsafe"), { recursive: true });
+    await fs.writeFile(path.join(workspace.sharedDir, "env", ".env"), "ROOT=true\n", "utf8");
+    await fs.writeFile(
+      path.join(workspace.sharedDir, "env", "apps", "api", ".env"),
+      "API=true\n",
+      "utf8",
+    );
+    await fs.writeFile(
+      path.join(workspace.sharedDir, "env", "apps", "web", ".env.local"),
+      "WEB=true\n",
+      "utf8",
+    );
+    await fs.writeFile(path.join(workspace.sharedDir, "fixtures", "a.json"), '{"a":1}\n');
+    await fs.writeFile(path.join(workspace.sharedDir, "fixtures", "b.json"), '{"b":1}\n');
+
+    const workflow = new WorktreeWorkflowService(git, worktrees, configs);
+    const plan = await workflow.planCreate(workspace, { branch: "main", fetch: false });
+    if (!plan.project) throw new Error("Expected project configuration.");
+    await configs.trust(workspace, plan.project);
+    const created = await workflow.executeCreate(plan);
+
+    for (const file of [".env", "apps/api/.env", "apps/web/.env.local"]) {
+      const target = path.join(created.path, file);
+      expect(path.isAbsolute(await fs.readlink(target))).toBe(false);
+    }
+    expect(await fs.readFile(path.join(created.path, "apps", "api", ".env"), "utf8")).toBe(
+      "API=true\n",
+    );
+
+    await workflow.runTask(workspace, created, "snapshot-env");
+    expect(
+      await fs.readFile(path.join(created.path, ".snapshots", "apps", "web", ".env.local"), "utf8"),
+    ).toBe("WEB=true\n");
+    await workflow.runTask(workspace, created, "optional-empty");
+    await expect(fs.stat(path.join(created.path, "optional"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    await expect(workflow.runTask(workspace, created, "required-empty")).rejects.toThrow(
+      /Glob did not match any files/u,
+    );
+
+    await fs.mkdir(path.join(created.path, "generated"), { recursive: true });
+    await fs.writeFile(path.join(created.path, "generated", "b.json"), "existing\n");
+    await expect(workflow.runTask(workspace, created, "preflight-conflict")).rejects.toThrow(
+      /Target path already exists/u,
+    );
+    await expect(fs.stat(path.join(created.path, "generated", "a.json"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+
+    await workflow.runTask(workspace, created, "overwrite-fixtures");
+    expect(await fs.readFile(path.join(created.path, "generated", "a.json"), "utf8")).toBe(
+      '{"a":1}\n',
+    );
+    expect(await fs.readFile(path.join(created.path, "generated", "b.json"), "utf8")).toBe(
+      '{"b":1}\n',
+    );
+    await expect(workflow.runTask(workspace, created, "source-must-be-directory")).rejects.toThrow(
+      /Glob source must be a directory/u,
+    );
+    await expect(workflow.runTask(workspace, created, "directories-only")).rejects.toThrow(
+      /Glob did not match any files/u,
+    );
+    await expect(workflow.runTask(workspace, created, "target-traversal")).rejects.toThrow(
+      /Target path must stay inside/u,
+    );
+
+    const outside = path.join(temporaryRoot, "outside-glob-secret.json");
+    await fs.writeFile(outside, '{"secret":true}\n');
+    await fs.symlink(outside, path.join(workspace.sharedDir, "unsafe", "secret.json"));
+    await expect(workflow.runTask(workspace, created, "glob-escape")).rejects.toThrow(
+      /Glob match resolves outside/u,
+    );
+  });
 });
 
 async function commitProjectConfig(

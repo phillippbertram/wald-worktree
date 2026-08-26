@@ -1,6 +1,6 @@
 ---
 name: wt-worktrees
-description: Use the wt CLI to create, inspect, enter, automate, open, and safely remove Git worktrees. Apply when a repository is managed by wt or the user asks for a wt-based worktree or agent workflow.
+description: Use the wt CLI to create, inspect, enter, automate, open, safely remove, and prune Git worktrees. Apply when a repository is managed by wt or the user asks for a wt-based worktree or agent workflow.
 ---
 
 # wt worktrees
@@ -12,6 +12,7 @@ Start with read-only discovery:
 ```sh
 wt list --json
 wt config
+wt prune
 ```
 
 Resolve locations with `wt cd`; do not derive directory names from branches. Prefer direct
@@ -26,6 +27,9 @@ commands in non-interactive agent sessions and include required confirmation fla
 Do not use `--force` for removal without verifying that dirty or unmerged work can be discarded.
 Never infer permission to delete branches or the primary checkout; `wt` does not perform those
 actions as part of normal removal.
+
+Use `wt prune` as a read-only preview of stale Git metadata. Apply it non-interactively only with
+`wt prune --apply --yes`; this does not remove directories or branches and preserves locked entries.
 
 If `.wt.yml` is untrusted, inspect the reported hooks, tasks, and tools before running
 `wt config trust --yes`. A formatting-only edit preserves its semantic trust, but changed behavior

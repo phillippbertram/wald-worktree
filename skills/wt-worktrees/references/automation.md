@@ -37,4 +37,16 @@ public hook runner.
 
 Command steps using `argv` do not invoke a shell. A configured `shell` step explicitly uses
 `/bin/sh -c`; review quoting and expansion accordingly. `copy` and `symlink` steps are restricted to
-the target worktree and supported source worktrees.
+the target worktree and supported source roots. For multiple files, use one positive glob below an
+explicit source directory while preserving repository-relative paths:
+
+```yaml
+- type: symlink
+  source: shared
+  from: env
+  glob: "**/.env*"
+  to: .
+```
+
+Glob steps process files only, validate every destination before changing targets, and require
+`optional: true` when no match should be accepted.

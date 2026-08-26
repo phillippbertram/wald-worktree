@@ -7,6 +7,7 @@ import { registerExecCommand } from "./commands/exec.js";
 import { registerInitCommand } from "./commands/init.js";
 import { registerListCommand } from "./commands/list.js";
 import { registerOpenCommand } from "./commands/open.js";
+import { registerPruneCommand } from "./commands/prune.js";
 import { registerRemoveCommand } from "./commands/remove.js";
 import { registerRunCommand } from "./commands/run.js";
 import { registerSetupCommand } from "./commands/setup.js";
@@ -45,6 +46,7 @@ export function createProgram(
   registerRunCommand(program, context);
   registerSetupCommand(program, context);
   registerRemoveCommand(program, context);
+  registerPruneCommand(program, context);
   registerConfigCommand(program, context);
   registerShellInitCommand(program, context);
   registerCompletionCommand(program, context);

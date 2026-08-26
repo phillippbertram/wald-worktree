@@ -146,4 +146,62 @@ hooks:
       "hook post_create: symlink shared:env/.env -> .env",
     );
   });
+
+  it("parses glob file steps and includes the pattern in trust behavior", () => {
+    const first = configs.parseProjectConfig(
+      `version: 1
+hooks:
+  post_create:
+    - type: symlink
+      source: shared
+      from: env
+      glob: "**/.env*"
+      to: .
+`,
+      ".wt.yml",
+    );
+    const changed = configs.parseProjectConfig(
+      `version: 1
+hooks:
+  post_create:
+    - type: symlink
+      source: shared
+      from: env
+      glob: "**/*.json"
+      to: .
+`,
+      ".wt.yml",
+    );
+
+    expect(first.config.hooks.post_create[0]).toMatchObject({
+      type: "symlink",
+      from: "env",
+      glob: "**/.env*",
+      to: ".",
+    });
+    expect(first.hash).not.toBe(changed.hash);
+    expect(configs.formatProjectConfig(first.config)).toContain('glob: "**/.env*"');
+    expect(summarizeExecutableConfig(first)).toContain(
+      "hook post_create: symlink shared:env/**/.env* -> .",
+    );
+  });
+
+  it.each(["../*.env", "/tmp/*.env", "!secret.env", "C:\\\\secrets\\\\*.env"])(
+    "rejects unsafe glob pattern %s",
+    (glob) => {
+      expect(() =>
+        configs.parseProjectConfig(
+          `version: 1
+hooks:
+  post_create:
+    - type: copy
+      from: env
+      glob: ${JSON.stringify(glob)}
+      to: .
+`,
+          ".wt.yml",
+        ),
+      ).toThrow(/positive relative pattern/u);
+    },
+  );
 });

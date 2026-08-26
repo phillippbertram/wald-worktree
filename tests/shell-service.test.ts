@@ -14,4 +14,8 @@ describe("shell integration", () => {
       expect(script).toContain("builtin cd");
     },
   );
+
+  it.each(["bash", "zsh", "fish"] as const)("offers prune completion for %s", (shell) => {
+    expect(shells.render(shell)).toContain("prune");
+  });
 });
