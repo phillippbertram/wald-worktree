@@ -49,17 +49,23 @@ describe("CLI contract", () => {
   it("keeps onboarding and built-in tools discoverable in help", () => {
     const output = new PassThrough();
     const program = createProgram({ stdout: output, stderr: output });
+    const init = program.commands.find((command) => command.name() === "init");
     const create = program.commands.find((command) => command.name() === "create");
     const open = program.commands.find((command) => command.name() === "open");
 
     program.outputHelp();
     const rootHelp = output.read()?.toString() ?? "";
+    init?.outputHelp();
+    const initHelp = output.read()?.toString() ?? "";
     create?.outputHelp();
     const createHelp = output.read()?.toString() ?? "";
     open?.outputHelp();
     const openHelp = output.read()?.toString() ?? "";
 
     expect(rootHelp).toContain("cd ~/dev/project && wt init");
+    expect(initHelp).toContain("Keep an existing checkout or create a standalone workspace root");
+    expect(initHelp).toContain("inside the workspace root for");
+    expect(initHelp).toContain("cloned repositories");
     expect(createHelp).toContain("wt create feature/payment --cd");
     expect(createHelp).toContain("codex-app");
     expect(openHelp).toContain("wt open feature-payment --tool code");

@@ -113,18 +113,18 @@ export class AutomationService {
     if (context.event !== "post_create" && !context.event.startsWith("task:")) {
       throw new WtError(`${step.type} steps are only supported in post_create hooks and tasks.`);
     }
-    const sourceWorktree = resolveSource(step.source, context);
-    if (!sourceWorktree) {
+    const sourceRoot = resolveSourceRoot(step.source, context);
+    if (!sourceRoot) {
       if (step.optional) {
         return;
       }
-      throw new WtError(`Cannot resolve ${step.source} source worktree for ${step.type} step.`);
+      throw new WtError(`Cannot resolve ${step.source} source for ${step.type} step.`);
     }
     if (!context.targetPath) {
       throw new WtError(`${step.type} steps require an existing target worktree.`);
     }
 
-    const source = resolveRelativePath(sourceWorktree.path, step.from, "Source path");
+    const source = resolveRelativePath(sourceRoot, step.from, "Source path");
     const target = resolveRelativePath(context.targetPath, step.to, "Target path");
     const sourceStat = await lstatOrNull(source);
     if (!sourceStat) {
@@ -133,7 +133,10 @@ export class AutomationService {
       }
       throw new WtError(`Source path does not exist: ${source}`);
     }
-    await assertRealPathInside(sourceWorktree.path, source, "Source path");
+    if (step.source === "shared") {
+      await assertSharedDirectory(context.workspace);
+    }
+    await assertRealPathInside(sourceRoot, source, "Source path");
     await assertDestinationInside(context.targetPath, target);
 
     const targetStat = await lstatOrNull(target);
@@ -177,14 +180,16 @@ function resolveWorkingDirectory(
   return context.targetPath;
 }
 
-function resolveSource(source: StepSource, context: AutomationContext): Worktree | null {
+function resolveSourceRoot(source: StepSource, context: AutomationContext): string | null {
   switch (source) {
     case "current":
-      return context.current;
+      return context.current?.path ?? null;
     case "primary":
-      return context.primary;
+      return context.primary?.path ?? null;
     case "default":
-      return context.defaultWorktree;
+      return context.defaultWorktree?.path ?? null;
+    case "shared":
+      return context.workspace.sharedDir;
   }
 }
 
@@ -198,7 +203,7 @@ function resolveRelativePath(root: string, relativePath: string, label: string):
   }
   const resolved = path.resolve(root, relativePath);
   if (!isPathInsideOrEqual(root, resolved)) {
-    throw new WtError(`${label} must stay inside its worktree.`);
+    throw new WtError(`${label} must stay inside its configured source.`);
   }
   return resolved;
 }
@@ -207,6 +212,22 @@ async function assertRealPathInside(root: string, candidate: string, label: stri
   const [realRoot, realCandidate] = await Promise.all([fs.realpath(root), fs.realpath(candidate)]);
   if (!isPathInsideOrEqual(realRoot, realCandidate)) {
     throw new WtError(`${label} resolves outside its worktree.`);
+  }
+}
+
+async function assertSharedDirectory(workspace: Workspace): Promise<void> {
+  const stat = await fs.lstat(workspace.sharedDir);
+  if (stat.isSymbolicLink() || !stat.isDirectory()) {
+    throw new WtError(
+      `Shared path must be a directory, not a link or file: ${workspace.sharedDir}`,
+    );
+  }
+  const [realMetadata, realShared] = await Promise.all([
+    fs.realpath(path.dirname(workspace.configPath)),
+    fs.realpath(workspace.sharedDir),
+  ]);
+  if (!isPathInsideOrEqual(realMetadata, realShared)) {
+    throw new WtError("Shared path resolves outside the workspace metadata directory.");
   }
 }
 

@@ -14,6 +14,10 @@ export type AdoptionOptions = {
   defaultBranch?: string;
 };
 
+export type ManagedInitializationOptions = {
+  worktreeDir?: string;
+};
+
 export type AdoptionWorktree = Pick<
   Worktree,
   "path" | "branch" | "branchRef" | "locked" | "lockReason" | "prunable"
@@ -36,6 +40,10 @@ export type AdoptionInspection = {
   worktreeDirSelectionRequired: boolean;
   metadataDir: string;
   existingWorkspace: Workspace | null;
+  modified: boolean;
+  modifiedWorktrees: string[];
+  detachedWorktrees: string[];
+  stashCount: number;
 };
 
 export class WorkspaceService {
@@ -48,10 +56,13 @@ export class WorkspaceService {
     repository: string,
     directory?: string,
     startDirectory = process.cwd(),
+    options: ManagedInitializationOptions = {},
   ): Promise<Workspace> {
     const root = path.resolve(startDirectory, directory ?? humanizeRepositoryName(repository));
     const gitDir = path.join(root, "repo.git");
     const metadataDir = path.join(root, ".wt");
+    const sharedDir = path.join(metadataDir, "shared");
+    const worktreeDir = resolveManagedWorktreeDir(root, options.worktreeDir);
     const configPath = path.join(metadataDir, workspaceConfigFileName);
     const rootExisted = await this.pathExists(root);
 
@@ -66,6 +77,10 @@ export class WorkspaceService {
 
     try {
       await fs.mkdir(metadataDir, { mode: 0o700 });
+      await fs.mkdir(sharedDir, { mode: 0o700 });
+      if (worktreeDir !== root) {
+        await fs.mkdir(worktreeDir, { recursive: true });
+      }
       await this.git.run(["clone", "--bare", "--", repository, gitDir], {
         cwd: startDirectory,
       });
@@ -85,7 +100,7 @@ export class WorkspaceService {
         mode: "managed",
         paths: {
           git: "../repo.git",
-          worktrees: "..",
+          worktrees: relativeConfigPath(metadataDir, worktreeDir),
           primaryWorktree: null,
         },
         remote,
@@ -99,6 +114,9 @@ export class WorkspaceService {
       await Promise.all([
         fs.rm(gitDir, { force: true, recursive: true }),
         fs.rm(metadataDir, { force: true, recursive: true }),
+        worktreeDir === root
+          ? Promise.resolve()
+          : fs.rm(worktreeDir, { force: true, recursive: true }),
       ]);
       if (!rootExisted) {
         await fs.rmdir(root).catch(() => undefined);
@@ -130,6 +148,23 @@ export class WorkspaceService {
     const primaryWorktree = primaryRecord ? await canonicalPath(primaryRecord.path) : null;
     const remotes = await this.readRemotes(gitDir);
     const existingWorkspace = await this.findExistingWorkspace(gitDir, discoveredWorkspace);
+    const modifiedWorktrees = (
+      await Promise.all(
+        worktrees
+          .filter((worktree) => !worktree.bare)
+          .map(async (worktree) => ({
+            path: worktree.path,
+            modified: await this.isModified(worktree.path),
+          })),
+      )
+    )
+      .filter((worktree) => worktree.modified)
+      .map((worktree) => worktree.path);
+    const detachedWorktrees = worktrees
+      .filter((worktree) => !worktree.bare && !worktree.branchRef)
+      .map((worktree) => worktree.path);
+    const modified = primaryWorktree ? modifiedWorktrees.includes(primaryWorktree) : false;
+    const stashCount = primaryWorktree ? await this.readStashCount(primaryWorktree) : 0;
 
     if (existingWorkspace) {
       await this.assertCompatibleReadoption(existingWorkspace, options, startDirectory);
@@ -148,6 +183,10 @@ export class WorkspaceService {
         worktreeDirSelectionRequired: false,
         metadataDir: path.dirname(existingWorkspace.configPath),
         existingWorkspace,
+        modified,
+        modifiedWorktrees,
+        detachedWorktrees,
+        stashCount,
       };
     }
 
@@ -187,7 +226,103 @@ export class WorkspaceService {
       worktreeDirSelectionRequired,
       metadataDir: path.join(gitDir, "wt"),
       existingWorkspace: null,
+      modified,
+      modifiedWorktrees,
+      detachedWorktrees,
+      stashCount,
     };
+  }
+
+  async initializeFromExisting(
+    inspection: AdoptionInspection,
+    directory: string,
+    startDirectory = process.cwd(),
+    options: ManagedInitializationOptions = {},
+  ): Promise<Workspace> {
+    if (inspection.remoteSelectionRequired) {
+      throw new WtError("Multiple remotes found. Select one before creating a new workspace.");
+    }
+    if (!inspection.defaultBranch) {
+      throw new WtError("Could not determine the default branch.");
+    }
+
+    const root = path.resolve(startDirectory, directory);
+    const gitDir = path.join(root, "repo.git");
+    const metadataDir = path.join(root, ".wt");
+    const sharedDir = path.join(metadataDir, "shared");
+    const worktreeDir = resolveManagedWorktreeDir(root, options.worktreeDir);
+    const configPath = path.join(metadataDir, workspaceConfigFileName);
+    const rootExisted = await this.pathExists(root);
+    if (rootExisted) {
+      const entries = await fs.readdir(root);
+      if (entries.length > 0) {
+        throw new WtError(`Target directory is not empty: ${root}`);
+      }
+    } else {
+      await fs.mkdir(root, { recursive: true });
+    }
+
+    const cloneSource = inspection.primaryWorktree ?? inspection.gitDir;
+    const remoteUrl = inspection.remoteName
+      ? await this.readRemoteUrl(inspection.gitDir, inspection.remoteName)
+      : null;
+
+    try {
+      await fs.mkdir(metadataDir, { mode: 0o700 });
+      await fs.mkdir(sharedDir, { mode: 0o700 });
+      if (worktreeDir !== root) {
+        await fs.mkdir(worktreeDir, { recursive: true });
+      }
+      await this.git.run(["clone", "--bare", "--", cloneSource, gitDir], {
+        cwd: startDirectory,
+      });
+      await this.git.run(["remote", "remove", "origin"], { gitDir, reject: false });
+
+      const remote = inspection.remoteName ? createRemote(inspection.remoteName) : null;
+      if (remote && remoteUrl) {
+        await this.git.run(["remote", "add", remote.name, remoteUrl], { gitDir });
+        await this.git.run(
+          ["config", "--replace-all", `remote.${remote.name}.fetch`, remote.fetchRefspec],
+          { gitDir },
+        );
+      }
+      await this.ensureCopiedDefaultBranch(
+        inspection.gitDir,
+        gitDir,
+        inspection.defaultBranch,
+        inspection.remoteName,
+      );
+      await this.git.run(["symbolic-ref", "HEAD", `refs/heads/${inspection.defaultBranch}`], {
+        gitDir,
+      });
+
+      const config: WorkspaceConfig = {
+        version: 1,
+        mode: "managed",
+        paths: {
+          git: "../repo.git",
+          worktrees: relativeConfigPath(metadataDir, worktreeDir),
+          primaryWorktree: null,
+        },
+        remote,
+        defaultBranch: inspection.defaultBranch,
+        trustedProjectConfig: null,
+      };
+      await this.configs.writeWorkspaceConfig(configPath, config);
+      return await this.toWorkspace(configPath, config);
+    } catch (error) {
+      await Promise.all([
+        fs.rm(gitDir, { force: true, recursive: true }),
+        fs.rm(metadataDir, { force: true, recursive: true }),
+        worktreeDir === root
+          ? Promise.resolve()
+          : fs.rm(worktreeDir, { force: true, recursive: true }),
+      ]);
+      if (!rootExisted) {
+        await fs.rmdir(root).catch(() => undefined);
+      }
+      throw error;
+    }
   }
 
   async adopt(inspection: AdoptionInspection): Promise<Workspace> {
@@ -245,6 +380,7 @@ export class WorkspaceService {
       await fs.mkdir(metadataDir, { mode: 0o700 });
       createdMetadata = true;
       await fs.chmod(metadataDir, 0o700);
+      await fs.mkdir(path.join(metadataDir, "shared"), { mode: 0o700 });
 
       const config: WorkspaceConfig = {
         version: 1,
@@ -314,7 +450,17 @@ export class WorkspaceService {
       }
     }
 
-    throw new WtError("No managed workspace found. Run this command inside a wt workspace.");
+    throw new WtError("No wt workspace found. Run wt init inside or for this repository.");
+  }
+
+  async ensureSharedDirectory(workspace: Workspace): Promise<void> {
+    const existing = await lstatOrNull(workspace.sharedDir);
+    if (existing?.isSymbolicLink() || (existing && !existing.isDirectory())) {
+      throw new WtError(
+        `Shared path must be a directory, not a link or file: ${workspace.sharedDir}`,
+      );
+    }
+    await fs.mkdir(workspace.sharedDir, { recursive: true, mode: 0o700 });
   }
 
   private async read(configPath: string): Promise<Workspace> {
@@ -348,15 +494,37 @@ export class WorkspaceService {
     const primaryWorktree = config.paths.primaryWorktree
       ? await canonicalPath(path.resolve(configDir, config.paths.primaryWorktree))
       : null;
+    const sharedDir = path.join(configDir, "shared");
+    const sharedStat = await lstatOrNull(sharedDir);
+    if (sharedStat?.isSymbolicLink() || (sharedStat && !sharedStat.isDirectory())) {
+      throw new WtError(`Shared path must be a directory, not a link or file: ${sharedDir}`);
+    }
+
+    let root: string;
 
     if (config.mode === "managed") {
+      root = path.dirname(configDir);
+      if (configDir !== path.join(root, ".wt")) {
+        throw new WtError("Managed workspace configuration must stay in <workspace>/.wt.");
+      }
       if (primaryWorktree) {
         throw new WtError("Managed bare workspaces cannot define a primary worktree.");
       }
-      if (!isPathInsideOrEqual(worktreeDir, gitDir)) {
+      if (gitDir !== path.join(root, "repo.git")) {
+        throw new WtError("Managed Git directory must be <workspace>/repo.git.");
+      }
+      if (!isPathInsideOrEqual(root, worktreeDir)) {
         throw new WtError("Managed workspace paths must stay inside the workspace root.");
       }
+      if (
+        worktreeDir === gitDir ||
+        isPathInsideOrEqual(gitDir, worktreeDir) ||
+        isPathInsideOrEqual(configDir, worktreeDir)
+      ) {
+        throw new WtError("Managed worktree directory overlaps reserved workspace metadata.");
+      }
     } else {
+      root = worktreeDir;
       if (configDir !== path.join(gitDir, "wt")) {
         throw new WtError("Adopted workspace configuration must stay inside the Git directory.");
       }
@@ -369,8 +537,9 @@ export class WorkspaceService {
     }
 
     return {
-      root: worktreeDir,
+      root,
       configPath: canonicalConfigPath,
+      sharedDir,
       gitDir,
       worktreeDir,
       primaryWorktree,
@@ -566,7 +735,7 @@ export class WorkspaceService {
     try {
       return await this.find(source);
     } catch (error) {
-      if (error instanceof WtError && error.message.startsWith("No managed workspace found")) {
+      if (error instanceof WtError && error.message.startsWith("No wt workspace found")) {
         return null;
       }
       throw error;
@@ -607,6 +776,47 @@ export class WorkspaceService {
       .split("\n")
       .filter(Boolean)
       .sort((left, right) => left.localeCompare(right));
+  }
+
+  private async readRemoteUrl(gitDir: string, remote: string): Promise<string> {
+    const result = await this.git.run(["remote", "get-url", remote], { gitDir });
+    return result.stdout;
+  }
+
+  private async isModified(worktree: string): Promise<boolean> {
+    const result = await this.git.run(
+      ["status", "--porcelain=v1", "-z", "--untracked-files=normal"],
+      { cwd: worktree, reject: false },
+    );
+    return result.exitCode === 0 && result.stdout.length > 0;
+  }
+
+  private async readStashCount(worktree: string): Promise<number> {
+    const result = await this.git.run(["stash", "list", "--format=%gd"], { cwd: worktree });
+    return result.stdout ? result.stdout.split("\n").filter(Boolean).length : 0;
+  }
+
+  private async ensureCopiedDefaultBranch(
+    sourceGitDir: string,
+    targetGitDir: string,
+    branch: string,
+    remote: string | null,
+  ): Promise<void> {
+    if (
+      await this.git.succeeds(
+        ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}^{commit}`],
+        {
+          gitDir: targetGitDir,
+        },
+      )
+    ) {
+      return;
+    }
+    const sourceReference = remote ? `refs/remotes/${remote}/${branch}` : `refs/heads/${branch}`;
+    await this.git.run(
+      ["fetch", "--no-tags", sourceGitDir, `${sourceReference}:refs/heads/${branch}`],
+      { gitDir: targetGitDir },
+    );
   }
 
   private async readLocalBranches(gitDir: string): Promise<string[]> {
@@ -658,6 +868,22 @@ function createRemote(name: string): WorkspaceRemote {
 
 function relativeConfigPath(configDir: string, target: string): string {
   return path.relative(configDir, target) || ".";
+}
+
+function resolveManagedWorktreeDir(root: string, requested?: string): string {
+  const resolved = requested ? path.resolve(root, requested) : root;
+  if (!isPathInsideOrEqual(root, resolved)) {
+    throw new WtError("Managed worktree directory must stay inside the workspace root.");
+  }
+  if (
+    resolved === path.join(root, "repo.git") ||
+    isPathInsideOrEqual(path.join(root, "repo.git"), resolved) ||
+    resolved === path.join(root, ".wt") ||
+    isPathInsideOrEqual(path.join(root, ".wt"), resolved)
+  ) {
+    throw new WtError("Managed worktree directory overlaps reserved workspace metadata.");
+  }
+  return resolved;
 }
 
 function commonDirectParent(paths: string[]): string | null {

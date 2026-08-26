@@ -21,6 +21,7 @@ export type WorkspaceConfig = {
 export type Workspace = {
   root: string;
   configPath: string;
+  sharedDir: string;
   gitDir: string;
   worktreeDir: string;
   primaryWorktree: string | null;
@@ -42,7 +43,7 @@ export type Worktree = {
   state: WorktreeState;
 };
 
-export type StepSource = "current" | "default" | "primary";
+export type StepSource = "current" | "default" | "primary" | "shared";
 export type StepWorkingDirectory = "source" | "target" | "workspace";
 
 type StepBase = {

@@ -136,6 +136,133 @@ hooks:
     );
     await expect(worktrees.resolve(workspace, "main")).resolves.toMatchObject({ branch: "main" });
   });
+
+  it("links and copies workspace-local shared files without escaping the shared root", async () => {
+    await commitProjectConfig(
+      repository,
+      `version: 1
+defaults:
+  fetch: false
+hooks:
+  post_create:
+    - type: symlink
+      source: shared
+      from: env/.env
+      to: .env
+    - type: symlink
+      source: shared
+      from: env/apps/api/.env
+      to: apps/api/.env
+    - type: copy
+      source: shared
+      from: config/tool.json
+      to: .local/tool.json
+tasks:
+  sync-local:
+    steps:
+      - type: copy
+        source: shared
+        from: config/tool.json
+        to: .local/tool.json
+        overwrite: true
+  escape:
+    steps:
+      - type: copy
+        source: shared
+        from: escape
+        to: escaped.txt
+  traversal:
+    steps:
+      - type: copy
+        source: shared
+        from: ../outside-secret
+        to: escaped.txt
+  optional-local:
+    steps:
+      - type: copy
+        source: shared
+        from: missing.txt
+        to: optional.txt
+        optional: true
+`,
+    );
+    const workspace = await workspaces.initialize(
+      repository.remote,
+      path.join(temporaryRoot, "shared-workspace"),
+    );
+    await fs.mkdir(path.join(workspace.sharedDir, "env", "apps", "api"), { recursive: true });
+    await fs.mkdir(path.join(workspace.sharedDir, "config"), { recursive: true });
+    await fs.writeFile(path.join(workspace.sharedDir, "env", ".env"), "ROOT=true\n", "utf8");
+    await fs.writeFile(
+      path.join(workspace.sharedDir, "env", "apps", "api", ".env"),
+      "API=true\n",
+      "utf8",
+    );
+    await fs.writeFile(
+      path.join(workspace.sharedDir, "config", "tool.json"),
+      '{"version":1}\n',
+      "utf8",
+    );
+
+    const workflow = new WorktreeWorkflowService(git, worktrees, configs);
+    const plan = await workflow.planCreate(workspace, { branch: "main", fetch: false });
+    if (!plan.project) throw new Error("Expected project configuration.");
+    await configs.trust(workspace, plan.project);
+    const created = await workflow.executeCreate(plan);
+
+    const rootLink = await fs.readlink(path.join(created.path, ".env"));
+    expect(path.isAbsolute(rootLink)).toBe(false);
+    expect(await fs.readFile(path.join(created.path, ".env"), "utf8")).toBe("ROOT=true\n");
+    expect(await fs.readFile(path.join(created.path, "apps", "api", ".env"), "utf8")).toBe(
+      "API=true\n",
+    );
+    expect(await fs.readFile(path.join(created.path, ".local", "tool.json"), "utf8")).toBe(
+      '{"version":1}\n',
+    );
+    await expect(workflow.runHook(workspace, created, "post_create")).rejects.toThrow(
+      /Target path already exists/u,
+    );
+    await workflow.runTask(workspace, created, "optional-local");
+    await expect(fs.stat(path.join(created.path, "optional.txt"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    await expect(workflow.runTask(workspace, created, "traversal")).rejects.toThrow(
+      /Source path must stay inside its configured source/u,
+    );
+
+    await fs.writeFile(
+      path.join(workspace.sharedDir, "config", "tool.json"),
+      '{"version":2}\n',
+      "utf8",
+    );
+    await workflow.runTask(workspace, created, "sync-local");
+    expect(await fs.readFile(path.join(created.path, ".local", "tool.json"), "utf8")).toBe(
+      '{"version":2}\n',
+    );
+
+    const outside = path.join(temporaryRoot, "outside-secret");
+    await fs.writeFile(outside, "do not copy\n", "utf8");
+    await fs.symlink(outside, path.join(workspace.sharedDir, "escape"));
+    await expect(workflow.runTask(workspace, created, "escape")).rejects.toThrow(
+      /Source path resolves outside/u,
+    );
+
+    const outsideShared = path.join(temporaryRoot, "outside-shared");
+    await fs.mkdir(path.join(outsideShared, "config"), { recursive: true });
+    await fs.writeFile(
+      path.join(outsideShared, "config", "tool.json"),
+      '{"outside":true}\n',
+      "utf8",
+    );
+    await fs.rm(workspace.sharedDir, { recursive: true });
+    await fs.symlink(outsideShared, workspace.sharedDir);
+    await expect(workflow.runTask(workspace, created, "sync-local")).rejects.toThrow(
+      /Shared path must be a directory, not a link/u,
+    );
+    await expect(workspaces.find(workspace.root)).rejects.toThrow(
+      /Shared path must be a directory, not a link/u,
+    );
+  });
 });
 
 async function commitProjectConfig(

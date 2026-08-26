@@ -207,7 +207,7 @@ export class WorktreeService {
     const directMatches = worktrees.filter(
       (worktree) => worktree.name === identifier || worktree.branch === identifier,
     );
-    const resolvedIdentifier = await canonicalPath(path.resolve(workspace.root, identifier));
+    const resolvedIdentifier = await canonicalPath(path.resolve(workspace.worktreeDir, identifier));
     const pathMatches = (
       await Promise.all(
         worktrees.map(async (worktree) => ({
@@ -223,7 +223,7 @@ export class WorktreeService {
     ];
 
     if (matches.length === 0) {
-      throw new WtError(`No managed worktree matches: ${identifier}`);
+      throw new WtError(`No worktree matches: ${identifier}`);
     }
     if (matches.length > 1) {
       throw new WtError(`Worktree identifier is ambiguous: ${identifier}`);

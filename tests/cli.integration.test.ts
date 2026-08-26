@@ -140,7 +140,7 @@ describe("CLI smoke flow", () => {
       { cwd: temporaryRoot, reject: false },
     );
     expect(adopted.exitCode, adopted.stderr).toBe(0);
-    expect(adopted.stdout).toContain("Adopted repository");
+    expect(adopted.stdout).toContain("Connected existing checkout");
     await expect(fs.stat(path.join(repository.source, ".wt.yml"))).rejects.toMatchObject({
       code: "ENOENT",
     });
@@ -166,6 +166,8 @@ describe("CLI smoke flow", () => {
     expect(refused.exitCode).toBe(1);
     expect(refused.stderr).toContain("primary checkout cannot be removed");
 
+    const sharedDir = path.join(repository.source, ".git", "wt", "shared");
+    await fs.rm(sharedDir, { recursive: true });
     const repeated = await execa(
       process.execPath,
       cliArguments("init", "--adopt", repository.source, "--yes", "--config"),
@@ -174,8 +176,45 @@ describe("CLI smoke flow", () => {
     expect(repeated.exitCode, repeated.stderr).toBe(0);
     expect(repeated.stdout).toContain("already initialized");
     expect(repeated.stdout).toContain("review and commit .wt.yml");
+    await expect(fs.stat(sharedDir)).resolves.toSatisfy((stat) => stat.isDirectory());
     await expect(fs.readFile(path.join(repository.source, ".wt.yml"), "utf8")).resolves.toContain(
       "version: 1",
+    );
+  });
+
+  it("initializes a grouped standalone layout and reports its absolute paths", async () => {
+    const workspace = path.join(temporaryRoot, "grouped-cli-workspace");
+    const initialized = await execa(
+      process.execPath,
+      cliArguments("init", repository.remote, workspace, "--worktrees-dir", "worktrees"),
+      { cwd: temporaryRoot, reject: false },
+    );
+    expect(initialized.exitCode, initialized.stderr).toBe(0);
+    await expect(
+      fs.readFile(path.join(workspace, ".wt", "workspace.yml"), "utf8"),
+    ).resolves.toContain("worktrees: ../worktrees");
+    expect((await fs.stat(path.join(workspace, ".wt", "shared"))).mode & 0o777).toBe(0o700);
+
+    const created = await execa(process.execPath, cliArguments("create", "main", "--no-fetch"), {
+      cwd: workspace,
+      reject: false,
+    });
+    expect(created.exitCode, created.stderr).toBe(0);
+    await expect(fs.stat(path.join(workspace, "worktrees", "main"))).resolves.toSatisfy((stat) =>
+      stat.isDirectory(),
+    );
+
+    const configured = await execa(process.execPath, cliArguments("config"), {
+      cwd: path.join(workspace, "worktrees", "main"),
+      reject: false,
+    });
+    expect(configured.exitCode, configured.stderr).toBe(0);
+    expect(configured.stdout).toContain(`workspace_root: ${await fs.realpath(workspace)}`);
+    expect(configured.stdout).toContain(
+      `worktrees_path: ${await fs.realpath(path.join(workspace, "worktrees"))}`,
+    );
+    expect(configured.stdout).toContain(
+      `shared_path: ${await fs.realpath(path.join(workspace, ".wt", "shared"))}`,
     );
   });
 

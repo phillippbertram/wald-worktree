@@ -206,7 +206,7 @@ describe("adopting existing Git repositories", () => {
     const configPath = path.join(metadataDir, "config.json");
     await fs.writeFile(configPath, `${JSON.stringify(removedConfig, null, 2)}\n`, "utf8");
 
-    await expect(workspaces.find(root)).rejects.toThrow(/No managed workspace/u);
+    await expect(workspaces.find(root)).rejects.toThrow(/No wt workspace/u);
   });
 
   it("rejects absolute paths in an adopted workspace config", async () => {

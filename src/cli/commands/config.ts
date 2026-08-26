@@ -84,6 +84,10 @@ export function registerConfigCommand(program: Command, context: CliContext): vo
 export async function showConfiguration(context: CliContext): Promise<void> {
   const workspace = await context.workspaces.find();
   context.output.stdout.write(context.configs.formatWorkspaceConfig(workspace.config));
+  writeLine(context.output.stdout, `workspace_config: ${workspace.configPath}`);
+  writeLine(context.output.stdout, `workspace_root: ${workspace.root}`);
+  writeLine(context.output.stdout, `worktrees_path: ${workspace.worktreeDir}`);
+  writeLine(context.output.stdout, `shared_path: ${workspace.sharedDir}`);
   const project = await resolveProjectConfiguration(workspace, context);
   writeLine(context.output.stdout, `project_config: ${project?.path ?? "none"}`);
   writeLine(context.output.stdout, `project_hash: ${project?.hash ?? "none"}`);

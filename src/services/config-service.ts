@@ -74,7 +74,7 @@ const commandStepFileSchema = z
   });
 
 const fileStepShape = {
-  source: z.enum(["current", "default", "primary"]).default("default"),
+  source: z.enum(["current", "default", "primary", "shared"]).default("default"),
   from: z.string().min(1),
   to: z.string().min(1),
   optional: z.boolean().default(false),
@@ -498,7 +498,7 @@ function describeStep(step: AutomationStep): string {
   if (step.type === "command") {
     return step.argv?.join(" ") ?? step.shell ?? "command";
   }
-  return `${step.type} ${step.from} -> ${step.to}`;
+  return `${step.type} ${step.source}:${step.from} -> ${step.to}`;
 }
 
 function isNotFound(error: unknown): boolean {

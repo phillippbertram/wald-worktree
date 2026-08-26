@@ -105,8 +105,7 @@ export async function findWorkspaceOrNull(context: CliContext): Promise<Workspac
   try {
     return await context.workspaces.find();
   } catch (error) {
-    if (error instanceof WtError && error.message.startsWith("No managed workspace found"))
-      return null;
+    if (error instanceof WtError && error.message.startsWith("No wt workspace found")) return null;
     throw error;
   }
 }

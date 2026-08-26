@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ConfigService,
   projectConfigFileName,
+  summarizeExecutableConfig,
   workspaceConfigFileName,
 } from "../src/services/config-service.js";
 
@@ -119,5 +120,30 @@ tools:
         ".wt.yml",
       ),
     ).toThrow(/first argv entry must name an executable/u);
+  });
+
+  it("accepts shared as a declarative file source", () => {
+    const document = configs.parseProjectConfig(
+      `version: 1
+hooks:
+  post_create:
+    - type: symlink
+      source: shared
+      from: env/.env
+      to: .env
+`,
+      ".wt.yml",
+    );
+
+    expect(document.config.hooks.post_create[0]).toMatchObject({
+      type: "symlink",
+      source: "shared",
+      from: "env/.env",
+      to: ".env",
+    });
+    expect(document.requiresTrust).toBe(true);
+    expect(summarizeExecutableConfig(document)).toContain(
+      "hook post_create: symlink shared:env/.env -> .env",
+    );
   });
 });

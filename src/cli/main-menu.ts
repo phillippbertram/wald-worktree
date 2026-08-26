@@ -19,18 +19,7 @@ export async function runMainMenu(program: Command, context: CliContext): Promis
   }
   const workspace = await findWorkspaceOrNull(context);
   if (!workspace) {
-    const action = await searchSelect("No wt workspace found. Choose an action:", [
-      { label: "Set up current Git repository", value: "init" },
-      { label: "Clone repository into a new workspace", value: "clone" },
-      { label: "Exit", value: "exit" },
-    ]);
-    if (action === "init") await initializeWorkspace({}, context);
-    if (action === "clone") {
-      const repository = await promptText("Repository URL or local path:");
-      if (!repository) return;
-      const directory = await promptText("Workspace directory (optional):");
-      await initializeWorkspace({ repository, directory: directory || undefined }, context);
-    }
+    await initializeWorkspace({}, context);
     return;
   }
 
