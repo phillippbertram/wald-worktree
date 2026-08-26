@@ -80,7 +80,7 @@ export class WorktreeWorkflowService {
     const targetProject = await this.configs.readProjectConfig(created.path);
     if ((plan.project?.hash ?? null) !== (targetProject?.hash ?? null)) {
       throw new WtError(
-        `Worktree was created at ${created.path}, but its ${targetProject?.path ?? ".wt.yaml"} does not match the configuration inspected before creation. Review the worktree before running hooks.`,
+        `Worktree was created at ${created.path}, but its ${targetProject?.path ?? ".wt.yml"} does not match the configuration inspected before creation. Review the worktree before running hooks.`,
       );
     }
 
@@ -160,7 +160,7 @@ export class WorktreeWorkflowService {
       this.readWorktreeContext(workspace),
     ]);
     if (!project) {
-      throw new WtError(`No .wt.yaml found in ${worktree.path}`);
+      throw new WtError(`No .wt.yml found in ${worktree.path}`);
     }
     await this.ensureTrusted(workspace, project, options.trustProjectConfig);
     await this.automation.runTask(project, name, {
@@ -242,7 +242,7 @@ export class WorktreeWorkflowService {
       return;
     }
     throw new WtError(
-      `Project configuration is not trusted: ${project?.path ?? ".wt.yaml"}\nReview it, then run: wt config trust`,
+      `Project configuration is not trusted: ${project?.path ?? ".wt.yml"}\nReview it, then run: wt config trust`,
     );
   }
 

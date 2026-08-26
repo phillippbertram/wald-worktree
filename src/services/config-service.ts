@@ -13,8 +13,8 @@ import type {
 } from "../domain/types.js";
 import type { GitClient } from "../infrastructure/git-client.js";
 
-export const workspaceConfigFileName = "workspace.yaml";
-export const projectConfigFileName = ".wt.yaml";
+export const workspaceConfigFileName = "workspace.yml";
+export const projectConfigFileName = ".wt.yml";
 
 const workspaceRemoteFileSchema = z
   .object({
@@ -184,6 +184,37 @@ export class ConfigService {
     }
   }
 
+  async writeProjectConfig(
+    root: string,
+    config: ProjectConfig,
+    options: { overwrite?: boolean } = {},
+  ): Promise<ProjectConfigDocument> {
+    const configPath = path.join(root, projectConfigFileName);
+    const content = this.formatProjectConfig(config);
+    if (!options.overwrite) {
+      try {
+        await fs.writeFile(configPath, content, { flag: "wx", mode: 0o644 });
+      } catch (error) {
+        if (isAlreadyExists(error)) {
+          throw new WtError(`Project configuration already exists: ${configPath}`);
+        }
+        throw new WtError(`Cannot write project configuration: ${configPath}`, { cause: error });
+      }
+      return this.parseProjectConfig(content, configPath);
+    }
+
+    const temporaryPath = `${configPath}.${randomUUID()}.tmp`;
+    try {
+      await fs.writeFile(temporaryPath, content, { mode: 0o644 });
+      await fs.rename(temporaryPath, configPath);
+    } catch (error) {
+      throw new WtError(`Cannot write project configuration: ${configPath}`, { cause: error });
+    } finally {
+      await fs.rm(temporaryPath, { force: true });
+    }
+    return this.parseProjectConfig(content, configPath);
+  }
+
   async readProjectConfigAtRevision(
     git: GitClient,
     workspace: Workspace,
@@ -230,6 +261,14 @@ export class ConfigService {
 
   formatWorkspaceConfig(config: WorkspaceConfig): string {
     return stringify(toWorkspaceConfigFile(config), { indent: 2, lineWidth: 0 });
+  }
+
+  formatProjectConfig(config: ProjectConfig): string {
+    const parsed = projectConfigFileSchema.safeParse(toProjectConfigFile(config));
+    if (!parsed.success) {
+      throw invalidConfigurationError(projectConfigFileName, parsed.error);
+    }
+    return stringify(parsed.data, { indent: 2, lineWidth: 0 });
   }
 
   private async readYaml(configPath: string): Promise<unknown> {
@@ -338,6 +377,41 @@ function fromProjectConfigFile(file: ProjectConfigFile): ProjectConfig {
   };
 }
 
+function toProjectConfigFile(config: ProjectConfig): ProjectConfigFile {
+  return {
+    version: 1,
+    defaults: {
+      fetch: config.defaults.fetch,
+      tool: config.defaults.tool,
+    },
+    hooks: {
+      pre_create: config.hooks.pre_create.map(toAutomationStepFile),
+      post_create: config.hooks.post_create.map(toAutomationStepFile),
+      pre_remove: config.hooks.pre_remove.map(toAutomationStepFile),
+      post_remove: config.hooks.post_remove.map(toAutomationStepFile),
+    },
+    tasks: Object.fromEntries(
+      Object.entries(config.tasks).map(([name, task]) => [
+        name,
+        {
+          description: task.description,
+          steps: task.steps.map(toAutomationStepFile),
+        },
+      ]),
+    ),
+    tools: Object.fromEntries(
+      Object.entries(config.tools).map(([name, tool]) => [
+        name,
+        {
+          description: tool.description,
+          command: tool.command,
+          mode: tool.mode,
+        },
+      ]),
+    ),
+  };
+}
+
 function fromAutomationStepFile(step: AutomationStepFile): AutomationStep {
   if (step.type === "command") {
     return {
@@ -358,6 +432,29 @@ function fromAutomationStepFile(step: AutomationStepFile): AutomationStep {
     optional: step.optional,
     overwrite: step.overwrite,
     continueOnError: step.continue_on_error,
+  };
+}
+
+function toAutomationStepFile(step: AutomationStep): AutomationStepFile {
+  if (step.type === "command") {
+    return {
+      type: "command",
+      argv: step.argv,
+      shell: step.shell,
+      cwd: step.cwd,
+      env: step.env,
+      timeout_seconds: step.timeoutSeconds,
+      continue_on_error: step.continueOnError,
+    };
+  }
+  return {
+    type: step.type,
+    source: step.source,
+    from: step.from,
+    to: step.to,
+    optional: step.optional,
+    overwrite: step.overwrite,
+    continue_on_error: step.continueOnError,
   };
 }
 
@@ -406,4 +503,8 @@ function describeStep(step: AutomationStep): string {
 
 function isNotFound(error: unknown): boolean {
   return error instanceof Error && "code" in error && error.code === "ENOENT";
+}
+
+function isAlreadyExists(error: unknown): boolean {
+  return error instanceof Error && "code" in error && error.code === "EEXIST";
 }

@@ -143,11 +143,11 @@ async function commitProjectConfig(
   configuration: string,
   files: Record<string, string> = {},
 ): Promise<void> {
-  await fs.writeFile(path.join(repository.source, ".wt.yaml"), configuration, "utf8");
+  await fs.writeFile(path.join(repository.source, ".wt.yml"), configuration, "utf8");
   for (const [name, content] of Object.entries(files)) {
     await fs.writeFile(path.join(repository.source, name), content, "utf8");
   }
-  await gitRun(repository.source, ["add", ".wt.yaml", ...Object.keys(files)]);
+  await gitRun(repository.source, ["add", ".wt.yml", ...Object.keys(files)]);
   await gitRun(repository.source, ["commit", "-m", "add wt workflow"]);
   await gitRun(repository.source, ["push", "origin", "main"]);
 }

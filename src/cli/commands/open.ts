@@ -19,7 +19,7 @@ export function registerOpenCommand(program: Command, context: CliContext): void
     .command("open")
     .description("Open a worktree in an editor, app, or agent tool")
     .argument("[worktree]", "Worktree name, branch, or path")
-    .option("--tool <profile>", "Tool profile from built-ins or .wt.yaml")
+    .option("--tool <profile>", "Tool profile from built-ins or .wt.yml")
     .action(async (worktree: unknown, options: unknown) => {
       const input = parseCliInput(openInputSchema, { worktree, ...(options as object) });
       const workspace = await context.workspaces.find();

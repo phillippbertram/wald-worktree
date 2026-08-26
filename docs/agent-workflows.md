@@ -14,7 +14,7 @@ wt open feature/payment --tool claude
 ```
 
 The `codex-app` profile opens the selected directory in the Codex desktop app. Project-specific
-agents can be declared under `tools` in `.wt.yaml`.
+agents can be declared under `tools` in `.wt.yml`.
 
 ## Recommended sequence
 

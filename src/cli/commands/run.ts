@@ -19,7 +19,7 @@ export function registerRunCommand(program: Command, context: CliContext): void 
   program
     .command("run")
     .description("Run a named project task")
-    .argument("[task]", "Task name from .wt.yaml")
+    .argument("[task]", "Task name from .wt.yml")
     .argument("[worktree]", "Worktree name, branch, or path")
     .action(async (task: unknown, worktree: unknown) => {
       await runProjectTask(parseCliInput(runInputSchema, { task, worktree }), context);
@@ -30,10 +30,13 @@ export async function runProjectTask(input: RunInput, context: CliContext): Prom
   const workspace = await context.workspaces.find();
   const worktree = await resolveWorktree(workspace, input.worktree, context.worktrees);
   const project = await context.workflow.projectForWorktree(worktree);
-  if (!project) throw new WtError(`No .wt.yaml found in ${worktree.path}`);
+  if (!project) throw new WtError(`No .wt.yml found in ${worktree.path}`);
   await ensureTrusted(workspace, project, context);
   let task = input.task;
   if (!task) {
+    if (Object.keys(project.config.tasks).length === 0) {
+      throw new WtError("No tasks are configured in .wt.yml.");
+    }
     if (!isInteractiveTerminal()) throw new WtError("Task is required without a TTY.");
     task =
       (await searchSelect(

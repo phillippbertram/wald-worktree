@@ -1,12 +1,15 @@
 # Project automation
 
-`.wt.yaml` is repository-owned executable configuration. Validate and inspect it before granting
+`.wt.yml` is repository-owned executable configuration. Validate and inspect it before granting
 trust:
 
 ```sh
 wt config
 wt config trust --yes
 ```
+
+Create a detected starting configuration with `wt config init`. In non-interactive sessions, use
+`wt config init <worktree> --yes`; replacing an existing file also requires `--force`.
 
 Run named tasks in the selected worktree:
 

@@ -60,6 +60,13 @@ _wt_complete() {
     create) COMPREPLY=( $(compgen -W "$(command wt completion branches)" -- "$current") ) ;;
     cd|open|remove|exec|setup) COMPREPLY=( $(compgen -W "$(command wt completion worktrees)" -- "$current") ) ;;
     run) COMPREPLY=( $(compgen -W "$(command wt completion tasks)" -- "$current") ) ;;
+    config)
+      if [ "$COMP_CWORD" -eq 2 ]; then
+        COMPREPLY=( $(compgen -W "init trust untrust" -- "$current") )
+      elif [ "\${COMP_WORDS[2]}" = "init" ]; then
+        COMPREPLY=( $(compgen -W "$(command wt completion worktrees)" -- "$current") )
+      fi
+      ;;
   esac
 }
 complete -F _wt_complete wt
@@ -94,6 +101,13 @@ function _wt_complete() {
     create) compadd -- \${(f)"$(command wt completion branches)"} ;;
     cd|open|remove|exec|setup) compadd -- \${(f)"$(command wt completion worktrees)"} ;;
     run) compadd -- \${(f)"$(command wt completion tasks)"} ;;
+    config)
+      if (( CURRENT == 3 )); then
+        compadd -- init trust untrust
+      elif [[ "$words[3]" == "init" ]]; then
+        compadd -- \${(f)"$(command wt completion worktrees)"}
+      fi
+      ;;
   esac
 }
 compdef _wt_complete wt
@@ -120,5 +134,7 @@ complete -c wt -f -n '__fish_use_subcommand' -a '${commands.join(" ")}'
 complete -c wt -f -n '__fish_seen_subcommand_from create' -a '(command wt completion branches)'
 complete -c wt -f -n '__fish_seen_subcommand_from cd open remove exec setup' -a '(command wt completion worktrees)'
 complete -c wt -f -n '__fish_seen_subcommand_from run' -a '(command wt completion tasks)'
+complete -c wt -f -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from init trust untrust' -a 'init trust untrust'
+complete -c wt -f -n '__fish_seen_subcommand_from config; and __fish_seen_subcommand_from init' -a '(command wt completion worktrees)'
 `;
 }

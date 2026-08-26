@@ -22,7 +22,7 @@ describe("CLI contract", () => {
       "completion",
     ]);
     expect(program.commands.find((command) => command.name() === "config")?.commands).toHaveLength(
-      2,
+      3,
     );
   });
 

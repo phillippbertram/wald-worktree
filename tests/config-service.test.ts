@@ -1,8 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { ConfigService } from "../src/services/config-service.js";
+import {
+  ConfigService,
+  projectConfigFileName,
+  workspaceConfigFileName,
+} from "../src/services/config-service.js";
 
 describe("project YAML configuration", () => {
   const configs = new ConfigService();
+
+  it("uses the clean-break .yml filenames", () => {
+    expect(projectConfigFileName).toBe(".wt.yml");
+    expect(workspaceConfigFileName).toBe("workspace.yml");
+  });
 
   it("uses a semantic hash so comments and key order do not invalidate trust", () => {
     const first = configs.parseProjectConfig(
@@ -17,7 +26,7 @@ tasks:
       - type: command
         argv: [pnpm, test]
 `,
-      ".wt.yaml",
+      ".wt.yml",
     );
     const reformatted = configs.parseProjectConfig(
       `# formatting is not behavior
@@ -34,7 +43,7 @@ hooks:
       type: command
 version: 1
 `,
-      ".wt.yaml",
+      ".wt.yml",
     );
     const changed = configs.parseProjectConfig(
       `version: 1
@@ -48,7 +57,7 @@ tasks:
       - type: command
         argv: [pnpm, test]
 `,
-      ".wt.yaml",
+      ".wt.yml",
     );
 
     expect(first.requiresTrust).toBe(true);
@@ -67,7 +76,7 @@ hooks:
       shell: pnpm install
       surprise: true
 `,
-        ".wt.yaml",
+        ".wt.yml",
       ),
     ).toThrow(/Configuration is invalid/u);
   });
@@ -78,7 +87,7 @@ hooks:
 defaults:
   fetch: false
 `,
-      ".wt.yaml",
+      ".wt.yml",
     );
 
     expect(document.requiresTrust).toBe(false);
@@ -94,7 +103,7 @@ tasks:
       - type: command
         argv: [printf, ""]
 `,
-      ".wt.yaml",
+      ".wt.yml",
     );
 
     expect(document.config.tasks["empty-argument"]?.steps[0]).toMatchObject({
@@ -107,7 +116,7 @@ tools:
   broken:
     command: [""]
 `,
-        ".wt.yaml",
+        ".wt.yml",
       ),
     ).toThrow(/first argv entry must name an executable/u);
   });

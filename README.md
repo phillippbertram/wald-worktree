@@ -12,15 +12,16 @@ formats are not supported.
 - Create, find, inspect, enter, open, and safely remove Git worktrees.
 - Adopt an existing repository without moving it or changing its Git configuration.
 - Bootstrap ignored files and shared directories through explicit copy or symlink steps.
-- Configure lifecycle hooks and named tasks in a committed `.wt.yaml`.
+- Configure lifecycle hooks and named tasks in a committed `.wt.yml`.
 - Run commands as argument arrays by default; shell evaluation is always explicit.
 - Trust executable project configuration by its semantic SHA-256 hash.
 - Open worktrees in editors and agents through built-in or custom tool profiles.
 - Install a portable Agent Skill from [`skills/wt-worktrees`](skills/wt-worktrees/SKILL.md).
+- Guide interactive input with Inquirer and present progress and status with concise colored output.
 
 ## Requirements and installation
 
-- Node.js 22 or newer
+- Node.js 22.13 or newer
 - pnpm 11
 - Git
 
@@ -66,6 +67,14 @@ wt create feature/review --tool codex
 wt remove feature-payment --yes
 ```
 
+Create a repository-owned configuration through project detection and guided prompts:
+
+```sh
+wt config init
+wt config
+wt config trust
+```
+
 Enable navigation and dynamic completion in the current shell:
 
 ```sh
@@ -85,22 +94,23 @@ parent-shell mutation.
 
 ## Commands
 
-| Command | Purpose |
-| --- | --- |
-| `wt init` | Interactively adopt the current Git repository. |
-| `wt init --adopt <path> --yes` | Adopt a repository non-interactively. |
-| `wt init <repository> [directory]` | Create a managed bare workspace. |
-| `wt create [branch]` | Create a worktree, run setup, and optionally open a tool. |
-| `wt list` | Show every worktree and its state. |
-| `wt cd [worktree]` | Enter a worktree with shell integration, or print its path. |
-| `wt open [worktree] --tool <profile>` | Open an editor or start an agent. |
-| `wt exec [worktree] -- <command>` | Execute an argument-safe command in a worktree. |
-| `wt run [task] [worktree]` | Run a named `.wt.yaml` task. |
-| `wt setup [worktree]` | Re-run the configured post-create setup. |
-| `wt remove [worktrees...] --yes` | Safely remove one or several worktrees. |
-| `wt config` | Show and validate local/project YAML configuration. |
-| `wt config trust\|untrust` | Control project configuration trust. |
-| `wt shell-init bash\|zsh\|fish` | Generate navigation and completion integration. |
+| Command                               | Purpose                                                     |
+| ------------------------------------- | ----------------------------------------------------------- |
+| `wt init`                             | Interactively adopt the current Git repository.             |
+| `wt init --adopt <path> --yes`        | Adopt a repository non-interactively.                       |
+| `wt init <repository> [directory]`    | Create a managed bare workspace.                            |
+| `wt create [branch]`                  | Create a worktree, run setup, and optionally open a tool.   |
+| `wt list`                             | Show every worktree and its state.                          |
+| `wt cd [worktree]`                    | Enter a worktree with shell integration, or print its path. |
+| `wt open [worktree] --tool <profile>` | Open an editor or start an agent.                           |
+| `wt exec [worktree] -- <command>`     | Execute an argument-safe command in a worktree.             |
+| `wt run [task] [worktree]`            | Run a named `.wt.yml` task.                                 |
+| `wt setup [worktree]`                 | Re-run the configured post-create setup.                    |
+| `wt remove [worktrees...] --yes`      | Safely remove one or several worktrees.                     |
+| `wt config init [worktree]`           | Generate `.wt.yml` from detected project conventions.       |
+| `wt config`                           | Show and validate local/project YAML configuration.         |
+| `wt config trust\|untrust`            | Control project configuration trust.                        |
+| `wt shell-init bash\|zsh\|fish`       | Generate navigation and completion integration.             |
 
 Use `wt <command> --help` for options. JSON output is available where it is a data interface, such
 as `wt list --json`; JSON is not a configuration format.
@@ -109,11 +119,48 @@ as `wt list --json`; JSON is not a configuration format.
 
 `wt` uses two YAML files with separate ownership:
 
-- `.wt/workspace.yaml` for a dedicated workspace, or `<git-common-dir>/wt/workspace.yaml` for an
+- `.wt/workspace.yml` for a dedicated workspace, or `<git-common-dir>/wt/workspace.yml` for an
   adopted repository. It stores local paths, remote/default-branch selection, and the trusted
   project configuration hash.
-- `.wt.yaml` in the repository. It is committed and may define defaults, lifecycle hooks, named
+- `.wt.yml` in the repository. It is committed and may define defaults, lifecycle hooks, named
   tasks, and tool profiles.
+
+`.yml` is the only v1 filename convention; `.yaml` aliases are intentionally not read.
+
+For an existing checkout, `wt init` offers to generate `.wt.yml` after adoption. The deterministic
+equivalent is:
+
+```sh
+wt init --adopt . --yes --config
+```
+
+For a managed bare workspace, first create a checkout and then initialize its configuration:
+
+```sh
+wt create main
+wt config init main
+```
+
+The wizard detects the package manager, an environment example, available package scripts, and a
+default editor or agent. `wt config init --yes` accepts the detected defaults without prompts;
+replacing an existing file additionally requires `--force`.
+
+```mermaid
+flowchart TD
+    Create[wt create] --> Validate[Validate .wt.yml]
+    Validate --> Trusted{Executable behavior trusted?}
+    Trusted -- No --> Stop[Stop before changing Git]
+    Trusted -- Yes --> PreCreate[pre_create]
+    PreCreate --> Add[git worktree add]
+    Add --> PostCreate[post_create]
+    PostCreate --> Ready[Worktree ready]
+    PostCreate -- Failure --> Recover[Worktree kept<br/>retry with wt setup]
+
+    Remove[wt remove] --> Safety[Dirty, merge and lock checks]
+    Safety --> PreRemove[pre_remove]
+    PreRemove --> GitRemove[git worktree remove]
+    GitRemove --> PostRemove[post_remove]
+```
 
 A minimal project configuration:
 
@@ -150,7 +197,7 @@ tools:
     mode: foreground
 ```
 
-See [configuration](docs/configuration.md) for the complete schema and lifecycle, and
+See [configuration](docs/configuration.md) for a complete hooks/tasks example and the lifecycle, and
 [agent workflows](docs/agent-workflows.md) for tool profiles and the packaged skill.
 
 ## Trust and safety
@@ -177,6 +224,10 @@ Commander owns routing, help, usage errors, and option collection. Each command 
 `src/cli/commands/` and validates its arguments and options with a command-specific Zod schema
 before calling services. YAML configuration uses the same boundary rule: strict Zod schemas apply
 defaults and reject unknown fields before domain logic sees the data.
+
+Interactive prompts use `@inquirer/prompts`, progress uses Ora, status and table output uses
+Picocolors, and child processes use Execa. Colors and spinners are TTY-aware so redirected output
+remains suitable for scripts.
 
 ## Development
 

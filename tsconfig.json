@@ -3,7 +3,6 @@
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "jsx": "react-jsx",
     "lib": ["ES2024"],
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
@@ -15,5 +14,5 @@
     "target": "ES2024",
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "tests/**/*.ts"]
+  "include": ["src/**/*.ts", "tests/**/*.ts"]
 }

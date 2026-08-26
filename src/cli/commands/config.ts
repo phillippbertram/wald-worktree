@@ -3,16 +3,46 @@ import { z } from "zod";
 import { WtError } from "../../domain/errors.js";
 import { confirm, isInteractiveTerminal } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
-import { printTrustSummary, resolveProjectConfiguration, success, writeLine } from "../helpers.js";
-import { parseCliInput } from "../input.js";
+import {
+  printTrustSummary,
+  resolveProjectConfiguration,
+  resolveWorktree,
+  success,
+  writeLine,
+} from "../helpers.js";
+import { nonEmptyCliString, parseCliInput } from "../input.js";
+import { initializeProjectConfiguration } from "../project-config-wizard.js";
 
 const confirmationInputSchema = z.object({ yes: z.boolean().default(false) }).strict();
+const initializationInputSchema = z
+  .object({
+    worktree: nonEmptyCliString.optional(),
+    force: z.boolean().default(false),
+    yes: z.boolean().default(false),
+  })
+  .strict();
 
 export function registerConfigCommand(program: Command, context: CliContext): void {
   const config = program
     .command("config")
-    .description("Show and trust YAML configuration")
+    .description("Create, show, and trust YAML configuration")
     .action(async () => showConfiguration(context));
+
+  config
+    .command("init")
+    .description("Create an initial .wt.yml through project detection or guided prompts")
+    .argument("[worktree]", "Worktree name, branch, or path")
+    .option("--yes", "Use detected defaults without prompting")
+    .option("--force", "Replace an existing .wt.yml")
+    .action(async (worktree: unknown, options: unknown) => {
+      const input = parseCliInput(initializationInputSchema, {
+        worktree,
+        ...(options as object),
+      });
+      const workspace = await context.workspaces.find();
+      const selected = await resolveWorktree(workspace, input.worktree, context.worktrees);
+      await initializeProjectConfiguration(selected.path, input, context);
+    });
 
   config
     .command("trust")
@@ -22,7 +52,7 @@ export function registerConfigCommand(program: Command, context: CliContext): vo
       const input = parseCliInput(confirmationInputSchema, options);
       const workspace = await context.workspaces.find();
       const project = await resolveProjectConfiguration(workspace, context);
-      if (!project) throw new WtError("No .wt.yaml found on the current or default branch.");
+      if (!project) throw new WtError("No .wt.yml found on the current or default branch.");
       printTrustSummary(project, context.output);
       if (!input.yes) {
         if (!isInteractiveTerminal()) throw new WtError("Non-interactive trust requires --yes.");

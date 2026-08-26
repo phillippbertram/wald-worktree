@@ -10,6 +10,7 @@ import { runProjectTask } from "./commands/run.js";
 import { setupWorktree } from "./commands/setup.js";
 import type { CliContext } from "./context.js";
 import { findWorkspaceOrNull, resolveWorktree } from "./helpers.js";
+import { initializeProjectConfiguration } from "./project-config-wizard.js";
 
 export async function runMainMenu(program: Command, context: CliContext): Promise<void> {
   if (!isInteractiveTerminal()) {
@@ -35,6 +36,7 @@ export async function runMainMenu(program: Command, context: CliContext): Promis
     { label: "Execute command", value: "exec" },
     { label: "List worktrees", value: "list" },
     { label: "Remove worktree", value: "remove" },
+    { label: "Create project configuration", value: "config-init" },
     { label: "Configuration", value: "config" },
     { label: "Exit", value: "exit" },
   ]);
@@ -69,5 +71,10 @@ export async function runMainMenu(program: Command, context: CliContext): Promis
     case "config":
       await showConfiguration(context);
       break;
+    case "config-init": {
+      const selected = current ?? (await resolveWorktree(workspace, undefined, context.worktrees));
+      await initializeProjectConfiguration(selected.path, { force: false, yes: false }, context);
+      break;
+    }
   }
 }

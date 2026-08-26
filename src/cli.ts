@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { CommanderError } from "commander";
+import pc from "picocolors";
 import { createProgram } from "./cli/create-program.js";
 import { toErrorMessage, WtError } from "./domain/errors.js";
 
@@ -14,7 +15,7 @@ async function main(): Promise<void> {
       return;
     }
 
-    process.stderr.write(`Error: ${toErrorMessage(error)}\n`);
+    process.stderr.write(`${pc.red(pc.bold("Error:"))} ${toErrorMessage(error)}\n`);
     process.exitCode = error instanceof WtError ? error.exitCode : 1;
   }
 }

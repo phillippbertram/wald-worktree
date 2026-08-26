@@ -1,6 +1,7 @@
 import { GitClient } from "../infrastructure/git-client.js";
 import { ProcessRunner } from "../infrastructure/process-runner.js";
 import { ConfigService } from "../services/config-service.js";
+import { ProjectConfigInitializer } from "../services/project-config-initializer.js";
 import { ShellService } from "../services/shell-service.js";
 import { ToolService } from "../services/tool-service.js";
 import { WorkspaceService } from "../services/workspace-service.js";
@@ -26,6 +27,7 @@ export function createCliContext(
     output,
     git,
     configs,
+    projectConfigs: new ProjectConfigInitializer(),
     workspaces,
     worktrees,
     processes,

@@ -48,9 +48,7 @@ describe("managed Git workspace", () => {
       },
       trustedProjectConfig: null,
     });
-    expect(workspace.configPath).toBe(
-      await fs.realpath(path.join(target, ".wt", "workspace.yaml")),
-    );
+    expect(workspace.configPath).toBe(await fs.realpath(path.join(target, ".wt", "workspace.yml")));
     expect(await fs.stat(workspace.gitDir)).toSatisfy((stat) => stat.isDirectory());
 
     const remoteMain = await new GitClient().succeeds(

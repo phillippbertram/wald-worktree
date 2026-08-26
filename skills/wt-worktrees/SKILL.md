@@ -27,6 +27,6 @@ Do not use `--force` for removal without verifying that dirty or unmerged work c
 Never infer permission to delete branches or the primary checkout; `wt` does not perform those
 actions as part of normal removal.
 
-If `.wt.yaml` is untrusted, inspect the reported hooks, tasks, and tools before running
+If `.wt.yml` is untrusted, inspect the reported hooks, tasks, and tools before running
 `wt config trust --yes`. A formatting-only edit preserves its semantic trust, but changed behavior
 requires a new decision.

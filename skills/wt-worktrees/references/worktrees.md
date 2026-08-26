@@ -12,7 +12,7 @@ wt create <branch>
 wt create <new-branch> --from <commit-ish>
 ```
 
-Fetching follows the `.wt.yaml` default. Override it only when the task requires it with
+Fetching follows the `.wt.yml` default. Override it only when the task requires it with
 `--fetch` or `--no-fetch`. Use `--tool <profile>` to open an editor or agent after setup.
 
 Creation runs trusted `pre_create` before Git creates the checkout, followed by `post_create`. If

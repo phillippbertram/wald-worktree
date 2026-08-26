@@ -14,6 +14,7 @@ import {
 import type { CliContext } from "../context.js";
 import { shellQuote, success, writeLine } from "../helpers.js";
 import { nonEmptyCliString, parseCliInput } from "../input.js";
+import { initializeProjectConfiguration } from "../project-config-wizard.js";
 
 const initInputSchema = z
   .object({
@@ -23,6 +24,7 @@ const initInputSchema = z
     worktreesDir: nonEmptyCliString.optional(),
     remote: z.union([nonEmptyCliString, z.literal(false)]).optional(),
     defaultBranch: nonEmptyCliString.optional(),
+    config: z.boolean().optional(),
     yes: z.boolean().optional(),
   })
   .strict();
@@ -40,6 +42,7 @@ export function registerInitCommand(program: Command, context: CliContext): void
     .option("--remote <name>", "Remote used for fetching and branch resolution")
     .option("--no-remote", "Adopt as a local-only repository")
     .option("--default-branch <branch>", "Default branch used for creation and merge checks")
+    .option("--config", "Create a detected .wt.yml after adopting a working repository")
     .option("--yes", "Accept detected adoption settings without prompting")
     .action(async (repository: unknown, directory: unknown, options: unknown) => {
       const input = parseCliInput(initInputSchema, {
@@ -64,6 +67,10 @@ export async function initializeWorkspace(input: InitInput, context: CliContext)
   );
   await success(`Initialized workspace at ${workspace.root}`, context.output);
   writeLine(context.output.stdout, `Next: wt create ${shellQuote(workspace.config.defaultBranch)}`);
+  writeLine(
+    context.output.stdout,
+    `Then: wt config init ${shellQuote(workspace.config.defaultBranch)}`,
+  );
 }
 
 async function initializeAdoptedWorkspace(input: InitInput, context: CliContext): Promise<void> {
@@ -132,6 +139,39 @@ async function initializeAdoptedWorkspace(input: InitInput, context: CliContext)
   );
   await success(`Adopted repository at ${workspace.root}`, context.output);
   writeLine(context.output.stdout, `Worktrees: ${workspace.worktreeDir}`);
+  await maybeInitializeProjectConfig(workspace.primaryWorktree, input, context);
+}
+
+async function maybeInitializeProjectConfig(
+  primaryWorktree: string | null,
+  input: InitInput,
+  context: CliContext,
+): Promise<void> {
+  if (!primaryWorktree) {
+    if (input.config) {
+      throw new WtError(
+        "Cannot create .wt.yml while adopting a bare repository without a worktree. Create a worktree, then run wt config init.",
+      );
+    }
+    return;
+  }
+  if (await context.configs.readProjectConfig(primaryWorktree)) return;
+
+  const requested = Boolean(input.config);
+  const shouldCreate =
+    requested ||
+    (isInteractiveTerminal() &&
+      !input.yes &&
+      (await confirm("Create an initial .wt.yml now?", true)));
+  if (!shouldCreate) {
+    writeLine(context.output.stdout, "Optional: wt config init");
+    return;
+  }
+  await initializeProjectConfiguration(
+    primaryWorktree,
+    { force: false, yes: Boolean(input.yes) },
+    context,
+  );
 }
 
 async function inspectAdoption(
@@ -158,6 +198,7 @@ function hasAdoptionOptions(input: InitInput): boolean {
     input.worktreesDir !== undefined ||
     input.remote !== undefined ||
     input.defaultBranch !== undefined ||
+    input.config === true ||
     input.yes === true
   );
 }

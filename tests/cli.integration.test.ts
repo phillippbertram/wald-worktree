@@ -56,6 +56,24 @@ describe("CLI smoke flow", () => {
       expect.objectContaining({ branch: "main", name: "main", state: "clean" }),
     ]);
 
+    const configured = await execa(
+      process.execPath,
+      cliArguments("config", "init", "main", "--yes"),
+      { cwd: workspace, reject: false },
+    );
+    expect(configured.exitCode, configured.stderr).toBe(0);
+    expect(configured.stdout).toContain("Created");
+    await expect(fs.readFile(path.join(workspace, "main", ".wt.yml"), "utf8")).resolves.toContain(
+      "version: 1",
+    );
+    const refusedOverwrite = await execa(
+      process.execPath,
+      cliArguments("config", "init", "main", "--yes"),
+      { cwd: workspace, reject: false },
+    );
+    expect(refusedOverwrite.exitCode).toBe(1);
+    expect(refusedOverwrite.stderr).toContain("Use --force to replace it");
+
     await fs.writeFile(path.join(workspace, "main", "untracked.txt"), "keep me\n", "utf8");
 
     const refused = await execa(process.execPath, cliArguments("remove", "main", "--yes"), {
@@ -102,11 +120,16 @@ describe("CLI smoke flow", () => {
         "origin",
         "--default-branch",
         "main",
+        "--config",
       ),
       { cwd: temporaryRoot, reject: false },
     );
     expect(adopted.exitCode, adopted.stderr).toBe(0);
     expect(adopted.stdout).toContain("Adopted repository");
+    expect(adopted.stdout).toContain("Created");
+    await expect(fs.readFile(path.join(repository.source, ".wt.yml"), "utf8")).resolves.toContain(
+      "version: 1",
+    );
     expect(await fs.readFile(configPath, "utf8")).toBe(configBefore);
 
     const listed = await execa(process.execPath, cliArguments("list", "--json"), {
@@ -140,7 +163,7 @@ describe("CLI smoke flow", () => {
 
   it("trusts project automation before the first checkout and exposes task and exec commands", async () => {
     await fs.writeFile(
-      path.join(repository.source, ".wt.yaml"),
+      path.join(repository.source, ".wt.yml"),
       `version: 1
 defaults:
   fetch: false
@@ -161,7 +184,7 @@ tools:
 `,
       "utf8",
     );
-    await execa("git", ["add", ".wt.yaml"], { cwd: repository.source });
+    await execa("git", ["add", ".wt.yml"], { cwd: repository.source });
     await execa("git", ["commit", "-m", "add wt automation"], { cwd: repository.source });
     await execa("git", ["push", "origin", "main"], { cwd: repository.source });
 
@@ -178,7 +201,7 @@ tools:
       reject: false,
     });
     expect(validated.exitCode, validated.stderr).toBe(0);
-    expect(validated.stdout).toContain("origin/main:.wt.yaml");
+    expect(validated.stdout).toContain("origin/main:.wt.yml");
 
     const untrusted = await execa(process.execPath, cliArguments("create", "main", "--no-fetch"), {
       cwd: workspace,
