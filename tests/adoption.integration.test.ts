@@ -2,8 +2,8 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { parse, stringify } from "yaml";
 import { GitClient } from "../src/infrastructure/git-client.js";
-import { EnvironmentService } from "../src/services/environment-service.js";
 import { WorkspaceService } from "../src/services/workspace-service.js";
 import { WorktreeService } from "../src/services/worktree-service.js";
 import {
@@ -52,7 +52,7 @@ describe("adopting existing Git repositories", () => {
 
     const workspace = await workspaces.adopt(inspection);
     expect(workspace.config).toMatchObject({
-      schemaVersion: 2,
+      version: 1,
       mode: "adopted",
       remote: null,
       defaultBranch: "main",
@@ -189,66 +189,38 @@ describe("adopting existing Git repositories", () => {
     ).rejects.toThrow(/different worktree directory/u);
   });
 
-  it("keeps schema-one workspaces readable without rewriting their config", async () => {
-    const root = path.join(temporaryRoot, "legacy-workspace");
+  it("does not interpret the removed JSON configuration format", async () => {
+    const root = path.join(temporaryRoot, "json-workspace");
     const metadataDir = path.join(root, ".wt");
     await fs.mkdir(path.join(metadataDir, "env"), { recursive: true });
     await git.run(["clone", "--bare", "--", repository.remote, path.join(root, "repo.git")], {
       cwd: temporaryRoot,
     });
-    const legacyConfig = {
-      schemaVersion: 1,
+    const removedConfig = {
+      version: 1,
       gitDir: "repo.git",
       envDir: ".wt/env",
       remote: "origin",
       defaultBranch: "main",
     } as const;
     const configPath = path.join(metadataDir, "config.json");
-    await fs.writeFile(configPath, `${JSON.stringify(legacyConfig, null, 2)}\n`, "utf8");
+    await fs.writeFile(configPath, `${JSON.stringify(removedConfig, null, 2)}\n`, "utf8");
 
-    const workspace = await workspaces.find(root);
-    expect(workspace.config).toMatchObject({ schemaVersion: 2, mode: "managed" });
-    expect(JSON.parse(await fs.readFile(configPath, "utf8"))).toEqual(legacyConfig);
+    await expect(workspaces.find(root)).rejects.toThrow(/No managed workspace/u);
   });
 
   it("rejects absolute paths in an adopted workspace config", async () => {
     const workspace = await workspaces.adopt(
       await workspaces.inspectAdoption(repository.source, { defaultBranch: "main" }),
     );
-    const config = JSON.parse(await fs.readFile(workspace.configPath, "utf8")) as Record<
-      string,
-      unknown
-    >;
-    config.worktreeDir = workspace.worktreeDir;
-    await fs.writeFile(workspace.configPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+    const config = parse(await fs.readFile(workspace.configPath, "utf8")) as {
+      paths: { worktrees: string };
+    };
+    config.paths.worktrees = workspace.worktreeDir;
+    await fs.writeFile(workspace.configPath, stringify(config), "utf8");
 
     await expect(workspaces.find(repository.source)).rejects.toThrow(
-      /worktreeDir must be relative/u,
-    );
-  });
-
-  it("shares adopted environment files through relative links", async () => {
-    const workspace = await workspaces.adopt(
-      await workspaces.inspectAdoption(repository.source, { defaultBranch: "main" }),
-    );
-    const environments = new EnvironmentService(git);
-    await fs.writeFile(path.join(repository.source, ".env"), "TEST_VALUE=fixture\n", "utf8");
-    const primary = (await worktrees.list(workspace)).find(
-      (worktree) => worktree.role === "primary",
-    );
-    if (!primary) {
-      throw new Error("Expected the adopted primary worktree to be listed.");
-    }
-
-    const candidates = await environments.discoverImportCandidates(workspace, primary);
-    await environments.importFiles(workspace, primary, candidates);
-    const feature = await worktrees.add(workspace, { branch: "feature/environment" });
-    await environments.sync(workspace, feature);
-
-    const link = await fs.readlink(path.join(feature.path, ".env"));
-    expect(path.isAbsolute(link)).toBe(false);
-    expect(await fs.readFile(path.join(workspace.envDir, ".env"), "utf8")).toBe(
-      "TEST_VALUE=fixture\n",
+      /paths\.worktrees must be relative/u,
     );
   });
 });

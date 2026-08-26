@@ -1,14 +1,15 @@
 {
   "name": "worktree-cli",
-  "version": "0.1.0",
-  "description": "A small, safe workspace manager for Git worktrees.",
+  "version": "1.0.0",
+  "description": "A configurable Git worktree and agent workflow CLI.",
   "private": true,
   "type": "module",
   "bin": {
     "wt": "./dist/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "skills"
   ],
   "engines": {
     "node": ">=22"
@@ -33,6 +34,7 @@
     "execa": "^10.0.1",
     "ink": "^7.1.1",
     "react": "^19.2.8",
+    "yaml": "^2.8.1",
     "zod": "^4.4.3"
   },
   "license": "MIT",

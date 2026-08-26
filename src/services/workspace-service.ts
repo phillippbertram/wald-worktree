@@ -1,45 +1,12 @@
-import { randomUUID } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { z } from "zod";
 import { WtError } from "../domain/errors.js";
 import type { Workspace, WorkspaceConfig, WorkspaceRemote, Worktree } from "../domain/types.js";
 import type { GitClient } from "../infrastructure/git-client.js";
 import { humanizeRepositoryName, isPathInsideOrEqual } from "../infrastructure/path-utils.js";
+import { ConfigService, workspaceConfigFileName } from "./config-service.js";
 import { type ParsedWorktree, parseWorktreePorcelain } from "./worktree-service.js";
-
-const legacyWorkspaceConfigSchema = z
-  .object({
-    schemaVersion: z.literal(1),
-    gitDir: z.string().min(1),
-    envDir: z.string().min(1),
-    remote: z.string().min(1),
-    defaultBranch: z.string().min(1),
-  })
-  .strict();
-
-const workspaceRemoteSchema = z
-  .object({
-    name: z.string().min(1),
-    fetchRefspec: z.string().min(1),
-  })
-  .strict();
-
-const workspaceConfigSchema = z
-  .object({
-    schemaVersion: z.literal(2),
-    mode: z.enum(["managed", "adopted"]),
-    gitDir: z.string().min(1),
-    envDir: z.string().min(1),
-    worktreeDir: z.string().min(1),
-    remote: workspaceRemoteSchema.nullable(),
-    defaultBranch: z.string().min(1),
-    primaryWorktree: z.string().min(1).nullable(),
-  })
-  .strict();
-
-type LegacyWorkspaceConfig = z.infer<typeof legacyWorkspaceConfigSchema>;
 
 export type AdoptionOptions = {
   worktreeDir?: string;
@@ -72,7 +39,10 @@ export type AdoptionInspection = {
 };
 
 export class WorkspaceService {
-  constructor(private readonly git: GitClient) {}
+  constructor(
+    private readonly git: GitClient,
+    private readonly configs = new ConfigService(),
+  ) {}
 
   async initialize(
     repository: string,
@@ -82,8 +52,7 @@ export class WorkspaceService {
     const root = path.resolve(startDirectory, directory ?? humanizeRepositoryName(repository));
     const gitDir = path.join(root, "repo.git");
     const metadataDir = path.join(root, ".wt");
-    const envDir = path.join(metadataDir, "env");
-    const configPath = path.join(metadataDir, "config.json");
+    const configPath = path.join(metadataDir, workspaceConfigFileName);
     const rootExisted = await this.pathExists(root);
 
     if (rootExisted) {
@@ -97,7 +66,6 @@ export class WorkspaceService {
 
     try {
       await fs.mkdir(metadataDir, { mode: 0o700 });
-      await fs.mkdir(envDir, { mode: 0o700 });
       await this.git.run(["clone", "--bare", "--", repository, gitDir], {
         cwd: startDirectory,
       });
@@ -113,17 +81,19 @@ export class WorkspaceService {
 
       const defaultBranch = await this.findCloneDefaultBranch(gitDir, remote.name);
       const config: WorkspaceConfig = {
-        schemaVersion: 2,
+        version: 1,
         mode: "managed",
-        gitDir: "../repo.git",
-        envDir: "env",
-        worktreeDir: "..",
+        paths: {
+          git: "../repo.git",
+          worktrees: "..",
+          primaryWorktree: null,
+        },
         remote,
         defaultBranch,
-        primaryWorktree: null,
+        trustedProjectConfig: null,
       };
 
-      await this.writeConfig(configPath, config);
+      await this.configs.writeWorkspaceConfig(configPath, config);
       return await this.toWorkspace(configPath, config);
     } catch (error) {
       await Promise.all([
@@ -248,8 +218,7 @@ export class WorkspaceService {
     );
 
     const metadataDir = inspection.metadataDir;
-    const configPath = path.join(metadataDir, "config.json");
-    const envDir = path.join(metadataDir, "env");
+    const configPath = path.join(metadataDir, workspaceConfigFileName);
     const markerPath = path.join(inspection.worktreeDir, ".wt");
     const metadataExisted = await this.pathExists(metadataDir);
     const worktreeDirExisted = await this.pathExists(inspection.worktreeDir);
@@ -275,24 +244,24 @@ export class WorkspaceService {
       }
       await fs.mkdir(metadataDir, { mode: 0o700 });
       createdMetadata = true;
-      await fs.mkdir(envDir, { mode: 0o700 });
       await fs.chmod(metadataDir, 0o700);
-      await fs.chmod(envDir, 0o700);
 
       const config: WorkspaceConfig = {
-        schemaVersion: 2,
+        version: 1,
         mode: "adopted",
-        gitDir: relativeConfigPath(metadataDir, inspection.gitDir),
-        envDir: "env",
-        worktreeDir: relativeConfigPath(metadataDir, inspection.worktreeDir),
+        paths: {
+          git: relativeConfigPath(metadataDir, inspection.gitDir),
+          worktrees: relativeConfigPath(metadataDir, inspection.worktreeDir),
+          primaryWorktree: inspection.primaryWorktree
+            ? relativeConfigPath(metadataDir, inspection.primaryWorktree)
+            : null,
+        },
         remote: inspection.remoteName ? createRemote(inspection.remoteName) : null,
         defaultBranch: inspection.defaultBranch,
-        primaryWorktree: inspection.primaryWorktree
-          ? relativeConfigPath(metadataDir, inspection.primaryWorktree)
-          : null,
+        trustedProjectConfig: null,
       };
 
-      await this.writeConfig(configPath, config);
+      await this.configs.writeWorkspaceConfig(configPath, config);
       await fs.symlink(path.relative(inspection.worktreeDir, metadataDir), markerPath);
       createdMarker = true;
       return await this.toWorkspace(configPath, config);
@@ -315,10 +284,10 @@ export class WorkspaceService {
     let current = start;
 
     while (true) {
-      const configPath = path.join(current, ".wt", "config.json");
+      const configPath = path.join(current, ".wt", workspaceConfigFileName);
       try {
         await fs.access(configPath, fsConstants.R_OK);
-        return await this.read(configPath, current);
+        return await this.read(configPath);
       } catch (error) {
         if (!this.isNotFound(error)) {
           throw error;
@@ -334,7 +303,7 @@ export class WorkspaceService {
 
     const gitDir = await this.findGitCommonDir(start);
     if (gitDir) {
-      const configPath = path.join(gitDir, "wt", "config.json");
+      const configPath = path.join(gitDir, "wt", workspaceConfigFileName);
       try {
         await fs.access(configPath, fsConstants.R_OK);
         return await this.read(configPath);
@@ -348,76 +317,48 @@ export class WorkspaceService {
     throw new WtError("No managed workspace found. Run this command inside a wt workspace.");
   }
 
-  private async read(configPath: string, legacyRoot?: string): Promise<Workspace> {
+  private async read(configPath: string): Promise<Workspace> {
     let realConfigPath: string;
-    let raw: string;
     try {
       realConfigPath = await fs.realpath(configPath);
-      raw = await fs.readFile(realConfigPath, "utf8");
     } catch (error) {
       throw new WtError(`Cannot read workspace configuration: ${configPath}`, { cause: error });
     }
-
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(raw);
-    } catch (error) {
-      throw new WtError(`Workspace configuration is not valid JSON: ${configPath}`, {
-        cause: error,
-      });
-    }
-
-    const currentResult = workspaceConfigSchema.safeParse(parsed);
-    if (currentResult.success) {
-      return await this.toWorkspace(realConfigPath, currentResult.data);
-    }
-
-    const legacyResult = legacyWorkspaceConfigSchema.safeParse(parsed);
-    if (legacyResult.success && legacyRoot) {
-      return await this.toWorkspace(
-        realConfigPath,
-        this.normalizeLegacyConfig(realConfigPath, legacyRoot, legacyResult.data),
-      );
-    }
-
-    const issue = currentResult.error.issues[0]?.message ?? "Unknown configuration error";
-    throw new WtError(`Workspace configuration is invalid: ${issue}`);
+    return await this.toWorkspace(
+      realConfigPath,
+      await this.configs.readWorkspaceConfig(realConfigPath),
+    );
   }
 
   private async toWorkspace(configPath: string, config: WorkspaceConfig): Promise<Workspace> {
     const canonicalConfigPath = await canonicalPath(configPath);
     const configDir = path.dirname(canonicalConfigPath);
     for (const [label, value] of [
-      ["gitDir", config.gitDir],
-      ["envDir", config.envDir],
-      ["worktreeDir", config.worktreeDir],
-      ["primaryWorktree", config.primaryWorktree],
+      ["paths.git", config.paths.git],
+      ["paths.worktrees", config.paths.worktrees],
+      ["paths.primary_worktree", config.paths.primaryWorktree],
     ] as const) {
       if (value && path.isAbsolute(value)) {
         throw new WtError(`${label} must be relative to the workspace configuration.`);
       }
     }
 
-    const gitDir = await canonicalPath(path.resolve(configDir, config.gitDir));
-    const envDir = await canonicalPath(path.resolve(configDir, config.envDir));
-    const worktreeDir = await canonicalPath(path.resolve(configDir, config.worktreeDir));
-    const primaryWorktree = config.primaryWorktree
-      ? await canonicalPath(path.resolve(configDir, config.primaryWorktree))
+    const gitDir = await canonicalPath(path.resolve(configDir, config.paths.git));
+    const worktreeDir = await canonicalPath(path.resolve(configDir, config.paths.worktrees));
+    const primaryWorktree = config.paths.primaryWorktree
+      ? await canonicalPath(path.resolve(configDir, config.paths.primaryWorktree))
       : null;
 
     if (config.mode === "managed") {
       if (primaryWorktree) {
         throw new WtError("Managed bare workspaces cannot define a primary worktree.");
       }
-      if (!isPathInsideOrEqual(worktreeDir, gitDir) || !isPathInsideOrEqual(worktreeDir, envDir)) {
+      if (!isPathInsideOrEqual(worktreeDir, gitDir)) {
         throw new WtError("Managed workspace paths must stay inside the workspace root.");
       }
     } else {
       if (configDir !== path.join(gitDir, "wt")) {
         throw new WtError("Adopted workspace configuration must stay inside the Git directory.");
-      }
-      if (!isPathInsideOrEqual(configDir, envDir)) {
-        throw new WtError("Adopted environment files must stay inside the wt metadata directory.");
       }
       if (isPathInsideOrEqual(gitDir, worktreeDir)) {
         throw new WtError("Adopted worktree directory must stay outside the Git directory.");
@@ -431,28 +372,9 @@ export class WorkspaceService {
       root: worktreeDir,
       configPath: canonicalConfigPath,
       gitDir,
-      envDir,
       worktreeDir,
       primaryWorktree,
       config,
-    };
-  }
-
-  private normalizeLegacyConfig(
-    configPath: string,
-    root: string,
-    legacy: LegacyWorkspaceConfig,
-  ): WorkspaceConfig {
-    const configDir = path.dirname(configPath);
-    return {
-      schemaVersion: 2,
-      mode: "managed",
-      gitDir: relativeConfigPath(configDir, path.resolve(root, legacy.gitDir)),
-      envDir: relativeConfigPath(configDir, path.resolve(root, legacy.envDir)),
-      worktreeDir: relativeConfigPath(configDir, root),
-      remote: createRemote(legacy.remote),
-      defaultBranch: legacy.defaultBranch,
-      primaryWorktree: null,
     };
   }
 
@@ -628,7 +550,7 @@ export class WorkspaceService {
       return discoveredWorkspace;
     }
 
-    const configPath = path.join(gitDir, "wt", "config.json");
+    const configPath = path.join(gitDir, "wt", workspaceConfigFileName);
     try {
       await fs.access(configPath, fsConstants.R_OK);
       return await this.read(configPath);
@@ -695,16 +617,6 @@ export class WorkspaceService {
       .split("\n")
       .filter(Boolean)
       .sort((left, right) => left.localeCompare(right));
-  }
-
-  private async writeConfig(configPath: string, config: WorkspaceConfig): Promise<void> {
-    const tempPath = `${configPath}.${randomUUID()}.tmp`;
-    try {
-      await fs.writeFile(tempPath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
-      await fs.rename(tempPath, configPath);
-    } finally {
-      await fs.rm(tempPath, { force: true });
-    }
   }
 
   private async canonicalDirectory(target: string): Promise<string> {

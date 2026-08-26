@@ -1,11 +1,7 @@
 import { ConfirmInput, MultiSelect, Select, Spinner, StatusMessage, TextInput } from "@inkjs/ui";
-import { Box, render, Text, useApp } from "ink";
-import { useEffect, useRef } from "react";
-import type {
-  EnvironmentFileStatus,
-  EnvironmentImportCandidate,
-  Worktree,
-} from "../domain/types.js";
+import { Box, render, Text, useApp, useInput } from "ink";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { Worktree } from "../domain/types.js";
 
 export function isInteractiveTerminal(): boolean {
   return Boolean(process.stdin.isTTY && process.stdout.isTTY);
@@ -126,6 +122,120 @@ export async function selectValue(
   return selected;
 }
 
+export async function searchSelect(
+  question: string,
+  options: Array<{ label: string; value: string; description?: string }>,
+): Promise<string | null> {
+  let selected: string | null = null;
+
+  function SearchSelection(): React.JSX.Element {
+    const { exit } = useApp();
+    const [query, setQuery] = useState("");
+    const [selectedIndex, setSelectedIndex] = useState(0);
+    const filtered = useMemo(() => {
+      const normalized = query.toLocaleLowerCase();
+      return options.filter((option) =>
+        `${option.label} ${option.description ?? ""}`.toLocaleLowerCase().includes(normalized),
+      );
+    }, [query]);
+
+    useEffect(() => {
+      setSelectedIndex((current) => Math.min(current, Math.max(0, filtered.length - 1)));
+    }, [filtered.length]);
+
+    useInput((input, key) => {
+      if (key.escape) {
+        exit();
+        return;
+      }
+      if (key.upArrow) {
+        setSelectedIndex((current) => Math.max(0, current - 1));
+        return;
+      }
+      if (key.downArrow) {
+        setSelectedIndex((current) => Math.min(filtered.length - 1, current + 1));
+        return;
+      }
+      if (key.return) {
+        selected = filtered[selectedIndex]?.value ?? null;
+        exit();
+        return;
+      }
+      if (key.backspace || key.delete) {
+        setQuery((current) => current.slice(0, -1));
+        return;
+      }
+      if (!key.ctrl && !key.meta && input && isPrintableInput(input)) {
+        setQuery((current) => `${current}${input}`);
+      }
+    });
+
+    const firstVisible = Math.max(0, selectedIndex - 4);
+    const visible = filtered.slice(firstVisible, firstVisible + 10);
+    return (
+      <Box flexDirection="column">
+        <Text>{question}</Text>
+        <Text dimColor>Filter: {query || "type to search"}</Text>
+        {visible.length === 0 ? (
+          <Text color="yellow">No matches</Text>
+        ) : (
+          visible.map((option, index) => {
+            const actualIndex = firstVisible + index;
+            const active = actualIndex === selectedIndex;
+            return (
+              <Text key={option.value} color={active ? "cyan" : undefined}>
+                {active ? "❯ " : "  "}
+                {option.label}
+                {option.description ? `  ${option.description}` : ""}
+              </Text>
+            );
+          })
+        )}
+      </Box>
+    );
+  }
+
+  await render(<SearchSelection />).waitUntilExit();
+  return selected;
+}
+
+function isPrintableInput(input: string): boolean {
+  return [...input].every((character) => {
+    const codePoint = character.codePointAt(0) ?? 0;
+    return codePoint >= 32 && codePoint !== 127;
+  });
+}
+
+export async function selectManyWorktrees(
+  question: string,
+  worktrees: Worktree[],
+): Promise<Worktree[]> {
+  let selectedPaths: string[] = [];
+
+  function WorktreeMultiSelect(): React.JSX.Element {
+    const { exit } = useApp();
+    return (
+      <Box flexDirection="column">
+        <Text>{question}</Text>
+        <MultiSelect
+          options={worktrees.map((worktree) => ({
+            label: `${worktree.name}  ${worktree.branch ?? "detached"}  ${worktree.state}`,
+            value: worktree.path,
+          }))}
+          visibleOptionCount={Math.min(10, Math.max(1, worktrees.length))}
+          onSubmit={(values) => {
+            selectedPaths = values;
+            exit();
+          }}
+        />
+      </Box>
+    );
+  }
+
+  await render(<WorktreeMultiSelect />).waitUntilExit();
+  return worktrees.filter((worktree) => selectedPaths.includes(worktree.path));
+}
+
 export async function promptText(question: string, defaultValue?: string): Promise<string> {
   let answer = "";
 
@@ -149,39 +259,6 @@ export async function promptText(question: string, defaultValue?: string): Promi
   return answer.trim();
 }
 
-export async function selectEnvironmentFiles(
-  candidates: EnvironmentImportCandidate[],
-): Promise<string[]> {
-  let selected: string[] = [];
-  const importable = candidates.filter(
-    (candidate) => candidate.state === "new" || candidate.state === "same",
-  );
-
-  function EnvironmentSelect(): React.JSX.Element {
-    const { exit } = useApp();
-    return (
-      <Box flexDirection="column">
-        <Text>Select environment files (space toggles, enter confirms):</Text>
-        <MultiSelect
-          defaultValue={importable.map((candidate) => candidate.path)}
-          options={importable.map((candidate) => ({
-            label: `${candidate.path}  ${candidate.state}`,
-            value: candidate.path,
-          }))}
-          visibleOptionCount={Math.min(10, Math.max(1, importable.length))}
-          onSubmit={(values) => {
-            selected = values;
-            exit();
-          }}
-        />
-      </Box>
-    );
-  }
-
-  await render(<EnvironmentSelect />).waitUntilExit();
-  return selected;
-}
-
 export async function printWorktreeTable(worktrees: Worktree[]): Promise<void> {
   const rows = worktrees.map((worktree) => [
     worktree.name,
@@ -195,26 +272,6 @@ export async function printWorktreeTable(worktrees: Worktree[]): Promise<void> {
 
 export async function printKeyValueTable(rows: Array<[string, string]>): Promise<void> {
   await renderOnce(<Table headers={["SETTING", "VALUE"]} rows={rows} />);
-}
-
-export async function printEnvironmentTable(
-  rows: Array<{ worktree: Worktree; status: EnvironmentFileStatus }>,
-): Promise<void> {
-  await renderOnce(
-    <Table
-      headers={["WORKTREE", "FILE", "STATUS"]}
-      rows={rows.map(({ worktree, status }) => [worktree.name, status.path, status.state])}
-    />,
-  );
-}
-
-export async function printCandidateTable(candidates: EnvironmentImportCandidate[]): Promise<void> {
-  await renderOnce(
-    <Table
-      headers={["FILE", "ACTION"]}
-      rows={candidates.map((candidate) => [candidate.path, candidate.state])}
-    />,
-  );
 }
 
 export async function printStatus(

@@ -14,6 +14,23 @@ export type AddWorktreeOptions = {
   fetch?: boolean;
 };
 
+export type PreparedAddWorktree = {
+  branch: string;
+  branchRef: string;
+  target: string;
+  projectRevision: string;
+  strategy:
+    | { type: "local" }
+    | { type: "remote"; remoteName: string }
+    | { type: "new"; base: string };
+};
+
+export type BranchCandidate = {
+  name: string;
+  source: "local" | "remote";
+  label: string;
+};
+
 export type RemovalInspection = {
   worktree: Worktree;
   dirty: boolean;
@@ -49,6 +66,13 @@ export class WorktreeService {
   }
 
   async add(workspace: Workspace, options: AddWorktreeOptions): Promise<Worktree> {
+    return await this.createPrepared(workspace, await this.prepareAdd(workspace, options));
+  }
+
+  async prepareAdd(
+    workspace: Workspace,
+    options: AddWorktreeOptions,
+  ): Promise<PreparedAddWorktree> {
     await this.validateBranch(workspace, options.branch);
     const directoryName = options.name ?? slugifyBranch(options.branch);
     validateWorktreeName(directoryName);
@@ -57,7 +81,7 @@ export class WorktreeService {
     if (!isPathInside(workspace.worktreeDir, target)) {
       throw new WtError("Worktree directory must stay inside the configured worktree root.");
     }
-    if (target === workspace.gitDir || target.startsWith(`${workspace.envDir}${path.sep}`)) {
+    if (target === workspace.gitDir) {
       throw new WtError(`Reserved worktree directory: ${directoryName}`);
     }
     const remote = workspace.config.remote;
@@ -84,36 +108,96 @@ export class WorktreeService {
     const remoteExists = remoteRef ? await this.refExists(workspace, remoteRef) : false;
 
     if (localExists) {
-      await this.git.run(["worktree", "add", target, options.branch], {
+      return {
+        branch: options.branch,
+        branchRef,
+        target,
+        projectRevision: branchRef,
+        strategy: { type: "local" },
+      };
+    }
+    if (remoteExists && remote && remoteRef) {
+      return {
+        branch: options.branch,
+        branchRef,
+        target,
+        projectRevision: remoteRef,
+        strategy: { type: "remote", remoteName: remote.name },
+      };
+    }
+
+    const base = await this.resolveBase(workspace, options.from);
+    return {
+      branch: options.branch,
+      branchRef,
+      target,
+      projectRevision: base,
+      strategy: { type: "new", base },
+    };
+  }
+
+  async createPrepared(workspace: Workspace, prepared: PreparedAddWorktree): Promise<Worktree> {
+    if (prepared.strategy.type === "local") {
+      await this.git.run(["worktree", "add", prepared.target, prepared.branch], {
         gitDir: workspace.gitDir,
       });
-    } else if (remoteExists && remote) {
+    } else if (prepared.strategy.type === "remote") {
       await this.git.run(
         [
           "worktree",
           "add",
           "--track",
           "-b",
-          options.branch,
-          target,
-          `${remote.name}/${options.branch}`,
+          prepared.branch,
+          prepared.target,
+          `${prepared.strategy.remoteName}/${prepared.branch}`,
         ],
         { gitDir: workspace.gitDir },
       );
     } else {
-      const base = await this.resolveBase(workspace, options.from);
-      await this.git.run(["worktree", "add", "-b", options.branch, target, base], {
-        gitDir: workspace.gitDir,
-      });
+      await this.git.run(
+        ["worktree", "add", "-b", prepared.branch, prepared.target, prepared.strategy.base],
+        { gitDir: workspace.gitDir },
+      );
     }
 
     const created = (await this.list(workspace)).find(
-      (worktree) => worktree.branchRef === branchRef,
+      (worktree) => worktree.branchRef === prepared.branchRef,
     );
     if (!created) {
-      throw new WtError(`Git created the worktree, but it could not be read back: ${target}`);
+      throw new WtError(
+        `Git created the worktree, but it could not be read back: ${prepared.target}`,
+      );
     }
     return created;
+  }
+
+  async listBranchCandidates(workspace: Workspace): Promise<BranchCandidate[]> {
+    const result = await this.git.run(
+      ["for-each-ref", "--format=%(refname)", "refs/heads", "refs/remotes"],
+      { gitDir: workspace.gitDir },
+    );
+    const candidates: BranchCandidate[] = [];
+    for (const reference of result.stdout.split("\n").filter(Boolean)) {
+      if (reference.startsWith("refs/heads/")) {
+        const name = reference.slice("refs/heads/".length);
+        candidates.push({ name, source: "local", label: `${name}  local` });
+        continue;
+      }
+      const remote = workspace.config.remote?.name;
+      if (!remote || !reference.startsWith(`refs/remotes/${remote}/`)) {
+        continue;
+      }
+      const name = reference.slice(`refs/remotes/${remote}/`.length);
+      if (name === "HEAD") {
+        continue;
+      }
+      candidates.push({ name, source: "remote", label: `${name}  ${remote}` });
+    }
+    return candidates.sort((left, right) => {
+      const nameComparison = left.name.localeCompare(right.name);
+      return nameComparison === 0 ? left.source.localeCompare(right.source) : nameComparison;
+    });
   }
 
   async resolve(workspace: Workspace, identifier: string): Promise<Worktree> {

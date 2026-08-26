@@ -6,21 +6,22 @@ export type WorkspaceRemote = {
 };
 
 export type WorkspaceConfig = {
-  schemaVersion: 2;
+  version: 1;
   mode: WorkspaceMode;
-  gitDir: string;
-  envDir: string;
-  worktreeDir: string;
+  paths: {
+    git: string;
+    worktrees: string;
+    primaryWorktree: string | null;
+  };
   remote: WorkspaceRemote | null;
   defaultBranch: string;
-  primaryWorktree: string | null;
+  trustedProjectConfig: string | null;
 };
 
 export type Workspace = {
   root: string;
   configPath: string;
   gitDir: string;
-  envDir: string;
   worktreeDir: string;
   primaryWorktree: string | null;
   config: WorkspaceConfig;
@@ -41,33 +42,68 @@ export type Worktree = {
   state: WorktreeState;
 };
 
-export type EnvironmentState = "linked" | "missing" | "conflict" | "wrong-link";
+export type StepSource = "current" | "default" | "primary";
+export type StepWorkingDirectory = "source" | "target" | "workspace";
 
-export type EnvironmentFileStatus = {
+type StepBase = {
+  continueOnError: boolean;
+};
+
+export type CommandStep = StepBase & {
+  type: "command";
+  argv?: string[];
+  shell?: string;
+  cwd?: StepWorkingDirectory;
+  env: Record<string, string>;
+  timeoutSeconds?: number;
+};
+
+export type CopyStep = StepBase & {
+  type: "copy";
+  source: StepSource;
+  from: string;
+  to: string;
+  optional: boolean;
+  overwrite: boolean;
+};
+
+export type SymlinkStep = StepBase & {
+  type: "symlink";
+  source: StepSource;
+  from: string;
+  to: string;
+  optional: boolean;
+  overwrite: boolean;
+};
+
+export type AutomationStep = CommandStep | CopyStep | SymlinkStep;
+export type HookEvent = "pre_create" | "post_create" | "pre_remove" | "post_remove";
+
+export type ProjectTask = {
+  description?: string;
+  steps: AutomationStep[];
+};
+
+export type ToolProfile = {
+  description?: string;
+  command: string[];
+  mode: "foreground" | "detached";
+};
+
+export type ProjectConfig = {
+  version: 1;
+  defaults: {
+    fetch: boolean;
+    tool?: string;
+  };
+  hooks: Record<HookEvent, AutomationStep[]>;
+  tasks: Record<string, ProjectTask>;
+  tools: Record<string, ToolProfile>;
+};
+
+export type ProjectConfigDocument = {
+  config: ProjectConfig;
+  hash: string;
   path: string;
-  state: EnvironmentState;
-  target: string;
-};
-
-export type EnvironmentSyncResult = {
-  worktree: Worktree;
-  created: string[];
-  repaired: string[];
-  linked: string[];
-  conflicts: EnvironmentFileStatus[];
-};
-
-export type EnvironmentImportCandidate = {
-  path: string;
-  source: string;
-  target: string;
-  state: "new" | "same" | "conflict" | "already-linked";
-};
-
-export type EnvironmentImportResult = {
-  worktree: Worktree;
-  imported: string[];
-  linked: string[];
-  skipped: string[];
-  conflicts: string[];
+  requiresTrust: boolean;
 };

@@ -1,47 +1,33 @@
 # worktree-cli
 
-`wt` is a small workspace manager built on top of Git worktrees. It can create a dedicated bare
-workspace or adopt an existing Git repository without moving its checkout.
+`wt` is a configurable Git worktree and agent workflow CLI. It keeps Git as the source of truth,
+adds a searchable interactive terminal UI, and gives scripts the same capabilities through direct
+commands.
 
-```text
-my-project/
-├── repo.git/
-├── .wt/
-│   ├── config.json
-│   └── env/
-├── main/
-└── feature-payment/
-```
+The v1 contract is a clean break: configuration is YAML-only and previous command or configuration
+formats are not supported.
 
-The project is an early source-only MVP for macOS and Linux. It does not publish an npm package yet.
+## Highlights
 
-## Why
+- Create, find, inspect, enter, open, and safely remove Git worktrees.
+- Adopt an existing repository without moving it or changing its Git configuration.
+- Bootstrap ignored files and shared directories through explicit copy or symlink steps.
+- Configure lifecycle hooks and named tasks in a committed `.wt.yaml`.
+- Run commands as argument arrays by default; shell evaluation is always explicit.
+- Trust executable project configuration by its semantic SHA-256 hash.
+- Open worktrees in editors and agents through built-in or custom tool profiles.
+- Install a portable Agent Skill from [`skills/wt-worktrees`](skills/wt-worktrees/SKILL.md).
 
-Plain Git worktrees are useful, but a daily workflow still involves choosing paths, resolving
-branches, sharing ignored configuration, and checking that removal is safe. `wt` handles that
-workspace-level coordination while leaving Git as the source of truth.
-
-## Requirements
+## Requirements and installation
 
 - Node.js 22 or newer
 - pnpm 11
 - Git
 
-## Install from source
-
-Clone this repository first, then run:
-
 ```sh
-cd worktree-cli
 pnpm install
 pnpm run link:global
 wt --help
-```
-
-Remove the global `wt` command again with:
-
-```sh
-pnpm run unlink:global
 ```
 
 For development without a global link:
@@ -52,154 +38,145 @@ pnpm dev -- --help
 
 ## Quickstart
 
-### Adopt an existing repository
-
-Run `init` inside an existing checkout and confirm the detected settings:
+Adopt the current checkout:
 
 ```sh
 cd ~/dev/project
 wt init
 ```
 
-For scripts and non-interactive terminals, make the adoption explicit:
-
-```sh
-wt init --adopt ~/dev/project --yes \
-  --worktrees-dir ~/dev/project-worktrees \
-  --remote origin \
-  --default-branch main
-```
-
-Repositories without a remote are supported with `--no-remote`. Existing worktrees, branches,
-remotes, Git configuration, and uncommitted files are preserved. New worktrees use the detected or
-configured worktree directory:
-
-```text
-~/dev/
-├── project/                  # existing primary checkout
-│   └── .git/wt/              # local wt config and environment store
-└── project-worktrees/
-    ├── .wt -> ../project/.git/wt
-    └── feature-payment/
-```
-
-No environment files are imported automatically. Run `wt env import` separately after reviewing
-the candidates.
-
-### Create a dedicated workspace
-
-Create a new bare workspace from a remote URL or local Git repository:
+Or create a dedicated workspace backed by a bare clone:
 
 ```sh
 wt init git@github.com:example/project.git ~/dev/project
 cd ~/dev/project
-wt add main
-wt add feature/payment
+wt create main
+wt create feature/payment
 ```
 
-`wt add` fetches `origin` and resolves the branch in this order:
+Run `wt` without arguments for the interactive menu. Direct commands remain deterministic for
+scripts and agents:
 
-1. Check out an existing local branch.
-2. Create a tracking branch for an existing remote branch.
-3. Create a new branch from `origin/<default-branch>` or `--from`.
+```sh
+wt list
+wt cd feature-payment
+wt exec feature-payment -- pnpm test
+wt run verify feature-payment
+wt create feature/review --tool codex
+wt remove feature-payment --yes
+```
 
-The default directory replaces branch separators, so `feature/payment` becomes `feature-payment`.
-Use `--name` to override it.
+Enable navigation and dynamic completion in the current shell:
+
+```sh
+# zsh
+eval "$(wt shell-init zsh)"
+
+# bash
+eval "$(wt shell-init bash)"
+
+# fish
+wt shell-init fish | source
+```
+
+The wrapper makes `wt cd <worktree>` and `wt create <branch> --cd` change the parent shell's
+directory. Without it, both commands print or create the path without attempting the impossible
+parent-shell mutation.
 
 ## Commands
 
 | Command | Purpose |
 | --- | --- |
 | `wt init` | Interactively adopt the current Git repository. |
-| `wt init --adopt [path]` | Adopt an existing checkout or bare repository. |
-| `wt init <repository> [directory]` | Create a new managed bare workspace. |
-| `wt add <branch>` | Check out or create a branch in a sibling worktree. |
-| `wt list` | Show branch, state, and path for every managed worktree. |
-| `wt remove <worktree>` | Safely remove a worktree without deleting its branch. |
-| `wt env import [worktree]` | Import ignored `.env*` files and replace them with shared links. |
-| `wt env sync [worktree]` | Create missing shared environment links. |
-| `wt env status [worktree]` | Show `linked`, `missing`, `conflict`, and `wrong-link` states. |
+| `wt init --adopt <path> --yes` | Adopt a repository non-interactively. |
+| `wt init <repository> [directory]` | Create a managed bare workspace. |
+| `wt create [branch]` | Create a worktree, run setup, and optionally open a tool. |
+| `wt list` | Show every worktree and its state. |
+| `wt cd [worktree]` | Enter a worktree with shell integration, or print its path. |
+| `wt open [worktree] --tool <profile>` | Open an editor or start an agent. |
+| `wt exec [worktree] -- <command>` | Execute an argument-safe command in a worktree. |
+| `wt run [task] [worktree]` | Run a named `.wt.yaml` task. |
+| `wt setup [worktree]` | Re-run the configured post-create setup. |
+| `wt remove [worktrees...] --yes` | Safely remove one or several worktrees. |
+| `wt config` | Show and validate local/project YAML configuration. |
+| `wt config trust\|untrust` | Control project configuration trust. |
+| `wt shell-init bash\|zsh\|fish` | Generate navigation and completion integration. |
 
-Run `wt <command> --help` for all options. `wt list --json` and `wt env status --json` provide
-machine-readable output. Interactive prompts are only used when both stdin and stdout are terminals.
+Use `wt <command> --help` for options. JSON output is available where it is a data interface, such
+as `wt list --json`; JSON is not a configuration format.
 
-## Shared environment files
+## Configuration and automation
 
-The shared store mirrors repository-relative paths:
+`wt` uses two YAML files with separate ownership:
 
-```text
-.wt/env/apps/api/.env
-feature-payment/apps/api/.env -> ../../../.wt/env/apps/api/.env
+- `.wt/workspace.yaml` for a dedicated workspace, or `<git-common-dir>/wt/workspace.yaml` for an
+  adopted repository. It stores local paths, remote/default-branch selection, and the trusted
+  project configuration hash.
+- `.wt.yaml` in the repository. It is committed and may define defaults, lifecycle hooks, named
+  tasks, and tool profiles.
+
+A minimal project configuration:
+
+```yaml
+version: 1
+
+defaults:
+  fetch: true
+  tool: codex
+
+hooks:
+  post_create:
+    - type: command
+      argv: [pnpm, install, --frozen-lockfile]
+    - type: copy
+      source: default
+      from: .env.example
+      to: .env
+      optional: true
+
+tasks:
+  verify:
+    description: Run the local quality gate
+    steps:
+      - type: command
+        argv: [pnpm, lint]
+      - type: command
+        argv: [pnpm, test]
+
+tools:
+  review-agent:
+    description: Start the repository review agent
+    command: [codex, --profile, review]
+    mode: foreground
 ```
 
-Import only considers untracked files that Git already ignores. It excludes common vendor, build,
-coverage, and fixture directories as well as `.example`, `.sample`, and `.template` files.
+See [configuration](docs/configuration.md) for the complete schema and lifecycle, and
+[agent workflows](docs/agent-workflows.md) for tool profiles and the packaged skill.
+
+## Trust and safety
+
+Hooks, tasks, and custom tools can execute code. Before the first configured action, `wt` shows the
+behavior it found and requires trust. In a non-interactive terminal:
 
 ```sh
-wt env import main
-wt env status
-wt env sync feature-payment
+wt config
+wt config trust --yes
 ```
 
-Before importing, `wt` shows paths but never file contents. Existing shared files with different
-content are conflicts and are preserved. Synchronization never overwrites regular files. Incorrect
-symlinks are only replaced with `wt env sync --repair`.
+Trust is tied to normalized behavior, not YAML formatting: comments and key order do not invalidate
+it, while changed commands, hooks, tasks, or tools do. A worktree is created only after `pre_create`
+succeeds. If `post_create` or opening a requested tool fails, the worktree is intentionally kept
+and the error identifies the recoverable state. Run `wt setup <worktree>` to retry setup.
 
-> [!WARNING]
-> `.wt/env` or `.git/wt/env` contains plaintext secrets outside Git. Protect the workspace
-> directory, keep backups as appropriate for your environment, and never publish it.
+`wt remove` refuses dirty, unmerged, and locked worktrees unless `--force` is explicit. The primary
+checkout of an adopted repository can never be removed by `wt`. Branches are not deleted.
 
-## Removal safety
+## CLI architecture
 
-`wt remove` refuses to remove a worktree when it is dirty, its branch is not merged into the known
-default branch, or the worktree is locked. Interactive removal requires confirmation. Non-interactive
-removal requires `--force`.
-
-`--force` can discard worktree files. It still does not delete the Git branch or `.wt/env`.
-
-For adopted non-bare repositories, the original checkout is marked as `primary` in `wt list`. It
-cannot be removed by `wt`, even with `--force`.
-
-## Architecture
-
-```text
-Commander + Ink
-       │
-       ▼
-Workspace / Worktree / Environment services
-       │
-       ▼
-Git CLI + filesystem
-```
-
-Command parsing and terminal rendering are adapters. Workspace rules are independent of Commander
-and Ink, while all repository operations go through the installed Git CLI. Worktree discovery uses
-`git worktree list --porcelain -z`; no derived worktree registry is maintained. Adopted repositories
-are associated through their shared Git directory, so commands work from the primary checkout, any
-linked worktree, and the configured worktree container.
-
-## Troubleshooting
-
-### No managed workspace found
-
-Run the command from the workspace root or anywhere inside one of its worktrees. Dedicated
-workspaces are identified by `.wt/config.json`; adopted repositories also use
-`<git-common-dir>/wt/config.json`.
-
-### A branch is already checked out
-
-Git only allows one normal checkout of a branch at a time. Use `wt list` to find its existing path or
-create a different branch.
-
-### Environment conflict preserved
-
-A real file or unexpected symlink already exists at the target. Compare it manually. `--repair`
-replaces wrong symlinks only; it intentionally never replaces a regular file.
-
-### Offline branch creation
-
-`wt add` fetches the configured remote by default. Use `wt add <branch> --no-fetch` to work with the
-refs already available locally. Local-only adopted repositories skip fetching automatically.
+Commander owns routing, help, usage errors, and option collection. Each command lives in
+`src/cli/commands/` and validates its arguments and options with a command-specific Zod schema
+before calling services. YAML configuration uses the same boundary rule: strict Zod schemas apply
+defaults and reject unknown fields before domain logic sees the data.
 
 ## Development
 
@@ -210,8 +187,7 @@ pnpm test
 pnpm build
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidance and [SECURITY.md](SECURITY.md) for
-private vulnerability reporting. Planned follow-up features are tracked in the
+See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and the
 [roadmap](docs/roadmap.md).
 
 ## License

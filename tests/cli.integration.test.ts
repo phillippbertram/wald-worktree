@@ -26,7 +26,7 @@ describe("CLI smoke flow", () => {
     await fs.rm(temporaryRoot, { force: true, recursive: true });
   });
 
-  it("initializes, adds, lists, and safely removes through the non-TTY command interface", async () => {
+  it("initializes, creates, lists, and safely removes through the non-TTY command interface", async () => {
     const workspace = path.join(temporaryRoot, "workspace");
 
     const initialized = await execa(
@@ -40,14 +40,10 @@ describe("CLI smoke flow", () => {
     expect(initialized.exitCode, initialized.stderr).toBe(0);
     expect(initialized.stdout).toContain("Initialized workspace");
 
-    const added = await execa(
-      process.execPath,
-      cliArguments("add", "main", "--no-fetch", "--no-env"),
-      {
-        cwd: workspace,
-        reject: false,
-      },
-    );
+    const added = await execa(process.execPath, cliArguments("create", "main", "--no-fetch"), {
+      cwd: workspace,
+      reject: false,
+    });
     expect(added.exitCode, added.stderr).toBe(0);
     expect(added.stdout).toContain("Created main");
 
@@ -60,17 +56,23 @@ describe("CLI smoke flow", () => {
       expect.objectContaining({ branch: "main", name: "main", state: "clean" }),
     ]);
 
-    const refused = await execa(process.execPath, cliArguments("remove", "main"), {
+    await fs.writeFile(path.join(workspace, "main", "untracked.txt"), "keep me\n", "utf8");
+
+    const refused = await execa(process.execPath, cliArguments("remove", "main", "--yes"), {
       cwd: workspace,
       reject: false,
     });
     expect(refused.exitCode).toBe(1);
-    expect(refused.stderr).toContain("requires --force");
+    expect(refused.stderr).toContain("use --force only if this data can be discarded");
 
-    const removed = await execa(process.execPath, cliArguments("remove", "main", "--force"), {
-      cwd: workspace,
-      reject: false,
-    });
+    const removed = await execa(
+      process.execPath,
+      cliArguments("remove", "main", "--force", "--yes"),
+      {
+        cwd: workspace,
+        reject: false,
+      },
+    );
     expect(removed.exitCode, removed.stderr).toBe(0);
     expect(removed.stdout).toContain("Removed main");
   });
@@ -116,10 +118,14 @@ describe("CLI smoke flow", () => {
       expect.objectContaining({ branch: "main", name: "source", role: "primary" }),
     ]);
 
-    const refused = await execa(process.execPath, cliArguments("remove", "source", "--force"), {
-      cwd: repository.source,
-      reject: false,
-    });
+    const refused = await execa(
+      process.execPath,
+      cliArguments("remove", "source", "--force", "--yes"),
+      {
+        cwd: repository.source,
+        reject: false,
+      },
+    );
     expect(refused.exitCode).toBe(1);
     expect(refused.stderr).toContain("primary checkout cannot be removed");
 
@@ -130,5 +136,116 @@ describe("CLI smoke flow", () => {
     );
     expect(repeated.exitCode, repeated.stderr).toBe(0);
     expect(repeated.stdout).toContain("already initialized");
+  });
+
+  it("trusts project automation before the first checkout and exposes task and exec commands", async () => {
+    await fs.writeFile(
+      path.join(repository.source, ".wt.yaml"),
+      `version: 1
+defaults:
+  fetch: false
+hooks:
+  post_create:
+    - type: command
+      argv: [node, -e, "require('node:fs').writeFileSync('hook.log', process.env.WT_EVENT)"]
+tasks:
+  verify:
+    steps:
+      - type: command
+        argv: [node, -e, "require('node:fs').writeFileSync('task.log', process.env.WT_EVENT)"]
+tools:
+  fixture-agent:
+    description: Fixture foreground tool
+    command: [node, -e, "require('node:fs').writeFileSync('tool.log', process.cwd())"]
+    mode: foreground
+`,
+      "utf8",
+    );
+    await execa("git", ["add", ".wt.yaml"], { cwd: repository.source });
+    await execa("git", ["commit", "-m", "add wt automation"], { cwd: repository.source });
+    await execa("git", ["push", "origin", "main"], { cwd: repository.source });
+
+    const workspace = path.join(temporaryRoot, "configured-workspace");
+    const initialized = await execa(
+      process.execPath,
+      cliArguments("init", repository.remote, workspace),
+      { cwd: temporaryRoot, reject: false },
+    );
+    expect(initialized.exitCode, initialized.stderr).toBe(0);
+
+    const validated = await execa(process.execPath, cliArguments("config"), {
+      cwd: workspace,
+      reject: false,
+    });
+    expect(validated.exitCode, validated.stderr).toBe(0);
+    expect(validated.stdout).toContain("origin/main:.wt.yaml");
+
+    const untrusted = await execa(process.execPath, cliArguments("create", "main", "--no-fetch"), {
+      cwd: workspace,
+      reject: false,
+    });
+    expect(untrusted.exitCode).toBe(1);
+    expect(untrusted.stderr).toContain("not trusted");
+    await expect(fs.stat(path.join(workspace, "main"))).rejects.toMatchObject({ code: "ENOENT" });
+
+    const trusted = await execa(process.execPath, cliArguments("config", "trust", "--yes"), {
+      cwd: workspace,
+      reject: false,
+    });
+    expect(trusted.exitCode, trusted.stderr).toBe(0);
+
+    const created = await execa(
+      process.execPath,
+      cliArguments("create", "main", "--no-fetch", "--tool", "fixture-agent"),
+      { cwd: workspace, reject: false },
+    );
+    expect(created.exitCode, created.stderr).toBe(0);
+    expect(await fs.readFile(path.join(workspace, "main", "hook.log"), "utf8")).toBe("post_create");
+    expect(await fs.readFile(path.join(workspace, "main", "tool.log"), "utf8")).toBe(
+      await fs.realpath(path.join(workspace, "main")),
+    );
+
+    await fs.rm(path.join(workspace, "main", "hook.log"));
+    const setup = await execa(process.execPath, cliArguments("setup", "main"), {
+      cwd: workspace,
+      reject: false,
+    });
+    expect(setup.exitCode, setup.stderr).toBe(0);
+    expect(await fs.readFile(path.join(workspace, "main", "hook.log"), "utf8")).toBe("post_create");
+
+    const task = await execa(process.execPath, cliArguments("run", "verify", "main"), {
+      cwd: workspace,
+      reject: false,
+    });
+    expect(task.exitCode, task.stderr).toBe(0);
+    expect(await fs.readFile(path.join(workspace, "main", "task.log"), "utf8")).toBe("task:verify");
+
+    const executed = await execa(
+      process.execPath,
+      cliArguments(
+        "exec",
+        "main",
+        "--",
+        "node",
+        "-e",
+        "require('node:fs').writeFileSync('exec.log', process.cwd())",
+      ),
+      { cwd: workspace, reject: false },
+    );
+    expect(executed.exitCode, executed.stderr).toBe(0);
+    expect(await fs.readFile(path.join(workspace, "main", "exec.log"), "utf8")).toBe(
+      await fs.realpath(path.join(workspace, "main")),
+    );
+
+    await fs.rm(path.join(workspace, "main", "tool.log"));
+    const opened = await execa(
+      process.execPath,
+      cliArguments("open", "main", "--tool", "fixture-agent"),
+      { cwd: workspace, reject: false },
+    );
+    expect(opened.exitCode, opened.stderr).toBe(0);
+    expect(await fs.readFile(path.join(workspace, "main", "tool.log"), "utf8")).toBe(
+      await fs.realpath(path.join(workspace, "main")),
+    );
   });
 });

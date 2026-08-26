@@ -35,18 +35,23 @@ describe("managed Git workspace", () => {
 
     expect(workspace.config.defaultBranch).toBe("main");
     expect(workspace.config).toMatchObject({
-      schemaVersion: 2,
+      version: 1,
       mode: "managed",
-      gitDir: "../repo.git",
-      envDir: "env",
-      worktreeDir: "..",
+      paths: {
+        git: "../repo.git",
+        worktrees: "..",
+        primaryWorktree: null,
+      },
       remote: {
         name: "origin",
         fetchRefspec: "+refs/heads/*:refs/remotes/origin/*",
       },
+      trustedProjectConfig: null,
     });
+    expect(workspace.configPath).toBe(
+      await fs.realpath(path.join(target, ".wt", "workspace.yaml")),
+    );
     expect(await fs.stat(workspace.gitDir)).toSatisfy((stat) => stat.isDirectory());
-    expect(await fs.stat(workspace.envDir)).toSatisfy((stat) => stat.isDirectory());
 
     const remoteMain = await new GitClient().succeeds(
       ["show-ref", "--verify", "--quiet", "refs/remotes/origin/main"],

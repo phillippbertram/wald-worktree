@@ -5,6 +5,7 @@ export type GitRunOptions = {
   cwd?: string;
   gitDir?: string;
   reject?: boolean;
+  stripFinalNewline?: boolean;
 };
 
 export type GitResult = {
@@ -21,6 +22,7 @@ export class GitClient {
       cwd: options.cwd,
       reject: false,
       stdin: "ignore",
+      stripFinalNewline: options.stripFinalNewline ?? true,
     }).catch((error: unknown) => {
       throw new WtError("Git could not be started. Is Git installed and available in PATH?", {
         cause: error,
