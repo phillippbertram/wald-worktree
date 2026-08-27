@@ -1,5 +1,6 @@
 import type { Command } from "commander";
 import { isInteractiveTerminal, promptText, searchSelect } from "../ui/terminal.js";
+import { renderWelcome } from "../ui/welcome.js";
 import { showConfiguration } from "./commands/config.js";
 import { createWorktree } from "./commands/create.js";
 import { initializeWorkspace } from "./commands/init.js";
@@ -20,31 +21,39 @@ export async function runMainMenu(program: Command, context: CliContext): Promis
   }
   const workspace = await findWorkspaceOrNull(context);
   if (!workspace) {
+    context.output.stdout.write(renderWelcome(null));
     await initializeWorkspace({}, context);
     return;
   }
 
   const current = await context.worktrees.current(workspace);
   const worktrees = await context.worktrees.list(workspace);
+  context.output.stdout.write(
+    renderWelcome({
+      workspaceRoot: workspace.root,
+      current,
+      worktreeCount: worktrees.length,
+    }),
+  );
   const hasWorktrees = worktrees.length > 0;
   const actions = [
-    { label: "Create worktree", value: "create" },
-    { label: "List worktrees", value: "list" },
-    { label: "Prune stale worktree metadata", value: "prune" },
+    { label: "🌱 Create worktree", value: "create" },
+    { label: "🌿 List worktrees", value: "list" },
+    { label: "🍂 Prune stale worktree metadata", value: "prune" },
     ...(hasWorktrees
       ? [
-          { label: "Open worktree", value: "open" },
+          { label: "🌳 Open worktree", value: "open" },
           { label: "Run project task", value: "run" },
           { label: "Run worktree setup", value: "setup" },
           { label: "Execute command", value: "exec" },
-          { label: "Remove worktree", value: "remove" },
+          { label: "🍂 Remove worktree", value: "remove" },
           { label: "Create project configuration", value: "config-init" },
         ]
       : []),
     { label: "Configuration", value: "config" },
     { label: "Exit", value: "exit" },
   ];
-  const action = await searchSelect("What do you want to do?", actions);
+  const action = await searchSelect("🌳 What do you want to do?", actions);
 
   switch (action) {
     case "create":

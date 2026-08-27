@@ -21,14 +21,14 @@ export function createProgram(
   const context = createCliContext(output);
   const program = new Command()
     .name("ygg")
-    .description("Create and work in isolated Git checkouts safely.")
+    .description("🌳 Create and work in isolated Git checkouts safely.")
     .version("1.0.0")
     .showSuggestionAfterError()
     .showHelpAfterError();
 
   program.addHelpText(
     "after",
-    "\nStart here:\n  cd ~/dev/project && ygg init\n  ygg create feature/payment --cd\n  ygg create feature/review --tool codex\n",
+    "\n🌱 Start here:\n  cd ~/dev/project && ygg init\n  ygg create feature/payment --cd\n  ygg create feature/review --tool codex\n",
   );
 
   program.configureOutput({

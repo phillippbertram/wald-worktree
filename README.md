@@ -1,4 +1,4 @@
-# Ygg
+# 🌳 Ygg
 
 **Ygg — Git workspaces, rooted together.**
 
@@ -9,7 +9,7 @@ switching one checkout back and forth.
 Git remains the source of truth. `ygg` adds stable paths, branch resolution, repeatable setup,
 navigation, editor and agent launching, trusted project tasks, and safe cleanup.
 
-## Why Ygg?
+## 🌿 Why Ygg?
 
 Ygg is short for **Yggdrasil**, the world tree from Norse mythology. Yggdrasil connects different
 worlds through one living structure; Ygg applies that image to Git workspaces. The shared Git
@@ -17,7 +17,7 @@ repository forms the roots and trunk, while each worktree is an independent bran
 world with its own checked-out files, dependencies, and running processes. They remain rooted in the
 same Git history even while work continues in parallel.
 
-## Why worktrees?
+## 🌱 Why worktrees?
 
 A Git branch names a line of development, but a normal checkout still shows only one branch at a
 time. Switching branches replaces the files in that directory. An urgent fix therefore often means
@@ -42,7 +42,7 @@ Native `git worktree` commands provide the foundation. `ygg` handles the repeate
 them: where checkouts live, whether a branch is local or remote, which setup runs, how local files
 arrive, which tool opens, and whether cleanup is safe.
 
-## Quick start
+## 🌲 Quick start
 
 Requirements: Node.js 22.13 or newer, pnpm 11, and Git.
 
@@ -90,7 +90,8 @@ ygg init
 
 Choose whether to keep that checkout and place new worktrees beside it, or create a new standalone
 workspace from its committed history. The original checkout is never moved or deleted. Run `ygg`
-without arguments whenever you prefer the guided menu.
+without arguments for an interactive home with the current workspace, worktree count, and a changing
+Ygg thought before the guided menu.
 
 ## Shell integration
 
@@ -110,7 +111,7 @@ ygg shell-init fish | source
 Add the matching line to your shell configuration to enable it in future terminals. Without the
 wrapper, `ygg cd` prints the canonical path and `ygg create --cd` prints a normal `cd` fallback.
 
-## Everyday development flows
+## 🌿 Everyday development flows
 
 ### Fix production without disturbing a feature
 
@@ -242,7 +243,7 @@ ygg prune --apply --yes
 
 `ygg prune` never deletes a directory or branch. Locked registrations are preserved.
 
-## Configuration model
+## 🌳 Configuration model
 
 Configuration and local files have separate owners:
 

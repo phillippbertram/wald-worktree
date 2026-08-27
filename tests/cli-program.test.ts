@@ -63,17 +63,25 @@ describe("CLI contract", () => {
     const init = program.commands.find((command) => command.name() === "init");
     const create = program.commands.find((command) => command.name() === "create");
     const open = program.commands.find((command) => command.name() === "open");
+    let captured = "";
+    output.setEncoding("utf8");
+    output.on("data", (chunk: string) => {
+      captured += chunk;
+    });
+    const captureHelp = (command: typeof program | undefined): string => {
+      captured = "";
+      command?.outputHelp();
+      return captured;
+    };
 
-    program.outputHelp();
-    const rootHelp = output.read()?.toString() ?? "";
-    init?.outputHelp();
-    const initHelp = output.read()?.toString() ?? "";
-    create?.outputHelp();
-    const createHelp = output.read()?.toString() ?? "";
-    open?.outputHelp();
-    const openHelp = output.read()?.toString() ?? "";
+    const rootHelp = captureHelp(program);
+    const initHelp = captureHelp(init);
+    const createHelp = captureHelp(create);
+    const openHelp = captureHelp(open);
 
     expect(rootHelp).toContain("Usage: ygg");
+    expect(rootHelp).toContain("🌳 Create and work in isolated Git checkouts safely.");
+    expect(rootHelp).toContain("🌱 Start here:");
     expect(rootHelp).toContain("cd ~/dev/project && ygg init");
     expect(initHelp).toContain("Keep an existing checkout or create a standalone workspace root");
     expect(initHelp).toContain("inside the workspace root for");
