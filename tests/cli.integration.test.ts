@@ -18,7 +18,7 @@ describe("CLI smoke flow", () => {
   let repository: TestRepository;
 
   beforeEach(async () => {
-    temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "wt-cli-test-"));
+    temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "ygg-cli-test-"));
     repository = await createTestRepository(temporaryRoot);
   });
 
@@ -40,7 +40,7 @@ describe("CLI smoke flow", () => {
     expect(initialized.exitCode, initialized.stderr).toBe(0);
     expect(initialized.stdout).toContain("Initialized workspace");
     expect(initialized.stdout).toContain(`Next: cd '${await fs.realpath(workspace)}'`);
-    expect(initialized.stdout).toContain("Then: wt create 'main' --cd");
+    expect(initialized.stdout).toContain("Then: ygg create 'main' --cd");
 
     const added = await execa(process.execPath, cliArguments("create", "main", "--no-fetch"), {
       cwd: workspace,
@@ -78,8 +78,8 @@ describe("CLI smoke flow", () => {
     );
     expect(configured.exitCode, configured.stderr).toBe(0);
     expect(configured.stdout).toContain("Created");
-    expect(configured.stdout).toContain("review and commit .wt.yml");
-    await expect(fs.readFile(path.join(workspace, "main", ".wt.yml"), "utf8")).resolves.toContain(
+    expect(configured.stdout).toContain("review and commit .ygg.yml");
+    await expect(fs.readFile(path.join(workspace, "main", ".ygg.yml"), "utf8")).resolves.toContain(
       "version: 1",
     );
     const refusedOverwrite = await execa(
@@ -212,7 +212,7 @@ describe("CLI smoke flow", () => {
     );
     expect(adopted.exitCode, adopted.stderr).toBe(0);
     expect(adopted.stdout).toContain("Connected existing checkout");
-    await expect(fs.stat(path.join(repository.source, ".wt.yml"))).rejects.toMatchObject({
+    await expect(fs.stat(path.join(repository.source, ".ygg.yml"))).rejects.toMatchObject({
       code: "ENOENT",
     });
     expect(await fs.readFile(configPath, "utf8")).toBe(configBefore);
@@ -237,7 +237,7 @@ describe("CLI smoke flow", () => {
     expect(refused.exitCode).toBe(1);
     expect(refused.stderr).toContain("primary checkout cannot be removed");
 
-    const sharedDir = path.join(repository.source, ".git", "wt", "shared");
+    const sharedDir = path.join(repository.source, ".git", "ygg", "shared");
     await fs.rm(sharedDir, { recursive: true });
     const repeated = await execa(
       process.execPath,
@@ -246,9 +246,9 @@ describe("CLI smoke flow", () => {
     );
     expect(repeated.exitCode, repeated.stderr).toBe(0);
     expect(repeated.stdout).toContain("already initialized");
-    expect(repeated.stdout).toContain("review and commit .wt.yml");
+    expect(repeated.stdout).toContain("review and commit .ygg.yml");
     await expect(fs.stat(sharedDir)).resolves.toSatisfy((stat) => stat.isDirectory());
-    await expect(fs.readFile(path.join(repository.source, ".wt.yml"), "utf8")).resolves.toContain(
+    await expect(fs.readFile(path.join(repository.source, ".ygg.yml"), "utf8")).resolves.toContain(
       "version: 1",
     );
   });
@@ -262,9 +262,9 @@ describe("CLI smoke flow", () => {
     );
     expect(initialized.exitCode, initialized.stderr).toBe(0);
     await expect(
-      fs.readFile(path.join(workspace, ".wt", "workspace.yml"), "utf8"),
+      fs.readFile(path.join(workspace, ".ygg", "workspace.yml"), "utf8"),
     ).resolves.toContain("worktrees: ../worktrees");
-    expect((await fs.stat(path.join(workspace, ".wt", "shared"))).mode & 0o777).toBe(0o700);
+    expect((await fs.stat(path.join(workspace, ".ygg", "shared"))).mode & 0o777).toBe(0o700);
 
     const created = await execa(process.execPath, cliArguments("create", "main", "--no-fetch"), {
       cwd: workspace,
@@ -285,7 +285,7 @@ describe("CLI smoke flow", () => {
       `worktrees_path: ${await fs.realpath(path.join(workspace, "worktrees"))}`,
     );
     expect(configured.stdout).toContain(
-      `shared_path: ${await fs.realpath(path.join(workspace, ".wt", "shared"))}`,
+      `shared_path: ${await fs.realpath(path.join(workspace, ".ygg", "shared"))}`,
     );
   });
 
@@ -322,19 +322,19 @@ describe("CLI smoke flow", () => {
 
   it("trusts project automation before the first checkout and exposes task and exec commands", async () => {
     await fs.writeFile(
-      path.join(repository.source, ".wt.yml"),
+      path.join(repository.source, ".ygg.yml"),
       `version: 1
 defaults:
   fetch: false
 hooks:
   post_create:
     - type: command
-      argv: [node, -e, "require('node:fs').writeFileSync('hook.log', process.env.WT_EVENT)"]
+      argv: [node, -e, "require('node:fs').writeFileSync('hook.log', process.env.YGG_EVENT)"]
 tasks:
   verify:
     steps:
       - type: command
-        argv: [node, -e, "require('node:fs').writeFileSync('task.log', process.env.WT_EVENT)"]
+        argv: [node, -e, "require('node:fs').writeFileSync('task.log', process.env.YGG_EVENT)"]
   interrupt:
     steps:
       - type: command
@@ -347,8 +347,8 @@ tools:
 `,
       "utf8",
     );
-    await execa("git", ["add", ".wt.yml"], { cwd: repository.source });
-    await execa("git", ["commit", "-m", "add wt automation"], { cwd: repository.source });
+    await execa("git", ["add", ".ygg.yml"], { cwd: repository.source });
+    await execa("git", ["commit", "-m", "add ygg automation"], { cwd: repository.source });
     await execa("git", ["push", "origin", "main"], { cwd: repository.source });
 
     const workspace = path.join(temporaryRoot, "configured-workspace");
@@ -364,7 +364,7 @@ tools:
       reject: false,
     });
     expect(validated.exitCode, validated.stderr).toBe(0);
-    expect(validated.stdout).toContain("origin/main:.wt.yml");
+    expect(validated.stdout).toContain("origin/main:.ygg.yml");
 
     const untrusted = await execa(process.execPath, cliArguments("create", "main", "--no-fetch"), {
       cwd: workspace,

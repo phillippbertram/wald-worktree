@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { WtError } from "../domain/errors.js";
+import { YggError } from "../domain/errors.js";
 import type { ProjectConfigDocument } from "../domain/types.js";
 import { projectConfigFileName } from "../services/config-service.js";
 import type {
@@ -24,7 +24,7 @@ export async function initializeProjectConfiguration(
   context: CliContext,
 ): Promise<ProjectConfigDocument | null> {
   if (!options.yes && !isInteractiveTerminal()) {
-    throw new WtError("Non-interactive configuration initialization requires --yes.");
+    throw new YggError("Non-interactive configuration initialization requires --yes.");
   }
 
   const configPath = path.join(root, projectConfigFileName);
@@ -32,7 +32,7 @@ export async function initializeProjectConfiguration(
   let overwrite = options.force;
   if (exists && !overwrite) {
     if (options.yes || !isInteractiveTerminal()) {
-      throw new WtError(
+      throw new YggError(
         `Project configuration already exists: ${configPath}. Use --force to replace it.`,
       );
     }
@@ -77,7 +77,7 @@ export async function initializeProjectConfiguration(
     `Next: review and commit ${projectConfigFileName} on the branch used to create future worktrees.`,
   );
   if (document.requiresTrust) {
-    writeLine(context.output.stdout, "Then: wt config trust");
+    writeLine(context.output.stdout, "Then: ygg config trust");
   }
   return document;
 }

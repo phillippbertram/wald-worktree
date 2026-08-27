@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import type { Writable } from "node:stream";
 import { execa } from "execa";
-import { WtError } from "../domain/errors.js";
+import { YggError } from "../domain/errors.js";
 
 export type ProcessOptions = {
   cwd: string;
@@ -14,7 +14,7 @@ export class ProcessRunner {
   async runArgv(argv: string[], options: ProcessOptions): Promise<void> {
     const [command, ...args] = argv;
     if (!command) {
-      throw new WtError("Cannot execute an empty command.");
+      throw new YggError("Cannot execute an empty command.");
     }
     await this.run(command, args, options);
   }
@@ -26,20 +26,20 @@ export class ProcessRunner {
   async runInteractive(argv: string[], cwd: string): Promise<void> {
     const [command, ...args] = argv;
     if (!command) {
-      throw new WtError("Cannot execute an empty command.");
+      throw new YggError("Cannot execute an empty command.");
     }
     const result = await execa(command, args, {
       cwd,
       reject: false,
       stdio: "inherit",
     }).catch((error: unknown) => {
-      throw new WtError(`Could not start command: ${command}`, { cause: error });
+      throw new YggError(`Could not start command: ${command}`, { cause: error });
     });
     if (result.signal === "SIGINT" || result.exitCode === 130) {
-      throw new WtError("Command interrupted.", { exitCode: 130 });
+      throw new YggError("Command interrupted.", { exitCode: 130 });
     }
     if (result.exitCode !== 0) {
-      throw new WtError(`Command failed with exit code ${result.exitCode}: ${argv.join(" ")}`, {
+      throw new YggError(`Command failed with exit code ${result.exitCode}: ${argv.join(" ")}`, {
         exitCode: result.exitCode ?? 1,
       });
     }
@@ -52,7 +52,7 @@ export class ProcessRunner {
   async launchDetached(argv: string[], cwd: string): Promise<void> {
     const [command, ...args] = argv;
     if (!command) {
-      throw new WtError("Cannot launch an empty tool command.");
+      throw new YggError("Cannot launch an empty tool command.");
     }
     await new Promise<void>((resolve, reject) => {
       const child = spawn(command, args, {
@@ -61,7 +61,7 @@ export class ProcessRunner {
         stdio: "ignore",
       });
       child.once("error", (error) =>
-        reject(new WtError(`Could not launch tool: ${command}`, { cause: error })),
+        reject(new YggError(`Could not launch tool: ${command}`, { cause: error })),
       );
       child.once("spawn", () => {
         child.unref();
@@ -81,22 +81,22 @@ export class ProcessRunner {
       stderr: output,
       timeout: options.timeoutMs,
     }).catch((error: unknown) => {
-      throw new WtError(`Could not start command: ${command}`, { cause: error });
+      throw new YggError(`Could not start command: ${command}`, { cause: error });
     });
     if (result.timedOut) {
-      throw new WtError(
+      throw new YggError(
         `Command timed out after ${options.timeoutMs ?? 0}ms: ${[command, ...args].join(" ")}`,
       );
     }
     if (result.signal === "SIGINT" || result.exitCode === 130) {
-      throw new WtError("Command interrupted.", { exitCode: 130 });
+      throw new YggError("Command interrupted.", { exitCode: 130 });
     }
     if (result.exitCode !== 0) {
       const outcome =
         result.exitCode === undefined
           ? `signal ${result.signal ?? "unknown"}`
           : `exit code ${result.exitCode}`;
-      throw new WtError(`Command failed with ${outcome}: ${[command, ...args].join(" ")}`, {
+      throw new YggError(`Command failed with ${outcome}: ${[command, ...args].join(" ")}`, {
         exitCode: result.exitCode ?? 1,
       });
     }

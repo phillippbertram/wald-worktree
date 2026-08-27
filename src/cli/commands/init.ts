@@ -1,7 +1,7 @@
 import path from "node:path";
 import type { Command } from "commander";
 import { z } from "zod";
-import { WtError } from "../../domain/errors.js";
+import { YggError } from "../../domain/errors.js";
 import { humanizeRepositoryName } from "../../infrastructure/path-utils.js";
 import type { AdoptionInspection, AdoptionOptions } from "../../services/workspace-service.js";
 import {
@@ -47,11 +47,11 @@ export function registerInitCommand(program: Command, context: CliContext): void
     .option("--remote <name>", "Remote used for fetching and branch resolution")
     .option("--no-remote", "Use no remote (local-only repository)")
     .option("--default-branch <branch>", "Default branch used for creation and merge checks")
-    .option("--config", "Create a detected .wt.yml in the retained checkout")
+    .option("--config", "Create a detected .ygg.yml in the retained checkout")
     .option("--yes", "Accept detected settings without prompting")
     .addHelpText(
       "after",
-      "\nExamples:\n  cd ~/dev/project && wt init\n  wt init git@github.com:example/project.git ~/dev/project\n  wt init git@github.com:example/project.git ~/dev/project --worktrees-dir worktrees\n  wt init --adopt . --yes --config\n",
+      "\nExamples:\n  cd ~/dev/project && ygg init\n  ygg init git@github.com:example/project.git ~/dev/project\n  ygg init git@github.com:example/project.git ~/dev/project --worktrees-dir worktrees\n  ygg init --adopt . --yes --config\n",
     )
     .action(async (repository: unknown, directory: unknown, options: unknown) => {
       const input = parseCliInput(initInputSchema, {
@@ -73,8 +73,8 @@ export async function initializeWorkspace(input: InitInput, context: CliContext)
     return;
   }
   if (hasAdoptionOptions(input)) {
-    throw new WtError(
-      "Existing-checkout options cannot be combined with clone mode. Use wt init --adopt.",
+    throw new YggError(
+      "Existing-checkout options cannot be combined with clone mode. Use ygg init --adopt.",
     );
   }
   const workspace = await runTask("Initializing workspace", () =>
@@ -86,7 +86,7 @@ export async function initializeWorkspace(input: InitInput, context: CliContext)
   writeLine(context.output.stdout, `Next: cd ${shellQuote(workspace.root)}`);
   writeLine(
     context.output.stdout,
-    `Then: wt create ${shellQuote(workspace.config.defaultBranch)} --cd`,
+    `Then: ygg create ${shellQuote(workspace.config.defaultBranch)} --cd`,
   );
 }
 
@@ -115,7 +115,7 @@ async function initializeGuidedWorkspace(context: CliContext): Promise<void> {
   }
 
   const keepRecommended = current.modifiedWorktrees.length > 0 || current.stashCount > 0;
-  const choice = await selectValue("How should wt organize this repository?", [
+  const choice = await selectValue("How should ygg organize this repository?", [
     ...(keepRecommended
       ? [
           {
@@ -256,10 +256,10 @@ async function chooseManagedWorktreeDirectory(): Promise<string> {
     },
     { label: "Choose another subdirectory", value: custom },
   ]);
-  if (!selected) throw new WtError("No worktree directory selected.");
+  if (!selected) throw new YggError("No worktree directory selected.");
   if (selected !== custom) return selected;
   const value = await promptText("Worktree directory inside the workspace root:", "worktrees");
-  if (!value) throw new WtError("Worktree directory cannot be empty.");
+  if (!value) throw new YggError("Worktree directory cannot be empty.");
   return value;
 }
 
@@ -271,7 +271,7 @@ async function completeNewWorkspace(
     writeLine(context.output.stdout, `Next: cd ${shellQuote(workspace.root)}`);
     writeLine(
       context.output.stdout,
-      `Then: wt create ${shellQuote(workspace.config.defaultBranch)} --cd`,
+      `Then: ygg create ${shellQuote(workspace.config.defaultBranch)} --cd`,
     );
     return;
   }
@@ -286,13 +286,13 @@ async function completeNewWorkspace(
   await success(`Created ${created.name} at ${created.path}`, context.output);
   await maybeInitializeProjectConfig(created.path, {}, context);
   writeLine(context.output.stdout, `Next: cd ${shellQuote(created.path)}`);
-  writeLine(context.output.stdout, "Then create a feature worktree with: wt create <branch> --cd");
+  writeLine(context.output.stdout, "Then create a feature worktree with: ygg create <branch> --cd");
 }
 
 async function initializeAdoptedWorkspace(input: InitInput, context: CliContext): Promise<void> {
   const explicit = input.adopt !== undefined;
   if (!isInteractiveTerminal() && (!explicit || !input.yes)) {
-    throw new WtError("Keeping a checkout non-interactively requires --adopt and --yes.");
+    throw new YggError("Keeping a checkout non-interactively requires --adopt and --yes.");
   }
   const source = typeof input.adopt === "string" ? input.adopt : ".";
   const requested: AdoptionOptions = {
@@ -325,7 +325,7 @@ async function initializeAdoptedWorkspace(input: InitInput, context: CliContext)
   );
   if (inspection.worktreeDirSelectionRequired) {
     if (!isInteractiveTerminal() || input.yes) {
-      throw new WtError("Could not select a safe worktree directory. Use --worktrees-dir.");
+      throw new YggError("Could not select a safe worktree directory. Use --worktrees-dir.");
     }
     requested.worktreeDir = await promptText(
       "Directory for new worktrees:",
@@ -343,10 +343,10 @@ async function initializeAdoptedWorkspace(input: InitInput, context: CliContext)
   const workspace = await runTask("Adopting repository", () =>
     context.workspaces.adopt(inspection),
   );
-  await success(`Connected existing checkout to wt at ${workspace.root}`, context.output);
+  await success(`Connected existing checkout to ygg at ${workspace.root}`, context.output);
   writeLine(context.output.stdout, `Worktrees: ${workspace.worktreeDir}`);
   await maybeInitializeProjectConfig(workspace.primaryWorktree, input, context);
-  writeLine(context.output.stdout, "Create another worktree: wt create <branch> --cd");
+  writeLine(context.output.stdout, "Create another worktree: ygg create <branch> --cd");
 }
 
 async function maybeInitializeProjectConfig(
@@ -356,8 +356,8 @@ async function maybeInitializeProjectConfig(
 ): Promise<void> {
   if (!primaryWorktree) {
     if (input.config) {
-      throw new WtError(
-        "Cannot create .wt.yml while retaining a bare repository without a worktree. Create a worktree, then run wt config init.",
+      throw new YggError(
+        "Cannot create .ygg.yml while retaining a bare repository without a worktree. Create a worktree, then run ygg config init.",
       );
     }
     return;
@@ -369,9 +369,9 @@ async function maybeInitializeProjectConfig(
     requested ||
     (isInteractiveTerminal() &&
       !input.yes &&
-      (await confirm("Create an initial .wt.yml now?", true)));
+      (await confirm("Create an initial .ygg.yml now?", true)));
   if (!shouldCreate) {
-    writeLine(context.output.stdout, "Optional: wt config init");
+    writeLine(context.output.stdout, "Optional: ygg config init");
     return;
   }
   await initializeProjectConfiguration(
@@ -392,8 +392,8 @@ async function inspectAdoption(
       context.workspaces.inspectAdoption(source, requested),
     );
   } catch (error) {
-    if (!explicit && error instanceof WtError && error.message.startsWith("Not a Git")) {
-      throw new WtError("No Git repository detected. Use wt init <repository> [directory].");
+    if (!explicit && error instanceof YggError && error.message.startsWith("Not a Git")) {
+      throw new YggError("No Git repository detected. Use ygg init <repository> [directory].");
     }
     throw error;
   }
@@ -409,26 +409,26 @@ async function resolveRepositorySettings(
   let inspection = initialInspection;
   if (inspection.remoteSelectionRequired) {
     if (!isInteractiveTerminal() || acceptDetected) {
-      throw new WtError("Multiple remotes found. Select one with --remote or --no-remote.");
+      throw new YggError("Multiple remotes found. Select one with --remote or --no-remote.");
     }
-    const selected = await selectValue("Select the remote wt should use:", [
+    const selected = await selectValue("Select the remote ygg should use:", [
       ...inspection.remotes.map((remote) => ({ label: remote, value: remote })),
       { label: "No remote (local only)", value: "__none__" },
     ]);
-    if (!selected) throw new WtError("No remote selected.");
+    if (!selected) throw new YggError("No remote selected.");
     requested.remote = selected === "__none__" ? null : selected;
     inspection = await context.workspaces.inspectAdoption(source, requested);
   }
   if (!inspection.defaultBranch) {
     if (!isInteractiveTerminal() || acceptDetected) {
-      throw new WtError("Could not determine the default branch. Use --default-branch.");
+      throw new YggError("Could not determine the default branch. Use --default-branch.");
     }
     const custom = "__custom__";
     const selected = await searchSelect("Select the default branch:", [
       ...inspection.defaultBranchCandidates.map((branch) => ({ label: branch, value: branch })),
       { label: "Enter another branch", value: custom },
     ]);
-    if (!selected) throw new WtError("No default branch selected.");
+    if (!selected) throw new YggError("No default branch selected.");
     requested.defaultBranch = selected === custom ? await promptText("Default branch:") : selected;
     inspection = await context.workspaces.inspectAdoption(source, requested);
   }
@@ -443,7 +443,7 @@ async function inspectExistingRepositoryOrNull(
     return await runTask("Inspecting repository", () => context.workspaces.inspectAdoption(source));
   } catch (error) {
     if (
-      error instanceof WtError &&
+      error instanceof YggError &&
       (error.message.startsWith("Not a Git") ||
         error.message.startsWith("Repository path does not exist"))
     ) {

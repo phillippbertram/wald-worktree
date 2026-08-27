@@ -1,4 +1,4 @@
-import { toErrorMessage, WtError } from "../domain/errors.js";
+import { toErrorMessage, YggError } from "../domain/errors.js";
 import type { HookEvent, ProjectConfigDocument, Workspace, Worktree } from "../domain/types.js";
 import type { GitClient } from "../infrastructure/git-client.js";
 import { type AutomationContext, AutomationService } from "./automation-service.js";
@@ -81,8 +81,8 @@ export class WorktreeWorkflowService {
     const created = await this.worktrees.createPrepared(plan.workspace, plan.prepared);
     const targetProject = await this.configs.readProjectConfig(created.path);
     if ((plan.project?.hash ?? null) !== (targetProject?.hash ?? null)) {
-      throw new WtError(
-        `Worktree was created at ${created.path}, but its ${targetProject?.path ?? ".wt.yml"} does not match the configuration inspected before creation. Review the worktree before running hooks.`,
+      throw new YggError(
+        `Worktree was created at ${created.path}, but its ${targetProject?.path ?? ".ygg.yml"} does not match the configuration inspected before creation. Review the worktree before running hooks.`,
       );
     }
 
@@ -100,8 +100,8 @@ export class WorktreeWorkflowService {
       };
       await this.automation.runHook(targetProject, "post_create", postContext);
     } catch (error) {
-      throw new WtError(
-        `Worktree was created at ${created.path}, but post-create setup failed: ${toErrorMessage(error)}\nRetry with: wt setup ${shellQuote(created.name)}`,
+      throw new YggError(
+        `Worktree was created at ${created.path}, but post-create setup failed: ${toErrorMessage(error)}\nRetry with: ygg setup ${shellQuote(created.name)}`,
         { cause: error },
       );
     }
@@ -144,7 +144,7 @@ export class WorktreeWorkflowService {
         event: "post_remove",
       });
     } catch (error) {
-      throw new WtError(
+      throw new YggError(
         `Worktree ${plan.inspection.worktree.name} was removed, but its post-remove hook failed: ${toErrorMessage(error)}`,
         { cause: error },
       );
@@ -162,7 +162,7 @@ export class WorktreeWorkflowService {
       this.readWorktreeContext(workspace),
     ]);
     if (!project) {
-      throw new WtError(`No .wt.yml found in ${worktree.path}`);
+      throw new YggError(`No .ygg.yml found in ${worktree.path}`);
     }
     await this.ensureTrusted(workspace, project, options.trustProjectConfig);
     await this.automation.runTask(project, name, {
@@ -256,8 +256,8 @@ export class WorktreeWorkflowService {
       await this.configs.trust(workspace, project);
       return;
     }
-    throw new WtError(
-      `Project configuration is not trusted: ${project?.path ?? ".wt.yml"}\nReview it, then run: wt config trust`,
+    throw new YggError(
+      `Project configuration is not trusted: ${project?.path ?? ".ygg.yml"}\nReview it, then run: ygg config trust`,
     );
   }
 

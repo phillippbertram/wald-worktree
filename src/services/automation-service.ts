@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { toErrorMessage, WtError } from "../domain/errors.js";
+import { toErrorMessage, YggError } from "../domain/errors.js";
 import type {
   AutomationStep,
   HookEvent,
@@ -42,7 +42,7 @@ export class AutomationService {
   ): Promise<void> {
     const task = document.config.tasks[name];
     if (!task) {
-      throw new WtError(`Unknown project task: ${name}`);
+      throw new YggError(`Unknown project task: ${name}`);
     }
     await this.runSteps(task.steps, { ...context, event: `task:${name}` });
   }
@@ -52,7 +52,7 @@ export class AutomationService {
       try {
         await this.runStep(step, context);
       } catch (error) {
-        if (error instanceof WtError && error.exitCode === 130) {
+        if (error instanceof YggError && error.exitCode === 130) {
           throw error;
         }
         if (step.continueOnError) {
@@ -62,7 +62,7 @@ export class AutomationService {
           );
           continue;
         }
-        throw new WtError(`Automation step ${index + 1} failed: ${toErrorMessage(error)}`, {
+        throw new YggError(`Automation step ${index + 1} failed: ${toErrorMessage(error)}`, {
           cause: error,
         });
       }
@@ -85,11 +85,11 @@ export class AutomationService {
     await assertDirectory(cwd, "Command working directory");
     const environment = {
       ...step.env,
-      WT_EVENT: context.event,
-      WT_WORKSPACE_ROOT: context.workspace.root,
-      WT_SOURCE_PATH: resolvePreferredSource(context)?.path ?? "",
-      WT_WORKTREE_PATH: context.targetPath,
-      WT_BRANCH: context.branch ?? "",
+      YGG_EVENT: context.event,
+      YGG_WORKSPACE_ROOT: context.workspace.root,
+      YGG_SOURCE_PATH: resolvePreferredSource(context)?.path ?? "",
+      YGG_WORKTREE_PATH: context.targetPath,
+      YGG_BRANCH: context.branch ?? "",
     };
     const options = {
       cwd,
@@ -102,7 +102,7 @@ export class AutomationService {
     } else if (step.shell) {
       await this.processes.runShell(step.shell, options);
     } else {
-      throw new WtError("Command step has neither argv nor shell.");
+      throw new YggError("Command step has neither argv nor shell.");
     }
   }
 
@@ -111,17 +111,17 @@ export class AutomationService {
     context: AutomationContext,
   ): Promise<void> {
     if (context.event !== "post_create" && !context.event.startsWith("task:")) {
-      throw new WtError(`${step.type} steps are only supported in post_create hooks and tasks.`);
+      throw new YggError(`${step.type} steps are only supported in post_create hooks and tasks.`);
     }
     const sourceRoot = resolveSourceRoot(step.source, context);
     if (!sourceRoot) {
       if (step.optional) {
         return;
       }
-      throw new WtError(`Cannot resolve ${step.source} source for ${step.type} step.`);
+      throw new YggError(`Cannot resolve ${step.source} source for ${step.type} step.`);
     }
     if (!context.targetPath) {
-      throw new WtError(`${step.type} steps require an existing target worktree.`);
+      throw new YggError(`${step.type} steps require an existing target worktree.`);
     }
 
     const source = resolveRelativePath(sourceRoot, step.from, "Source path");
@@ -130,7 +130,7 @@ export class AutomationService {
       if (step.optional) {
         return;
       }
-      throw new WtError(`Source path does not exist: ${source}`);
+      throw new YggError(`Source path does not exist: ${source}`);
     }
     if (step.source === "shared") {
       await assertSharedDirectory(context.workspace);
@@ -153,7 +153,7 @@ export class AutomationService {
 
     const targetStat = await lstatOrNull(target);
     if (targetStat && !step.overwrite) {
-      throw new WtError(`Target path already exists: ${target}`);
+      throw new YggError(`Target path already exists: ${target}`);
     }
     if (targetStat) {
       await fs.rm(target, { force: true, recursive: true });
@@ -186,7 +186,7 @@ async function runGlobFileStep(
   targetRoot: string,
 ): Promise<void> {
   if (!sourceStat.isDirectory() || sourceStat.isSymbolicLink()) {
-    throw new WtError(`Glob source must be a directory: ${sourceDirectory}`);
+    throw new YggError(`Glob source must be a directory: ${sourceDirectory}`);
   }
 
   const targetDirectory = resolveRelativePath(targetRoot, step.to, "Target path");
@@ -195,7 +195,7 @@ async function runGlobFileStep(
   }
   const targetDirectoryStat = await statOrNull(targetDirectory);
   if (targetDirectoryStat && !targetDirectoryStat.isDirectory()) {
-    throw new WtError(`Glob target must be a directory: ${targetDirectory}`);
+    throw new YggError(`Glob target must be a directory: ${targetDirectory}`);
   }
 
   const matches: string[] = [];
@@ -219,7 +219,7 @@ async function runGlobFileStep(
       continue;
     }
     if (step.type === "copy" && candidateStat.isSymbolicLink()) {
-      throw new WtError(`Copy source contains a symbolic link: ${candidate}`);
+      throw new YggError(`Copy source contains a symbolic link: ${candidate}`);
     }
 
     const relativeMatch = path.relative(sourceDirectory, candidate);
@@ -229,7 +229,7 @@ async function runGlobFileStep(
       "Target path",
     );
     if (targets.has(target)) {
-      throw new WtError(`Glob produces the same target more than once: ${target}`);
+      throw new YggError(`Glob produces the same target more than once: ${target}`);
     }
     targets.add(target);
     operations.push({ source: candidate, realSource: await fs.realpath(candidate), target });
@@ -239,14 +239,14 @@ async function runGlobFileStep(
     if (step.optional) {
       return;
     }
-    throw new WtError(`Glob did not match any files: ${step.glob}`);
+    throw new YggError(`Glob did not match any files: ${step.glob}`);
   }
 
   for (const operation of operations) {
     await assertDestinationInside(targetRoot, operation.target);
     const targetStat = await lstatOrNull(operation.target);
     if (targetStat && !step.overwrite) {
-      throw new WtError(`Target path already exists: ${operation.target}`);
+      throw new YggError(`Target path already exists: ${operation.target}`);
     }
   }
 
@@ -307,11 +307,11 @@ function resolvePreferredSource(context: AutomationContext): Worktree | null {
 
 function resolveRelativePath(root: string, relativePath: string, label: string): string {
   if (path.isAbsolute(relativePath) || relativePath.includes("\0")) {
-    throw new WtError(`${label} must be a relative path.`);
+    throw new YggError(`${label} must be a relative path.`);
   }
   const resolved = path.resolve(root, relativePath);
   if (!isPathInsideOrEqual(root, resolved)) {
-    throw new WtError(`${label} must stay inside its configured source.`);
+    throw new YggError(`${label} must stay inside its configured source.`);
   }
   return resolved;
 }
@@ -319,14 +319,14 @@ function resolveRelativePath(root: string, relativePath: string, label: string):
 async function assertRealPathInside(root: string, candidate: string, label: string): Promise<void> {
   const [realRoot, realCandidate] = await Promise.all([fs.realpath(root), fs.realpath(candidate)]);
   if (!isPathInsideOrEqual(realRoot, realCandidate)) {
-    throw new WtError(`${label} resolves outside its worktree.`);
+    throw new YggError(`${label} resolves outside its worktree.`);
   }
 }
 
 async function assertSharedDirectory(workspace: Workspace): Promise<void> {
   const stat = await fs.lstat(workspace.sharedDir);
   if (stat.isSymbolicLink() || !stat.isDirectory()) {
-    throw new WtError(
+    throw new YggError(
       `Shared path must be a directory, not a link or file: ${workspace.sharedDir}`,
     );
   }
@@ -335,7 +335,7 @@ async function assertSharedDirectory(workspace: Workspace): Promise<void> {
     fs.realpath(workspace.sharedDir),
   ]);
   if (!isPathInsideOrEqual(realMetadata, realShared)) {
-    throw new WtError("Shared path resolves outside the workspace metadata directory.");
+    throw new YggError("Shared path resolves outside the workspace metadata directory.");
   }
 }
 
@@ -345,24 +345,24 @@ async function assertDestinationInside(root: string, candidate: string): Promise
   while (!(await lstatOrNull(parent))) {
     const next = path.dirname(parent);
     if (next === parent) {
-      throw new WtError(`Cannot resolve target parent: ${candidate}`);
+      throw new YggError(`Cannot resolve target parent: ${candidate}`);
     }
     parent = next;
   }
   const parentStat = await fs.stat(parent);
   if (!parentStat.isDirectory()) {
-    throw new WtError(`Target parent is not a directory: ${parent}`);
+    throw new YggError(`Target parent is not a directory: ${parent}`);
   }
   const realParent = await fs.realpath(parent);
   if (!isPathInsideOrEqual(realRoot, realParent)) {
-    throw new WtError("Target path resolves outside its worktree.");
+    throw new YggError("Target path resolves outside its worktree.");
   }
 }
 
 async function copyWithoutSymlinks(source: string, target: string): Promise<void> {
   const stat = await fs.lstat(source);
   if (stat.isSymbolicLink()) {
-    throw new WtError(`Copy source contains a symbolic link: ${source}`);
+    throw new YggError(`Copy source contains a symbolic link: ${source}`);
   }
   if (stat.isDirectory()) {
     await fs.mkdir(target, { recursive: true, mode: stat.mode });
@@ -372,7 +372,7 @@ async function copyWithoutSymlinks(source: string, target: string): Promise<void
     return;
   }
   if (!stat.isFile()) {
-    throw new WtError(`Copy source is not a regular file or directory: ${source}`);
+    throw new YggError(`Copy source is not a regular file or directory: ${source}`);
   }
   await fs.copyFile(source, target);
   await fs.chmod(target, stat.mode);
@@ -381,7 +381,7 @@ async function copyWithoutSymlinks(source: string, target: string): Promise<void
 async function assertDirectory(directory: string, label: string): Promise<void> {
   const stat = await lstatOrNull(directory);
   if (!stat?.isDirectory()) {
-    throw new WtError(`${label} does not exist: ${directory}`);
+    throw new YggError(`${label} does not exist: ${directory}`);
   }
 }
 

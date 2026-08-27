@@ -7,6 +7,7 @@ describe("CLI contract", () => {
     const output = new PassThrough();
     const program = createProgram({ stdout: output, stderr: output });
 
+    expect(program.name()).toBe("ygg");
     expect(program.commands.map((command) => command.name())).toEqual([
       "init",
       "create",
@@ -31,7 +32,7 @@ describe("CLI contract", () => {
     const output = new PassThrough();
     const program = createProgram({ stdout: output, stderr: output });
 
-    await expect(program.parseAsync(["node", "wt", "prune", "--yes"])).rejects.toThrow(
+    await expect(program.parseAsync(["node", "ygg", "prune", "--yes"])).rejects.toThrow(
       /--yes: Requires --apply/u,
     );
   });
@@ -41,7 +42,7 @@ describe("CLI contract", () => {
     const program = createProgram({ stdout: output, stderr: output });
 
     await expect(
-      program.parseAsync(["node", "wt", "create", "main", "--name", ""]),
+      program.parseAsync(["node", "ygg", "create", "main", "--name", ""]),
     ).rejects.toThrow(
       /Invalid command input:[\s\S]*--name: Cannot be empty\.[\s\S]*Run with --help/u,
     );
@@ -52,7 +53,7 @@ describe("CLI contract", () => {
     const program = createProgram({ stdout: output, stderr: output });
 
     await expect(
-      program.parseAsync(["node", "wt", "create", "feature/review", "--cd", "--tool", "codex"]),
+      program.parseAsync(["node", "ygg", "create", "feature/review", "--cd", "--tool", "codex"]),
     ).rejects.toThrow(/--cd: Cannot be combined with --open or --tool/u);
   });
 
@@ -72,12 +73,13 @@ describe("CLI contract", () => {
     open?.outputHelp();
     const openHelp = output.read()?.toString() ?? "";
 
-    expect(rootHelp).toContain("cd ~/dev/project && wt init");
+    expect(rootHelp).toContain("Usage: ygg");
+    expect(rootHelp).toContain("cd ~/dev/project && ygg init");
     expect(initHelp).toContain("Keep an existing checkout or create a standalone workspace root");
     expect(initHelp).toContain("inside the workspace root for");
     expect(initHelp).toContain("cloned repositories");
-    expect(createHelp).toContain("wt create feature/payment --cd");
+    expect(createHelp).toContain("ygg create feature/payment --cd");
     expect(createHelp).toContain("codex-app");
-    expect(openHelp).toContain("wt open feature-payment --tool code");
+    expect(openHelp).toContain("ygg open feature-payment --tool code");
   });
 });

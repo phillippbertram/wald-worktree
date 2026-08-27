@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { z } from "zod";
-import { WtError } from "../../domain/errors.js";
+import { YggError } from "../../domain/errors.js";
 import { confirm, isInteractiveTerminal } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
 import {
@@ -25,15 +25,15 @@ const initializationInputSchema = z
 export function registerConfigCommand(program: Command, context: CliContext): void {
   const config = program
     .command("config")
-    .description("Show configuration or manage repository-owned .wt.yml behavior")
+    .description("Show configuration or manage repository-owned .ygg.yml behavior")
     .action(async () => showConfiguration(context));
 
   config
     .command("init")
-    .description("Create an initial .wt.yml through project detection or guided prompts")
+    .description("Create an initial .ygg.yml through project detection or guided prompts")
     .argument("[worktree]", "Worktree name, branch, or path")
     .option("--yes", "Use detected defaults without prompting")
-    .option("--force", "Replace an existing .wt.yml")
+    .option("--force", "Replace an existing .ygg.yml")
     .action(async (worktree: unknown, options: unknown) => {
       const input = parseCliInput(initializationInputSchema, {
         worktree,
@@ -52,10 +52,10 @@ export function registerConfigCommand(program: Command, context: CliContext): vo
       const input = parseCliInput(confirmationInputSchema, options);
       const workspace = await context.workspaces.find();
       const project = await resolveProjectConfiguration(workspace, context);
-      if (!project) throw new WtError("No .wt.yml found on the current or default branch.");
+      if (!project) throw new YggError("No .ygg.yml found on the current or default branch.");
       printTrustSummary(project, context.output);
       if (!input.yes) {
-        if (!isInteractiveTerminal()) throw new WtError("Non-interactive trust requires --yes.");
+        if (!isInteractiveTerminal()) throw new YggError("Non-interactive trust requires --yes.");
         if (!(await confirm("Trust this project configuration until its behavior changes?"))) {
           writeLine(context.output.stdout, "Cancelled.");
           return;
@@ -73,7 +73,7 @@ export function registerConfigCommand(program: Command, context: CliContext): vo
       const input = parseCliInput(confirmationInputSchema, options);
       const workspace = await context.workspaces.find();
       if (!input.yes) {
-        if (!isInteractiveTerminal()) throw new WtError("Non-interactive untrust requires --yes.");
+        if (!isInteractiveTerminal()) throw new YggError("Non-interactive untrust requires --yes.");
         if (!(await confirm("Remove trust for the project configuration?"))) return;
       }
       await context.configs.untrust(workspace);

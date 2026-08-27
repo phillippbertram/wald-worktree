@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping improve `wt`.
+Thanks for helping improve Ygg.
 
 ## Development
 

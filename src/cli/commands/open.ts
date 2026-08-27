@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { z } from "zod";
-import { toErrorMessage, WtError } from "../../domain/errors.js";
+import { toErrorMessage, YggError } from "../../domain/errors.js";
 import type { ProjectConfigDocument, Worktree } from "../../domain/types.js";
 import { builtInToolNames } from "../../services/tool-service.js";
 import { isInteractiveTerminal, searchSelect } from "../../ui/terminal.js";
@@ -20,10 +20,10 @@ export function registerOpenCommand(program: Command, context: CliContext): void
     .command("open")
     .description("Open a worktree in an editor, app, or agent tool")
     .argument("[worktree]", "Worktree name, branch, or path")
-    .option("--tool <profile>", "Tool profile from built-ins or .wt.yml")
+    .option("--tool <profile>", "Tool profile from built-ins or .ygg.yml")
     .addHelpText(
       "after",
-      `\nBuilt-in tools: ${builtInToolNames.join(", ")}\n\nExamples:\n  wt open feature-payment --tool code\n  wt open feature-payment --tool codex\n`,
+      `\nBuilt-in tools: ${builtInToolNames.join(", ")}\n\nExamples:\n  ygg open feature-payment --tool code\n  ygg open feature-payment --tool codex\n`,
     )
     .action(async (worktree: unknown, options: unknown) => {
       const input = parseCliInput(openInputSchema, { worktree, ...(options as object) });
@@ -46,10 +46,10 @@ export async function openSelectedWorktree(
       : options.project;
   await ensureTrusted(workspace, project, context);
   const available = await context.tools.availableProfiles(project);
-  if (available.length === 0) throw new WtError("No supported editor or agent tool is available.");
+  if (available.length === 0) throw new YggError("No supported editor or agent tool is available.");
   let tool = requestedTool ?? project?.config.defaults.tool;
   if (!tool) {
-    if (!isInteractiveTerminal()) throw new WtError("Tool is required without a TTY. Use --tool.");
+    if (!isInteractiveTerminal()) throw new YggError("Tool is required without a TTY. Use --tool.");
     tool =
       (await searchSelect(
         `Open ${worktree.name} with:`,
@@ -60,11 +60,11 @@ export async function openSelectedWorktree(
         })),
       )) ?? undefined;
   }
-  if (!tool) throw new WtError("No tool selected.");
+  if (!tool) throw new YggError("No tool selected.");
   try {
     await context.tools.open(worktree, tool, project);
   } catch (error) {
-    throw new WtError(`Could not open ${worktree.name} with ${tool}: ${toErrorMessage(error)}`, {
+    throw new YggError(`Could not open ${worktree.name} with ${tool}: ${toErrorMessage(error)}`, {
       cause: error,
     });
   }

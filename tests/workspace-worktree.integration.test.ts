@@ -18,7 +18,7 @@ describe("managed Git workspace", () => {
   let worktrees: WorktreeService;
 
   beforeEach(async () => {
-    temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "wt-workspace-test-"));
+    temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "ygg-workspace-test-"));
     repository = await createTestRepository(temporaryRoot);
     const git = new GitClient();
     workspaces = new WorkspaceService(git);
@@ -48,7 +48,9 @@ describe("managed Git workspace", () => {
       },
       trustedProjectConfig: null,
     });
-    expect(workspace.configPath).toBe(await fs.realpath(path.join(target, ".wt", "workspace.yml")));
+    expect(workspace.configPath).toBe(
+      await fs.realpath(path.join(target, ".ygg", "workspace.yml")),
+    );
     expect(await fs.stat(workspace.gitDir)).toSatisfy((stat) => stat.isDirectory());
 
     const remoteMain = await new GitClient().succeeds(
@@ -82,7 +84,7 @@ describe("managed Git workspace", () => {
 
     expect(workspace.root).toBe(await fs.realpath(target));
     expect(workspace.worktreeDir).toBe(await fs.realpath(path.join(target, "trees")));
-    expect(workspace.sharedDir).toBe(await fs.realpath(path.join(target, ".wt", "shared")));
+    expect(workspace.sharedDir).toBe(await fs.realpath(path.join(target, ".ygg", "shared")));
     expect(workspace.config.paths.worktrees).toBe("../trees");
     expect((await fs.stat(workspace.sharedDir)).mode & 0o777).toBe(0o700);
 
@@ -253,7 +255,7 @@ describe("managed Git workspace", () => {
     });
     const git = new GitClient();
     await git.run(["config", "user.email", "tests@example.invalid"], { cwd: feature.path });
-    await git.run(["config", "user.name", "wt tests"], { cwd: feature.path });
+    await git.run(["config", "user.name", "ygg tests"], { cwd: feature.path });
     await fs.writeFile(path.join(feature.path, "README.md"), "# changed\n", "utf8");
     await git.run(["add", "README.md"], { cwd: feature.path });
     await git.run(["commit", "-m", "feature change"], { cwd: feature.path });

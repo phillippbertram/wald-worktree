@@ -1,11 +1,21 @@
-# worktree-cli
+# Ygg
 
-`wt` turns Git worktrees into predictable development environments. Keep a feature, a hotfix, a
+**Ygg — Git workspaces, rooted together.**
+
+Ygg turns Git worktrees into predictable development environments. Keep a feature, a hotfix, a
 review, and a coding agent open at the same time without cloning the repository again or constantly
 switching one checkout back and forth.
 
-Git remains the source of truth. `wt` adds stable paths, branch resolution, repeatable setup,
+Git remains the source of truth. `ygg` adds stable paths, branch resolution, repeatable setup,
 navigation, editor and agent launching, trusted project tasks, and safe cleanup.
+
+## Why Ygg?
+
+Ygg is short for **Yggdrasil**, the world tree from Norse mythology. Yggdrasil connects different
+worlds through one living structure; Ygg applies that image to Git workspaces. The shared Git
+repository forms the roots and trunk, while each worktree is an independent branch or connected
+world with its own checked-out files, dependencies, and running processes. They remain rooted in the
+same Git history even while work continues in parallel.
 
 ## Why worktrees?
 
@@ -28,7 +38,7 @@ checkout:
 The [Git branching introduction](https://git-scm.com/book/en/v2/Git-Branching-Branches-in-a-Nutshell)
 explains branches themselves. Worktrees complement them; they do not replace them.
 
-Native `git worktree` commands provide the foundation. `wt` handles the repeated policy around
+Native `git worktree` commands provide the foundation. `ygg` handles the repeated policy around
 them: where checkouts live, whether a branch is local or remote, which setup runs, how local files
 arrive, which tool opens, and whether cleanup is safe.
 
@@ -39,27 +49,31 @@ Requirements: Node.js 22.13 or newer, pnpm 11, and Git.
 The CLI is not published to npm yet. Install it from this repository:
 
 ```sh
-git clone git@github.com:phillippbertram/worktree-cli.git
-cd worktree-cli
+git clone git@github.com:phillippbertram/ygg-worktree.git
+cd ygg-worktree
 pnpm install
 pnpm run link:global
-wt --help
+ygg --help
 ```
+
+Ygg is a clean rename of the earlier private `worktree-cli` prototype. Legacy `.wt` workspaces and
+`.wt.yml` files are not migrated automatically; initialize them again with Ygg or rename them
+manually before use.
 
 Create a standalone workspace from a remote repository:
 
 ```sh
-wt init git@github.com:example/project.git ~/dev/project
+ygg init git@github.com:example/project.git ~/dev/project
 cd ~/dev/project
-wt create main --cd
-wt create feature/payment --tool code
+ygg create main --cd
+ygg create feature/payment --tool code
 ```
 
 The default layout keeps one shared Git repository and multiple independent checkouts together:
 
 ```text
 project/
-├── .wt/
+├── .ygg/
 │   ├── workspace.yml
 │   └── shared/
 ├── repo.git/
@@ -71,30 +85,30 @@ Already have a checkout? Run the guided setup from it:
 
 ```sh
 cd ~/dev/project
-wt init
+ygg init
 ```
 
 Choose whether to keep that checkout and place new worktrees beside it, or create a new standalone
-workspace from its committed history. The original checkout is never moved or deleted. Run `wt`
+workspace from its committed history. The original checkout is never moved or deleted. Run `ygg`
 without arguments whenever you prefer the guided menu.
 
 ## Shell integration
 
-Shell integration lets `wt cd` and `wt create --cd` change the current terminal:
+Shell integration lets `ygg cd` and `ygg create --cd` change the current terminal:
 
 ```sh
 # zsh
-eval "$(wt shell-init zsh)"
+eval "$(ygg shell-init zsh)"
 
 # bash
-eval "$(wt shell-init bash)"
+eval "$(ygg shell-init bash)"
 
 # fish
-wt shell-init fish | source
+ygg shell-init fish | source
 ```
 
 Add the matching line to your shell configuration to enable it in future terminals. Without the
-wrapper, `wt cd` prints the canonical path and `wt create --cd` prints a normal `cd` fallback.
+wrapper, `ygg cd` prints the canonical path and `ygg create --cd` prints a normal `cd` fallback.
 
 ## Everyday development flows
 
@@ -104,10 +118,10 @@ Keep the current feature checkout, processes, and uncommitted files exactly as t
 
 ```sh
 # In the existing feature worktree
-wt create hotfix/payment --from release/1.x --tool code
+ygg create hotfix/payment --from release/1.x --tool code
 
 # After the hotfix is merged
-wt remove hotfix-payment
+ygg remove hotfix-payment
 ```
 
 The hotfix has its own directory and dependencies. Removal checks for dirty files, an unmerged
@@ -116,32 +130,32 @@ branch, and locks before deleting the worktree directory. The branch itself is p
 ### Review a remote branch beside your own work
 
 ```sh
-wt create contributor/payment-fix --tool code
-wt run verify contributor-payment-fix
-wt remove contributor-payment-fix
+ygg create contributor/payment-fix --tool code
+ygg run verify contributor-payment-fix
+ygg remove contributor-payment-fix
 ```
 
-After fetching, `wt create` reuses a local branch, tracks a matching remote branch, or creates a new
+After fetching, `ygg create` reuses a local branch, tracks a matching remote branch, or creates a new
 branch from the configured default branch. Branch separators become hyphens in directory names, so
 `contributor/payment-fix` becomes `contributor-payment-fix`.
 
 ### Give parallel agents separate checkouts
 
 ```sh
-wt create feature/api --tool codex
-wt create feature/ui --tool codex-app
-wt list
+ygg create feature/api --tool codex
+ygg create feature/ui --tool codex-app
+ygg list
 ```
 
 Built-in profiles cover Code, Cursor, Zed, Codex, Codex App, and Claude. A repository can define
-additional profiles in `.wt.yml`. Each agent receives a real Git checkout instead of sharing staged,
+additional profiles in `.ygg.yml`. Each agent receives a real Git checkout instead of sharing staged,
 unstaged, and generated files with another task.
 
 ### Start stacked work from the current commit
 
 ```sh
 cd ~/dev/project/feature-base
-wt create feature/follow-up --from HEAD --cd
+ygg create feature/follow-up --from HEAD --cd
 ```
 
 An explicit `--from HEAD` resolves the commit of the worktree from which the command is run. Without
@@ -149,7 +163,7 @@ An explicit `--from HEAD` resolves the commit of the worktree from which the com
 
 ### Prepare every worktree the same way
 
-Commit a `.wt.yml` so every developer gets the same install and task flow while local secrets stay
+Commit a `.ygg.yml` so every developer gets the same install and task flow while local secrets stay
 outside Git:
 
 ```yaml
@@ -179,10 +193,10 @@ tasks:
         argv: [pnpm, dev]
 ```
 
-Place centrally maintained files below `.wt/shared/env` using repository-relative paths:
+Place centrally maintained files below `.ygg/shared/env` using repository-relative paths:
 
 ```text
-.wt/shared/env/
+.ygg/shared/env/
 ├── .env
 ├── apps/api/.env
 └── apps/web/.env.local
@@ -194,11 +208,11 @@ worktree. `symlink` keeps them connected to the shared files; use `copy` for ind
 Create and review the project configuration before trusting it:
 
 ```sh
-wt config init
-git diff -- .wt.yml
-git add .wt.yml
+ygg config init
+git diff -- .ygg.yml
+git add .ygg.yml
 git commit -m "chore: configure worktree setup"
-wt config trust
+ygg config trust
 ```
 
 Hooks, tasks, file steps, and custom tools are executable behavior. Formatting-only YAML changes
@@ -206,7 +220,7 @@ preserve trust; behavioral changes require a new approval. If `post_create` fail
 is kept so setup can be retried:
 
 ```sh
-wt setup feature-payment
+ygg setup feature-payment
 ```
 
 ### Remove worktrees and prune stale metadata
@@ -215,18 +229,18 @@ These commands solve different cleanup problems:
 
 | Goal | Command | What it removes |
 | --- | --- | --- |
-| Finish with an existing worktree | `wt remove feature-payment` | The checked-out directory, never the branch. |
-| Inspect metadata for a directory deleted outside Git | `wt prune` | Nothing; this is a preview. |
-| Apply that metadata cleanup | `wt prune --apply` | Only stale Git worktree registrations. |
+| Finish with an existing worktree | `ygg remove feature-payment` | The checked-out directory, never the branch. |
+| Inspect metadata for a directory deleted outside Git | `ygg prune` | Nothing; this is a preview. |
+| Apply that metadata cleanup | `ygg prune --apply` | Only stale Git worktree registrations. |
 
 Scripts must confirm destructive actions explicitly:
 
 ```sh
-wt remove feature-payment --yes
-wt prune --apply --yes
+ygg remove feature-payment --yes
+ygg prune --apply --yes
 ```
 
-`wt prune` never deletes a directory or branch. Locked registrations are preserved.
+`ygg prune` never deletes a directory or branch. Locked registrations are preserved.
 
 ## Configuration model
 
@@ -234,11 +248,11 @@ Configuration and local files have separate owners:
 
 | Location | Owner | Purpose |
 | --- | --- | --- |
-| `.wt/workspace.yml` | Local workspace | Git, worktree, remote, default-branch, and trust state. |
-| `.wt/shared/` | Local workspace | Secrets and shared local files used by trusted setup steps. |
-| `.wt.yml` | Git repository | Committed hooks, tasks, file steps, and tool profiles. |
+| `.ygg/workspace.yml` | Local workspace | Git, worktree, remote, default-branch, and trust state. |
+| `.ygg/shared/` | Local workspace | Secrets and shared local files used by trusted setup steps. |
+| `.ygg.yml` | Git repository | Committed hooks, tasks, file steps, and tool profiles. |
 
-Use `wt config` to print the resolved workspace, worktree, shared-file, and project-configuration
+Use `ygg config` to print the resolved workspace, worktree, shared-file, and project-configuration
 paths.
 
 ## Documentation

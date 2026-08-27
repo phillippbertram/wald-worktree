@@ -10,7 +10,7 @@ describe("project configuration initialization", () => {
   const initializer = new ProjectConfigInitializer();
 
   beforeEach(async () => {
-    root = await fs.mkdtemp(path.join(os.tmpdir(), "wt-config-init-test-"));
+    root = await fs.mkdtemp(path.join(os.tmpdir(), "ygg-config-init-test-"));
     await fs.writeFile(path.join(root, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n", "utf8");
     await fs.writeFile(path.join(root, ".env.example"), "API_URL=\n", "utf8");
     await fs.writeFile(
@@ -67,7 +67,7 @@ describe("project configuration initialization", () => {
 
     const configs = new ConfigService();
     const document = await configs.writeProjectConfig(root, config);
-    expect(document.path).toBe(path.join(root, ".wt.yml"));
+    expect(document.path).toBe(path.join(root, ".ygg.yml"));
     expect(await fs.readFile(document.path, "utf8")).toContain("post_create:");
     await expect(configs.writeProjectConfig(root, config)).rejects.toThrow(/already exists/u);
     await expect(

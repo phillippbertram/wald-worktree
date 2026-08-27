@@ -20,7 +20,7 @@ export function createProgram(
 ): Command {
   const context = createCliContext(output);
   const program = new Command()
-    .name("wt")
+    .name("ygg")
     .description("Create and work in isolated Git checkouts safely.")
     .version("1.0.0")
     .showSuggestionAfterError()
@@ -28,7 +28,7 @@ export function createProgram(
 
   program.addHelpText(
     "after",
-    "\nStart here:\n  cd ~/dev/project && wt init\n  wt create feature/payment --cd\n  wt create feature/review --tool codex\n",
+    "\nStart here:\n  cd ~/dev/project && ygg init\n  ygg create feature/payment --cd\n  ygg create feature/review --tool codex\n",
   );
 
   program.configureOutput({

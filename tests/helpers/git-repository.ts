@@ -14,7 +14,7 @@ export async function createTestRepository(root: string): Promise<TestRepository
   await runGit(["init", "--bare", remote]);
   await runGit(["init", "-b", "main", source]);
   await runGit(["config", "user.email", "tests@example.invalid"], source);
-  await runGit(["config", "user.name", "wt tests"], source);
+  await runGit(["config", "user.name", "ygg tests"], source);
   await fs.writeFile(path.join(source, "README.md"), "# fixture\n", "utf8");
   await fs.writeFile(
     path.join(source, ".gitignore"),

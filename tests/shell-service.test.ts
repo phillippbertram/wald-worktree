@@ -12,6 +12,8 @@ describe("shell integration", () => {
       expect(script).toContain("--cd");
       expect(script).toContain("--print-path");
       expect(script).toContain("builtin cd");
+      expect(script).toContain("command ygg");
+      expect(script).toContain("ygg completion");
     },
   );
 

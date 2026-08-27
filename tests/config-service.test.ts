@@ -10,7 +10,7 @@ describe("project YAML configuration", () => {
   const configs = new ConfigService();
 
   it("uses the clean-break .yml filenames", () => {
-    expect(projectConfigFileName).toBe(".wt.yml");
+    expect(projectConfigFileName).toBe(".ygg.yml");
     expect(workspaceConfigFileName).toBe("workspace.yml");
   });
 
@@ -27,7 +27,7 @@ tasks:
       - type: command
         argv: [pnpm, test]
 `,
-      ".wt.yml",
+      ".ygg.yml",
     );
     const reformatted = configs.parseProjectConfig(
       `# formatting is not behavior
@@ -44,7 +44,7 @@ hooks:
       type: command
 version: 1
 `,
-      ".wt.yml",
+      ".ygg.yml",
     );
     const changed = configs.parseProjectConfig(
       `version: 1
@@ -58,7 +58,7 @@ tasks:
       - type: command
         argv: [pnpm, test]
 `,
-      ".wt.yml",
+      ".ygg.yml",
     );
 
     expect(first.requiresTrust).toBe(true);
@@ -77,7 +77,7 @@ hooks:
       shell: pnpm install
       surprise: true
 `,
-        ".wt.yml",
+        ".ygg.yml",
       ),
     ).toThrow(/Configuration is invalid/u);
   });
@@ -88,7 +88,7 @@ hooks:
 defaults:
   fetch: false
 `,
-      ".wt.yml",
+      ".ygg.yml",
     );
 
     expect(document.requiresTrust).toBe(false);
@@ -104,7 +104,7 @@ tasks:
       - type: command
         argv: [printf, ""]
 `,
-      ".wt.yml",
+      ".ygg.yml",
     );
 
     expect(document.config.tasks["empty-argument"]?.steps[0]).toMatchObject({
@@ -117,7 +117,7 @@ tools:
   broken:
     command: [""]
 `,
-        ".wt.yml",
+        ".ygg.yml",
       ),
     ).toThrow(/first argv entry must name an executable/u);
   });
@@ -132,7 +132,7 @@ hooks:
       from: env/.env
       to: .env
 `,
-      ".wt.yml",
+      ".ygg.yml",
     );
 
     expect(document.config.hooks.post_create[0]).toMatchObject({
@@ -158,7 +158,7 @@ hooks:
       glob: "**/.env*"
       to: .
 `,
-      ".wt.yml",
+      ".ygg.yml",
     );
     const changed = configs.parseProjectConfig(
       `version: 1
@@ -170,7 +170,7 @@ hooks:
       glob: "**/*.json"
       to: .
 `,
-      ".wt.yml",
+      ".ygg.yml",
     );
 
     expect(first.config.hooks.post_create[0]).toMatchObject({
@@ -199,7 +199,7 @@ hooks:
       glob: ${JSON.stringify(glob)}
       to: .
 `,
-          ".wt.yml",
+          ".ygg.yml",
         ),
       ).toThrow(/positive relative pattern/u);
     },

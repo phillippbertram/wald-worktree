@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { parseDocument, stringify } from "yaml";
 import { z } from "zod";
-import { WtError } from "../domain/errors.js";
+import { YggError } from "../domain/errors.js";
 import type {
   AutomationStep,
   ProjectConfig,
@@ -14,7 +14,7 @@ import type {
 import type { GitClient } from "../infrastructure/git-client.js";
 
 export const workspaceConfigFileName = "workspace.yml";
-export const projectConfigFileName = ".wt.yml";
+export const projectConfigFileName = ".ygg.yml";
 
 const workspaceRemoteFileSchema = z
   .object({
@@ -201,9 +201,9 @@ export class ConfigService {
         await fs.writeFile(configPath, content, { flag: "wx", mode: 0o644 });
       } catch (error) {
         if (isAlreadyExists(error)) {
-          throw new WtError(`Project configuration already exists: ${configPath}`);
+          throw new YggError(`Project configuration already exists: ${configPath}`);
         }
-        throw new WtError(`Cannot write project configuration: ${configPath}`, { cause: error });
+        throw new YggError(`Cannot write project configuration: ${configPath}`, { cause: error });
       }
       return this.parseProjectConfig(content, configPath);
     }
@@ -213,7 +213,7 @@ export class ConfigService {
       await fs.writeFile(temporaryPath, content, { mode: 0o644 });
       await fs.rename(temporaryPath, configPath);
     } catch (error) {
-      throw new WtError(`Cannot write project configuration: ${configPath}`, { cause: error });
+      throw new YggError(`Cannot write project configuration: ${configPath}`, { cause: error });
     } finally {
       await fs.rm(temporaryPath, { force: true });
     }
@@ -281,7 +281,7 @@ export class ConfigService {
     try {
       raw = await fs.readFile(configPath, "utf8");
     } catch (error) {
-      throw new WtError(`Cannot read workspace configuration: ${configPath}`, { cause: error });
+      throw new YggError(`Cannot read workspace configuration: ${configPath}`, { cause: error });
     }
     return parseYaml(raw, configPath);
   }
@@ -306,7 +306,7 @@ export function summarizeExecutableConfig(document: ProjectConfigDocument): stri
 function parseYaml(raw: string, configPath: string): unknown {
   const document = parseDocument(raw, { prettyErrors: true });
   if (document.errors.length > 0) {
-    throw new WtError(
+    throw new YggError(
       `Configuration is not valid YAML: ${configPath}\n${document.errors.map((error) => error.message).join("\n")}`,
     );
   }
@@ -465,11 +465,11 @@ function toAutomationStepFile(step: AutomationStep): AutomationStepFile {
   };
 }
 
-function invalidConfigurationError(configPath: string, error: z.ZodError): WtError {
+function invalidConfigurationError(configPath: string, error: z.ZodError): YggError {
   const details = error.issues
     .map((issue) => `${issue.path.join(".") || "configuration"}: ${issue.message}`)
     .join("\n");
-  return new WtError(`Configuration is invalid: ${configPath}\n${details}`);
+  return new YggError(`Configuration is invalid: ${configPath}\n${details}`);
 }
 
 function semanticHash(value: unknown): string {

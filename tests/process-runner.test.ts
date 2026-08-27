@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { WtError } from "../src/domain/errors.js";
+import { YggError } from "../src/domain/errors.js";
 import { ProcessRunner } from "../src/infrastructure/process-runner.js";
 
 describe("process execution", () => {
@@ -10,7 +10,7 @@ describe("process execution", () => {
   const runner = new ProcessRunner();
 
   beforeEach(async () => {
-    temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "wt-process-test-"));
+    temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "ygg-process-test-"));
   });
 
   afterEach(async () => {
@@ -52,7 +52,7 @@ describe("process execution", () => {
     await expect(interruption).rejects.toMatchObject({
       message: "Command interrupted.",
       exitCode: 130,
-      name: WtError.name,
+      name: YggError.name,
     });
   });
 });

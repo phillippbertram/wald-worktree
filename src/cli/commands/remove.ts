@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { z } from "zod";
-import { WtError } from "../../domain/errors.js";
+import { YggError } from "../../domain/errors.js";
 import type { RemovePlan } from "../../services/worktree-workflow-service.js";
 import { confirm, isInteractiveTerminal, selectManyWorktrees } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
@@ -38,7 +38,7 @@ export async function removeWorktrees(input: RemoveInput, context: CliContext): 
   let identifiers = input.worktrees;
   if (identifiers.length === 0) {
     if (!isInteractiveTerminal()) {
-      throw new WtError("Non-interactive removal requires worktree names and --yes.");
+      throw new YggError("Non-interactive removal requires worktree names and --yes.");
     }
     const current = await context.worktrees.current(workspace);
     const candidates = (await context.worktrees.list(workspace)).filter(
@@ -71,7 +71,7 @@ export async function removeWorktrees(input: RemoveInput, context: CliContext): 
 
   if (!input.yes) {
     if (!isInteractiveTerminal()) {
-      throw new WtError("Non-interactive removal requires --yes.");
+      throw new YggError("Non-interactive removal requires --yes.");
     }
     const accepted = await confirm(
       `Remove ${plans.map((plan) => plan.inspection.worktree.name).join(", ")}? Branches will be kept.`,

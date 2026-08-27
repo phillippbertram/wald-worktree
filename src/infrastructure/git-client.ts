@@ -1,5 +1,5 @@
 import { execa } from "execa";
-import { WtError } from "../domain/errors.js";
+import { YggError } from "../domain/errors.js";
 
 export type GitRunOptions = {
   cwd?: string;
@@ -24,7 +24,7 @@ export class GitClient {
       stdin: "ignore",
       stripFinalNewline: options.stripFinalNewline ?? true,
     }).catch((error: unknown) => {
-      throw new WtError("Git could not be started. Is Git installed and available in PATH?", {
+      throw new YggError("Git could not be started. Is Git installed and available in PATH?", {
         cause: error,
       });
     });
@@ -37,7 +37,7 @@ export class GitClient {
 
     if (options.reject !== false && output.exitCode !== 0) {
       const detail = output.stderr.trim() || output.stdout.trim() || "Git command failed.";
-      throw new WtError(detail, { exitCode: output.exitCode });
+      throw new YggError(detail, { exitCode: output.exitCode });
     }
 
     return output;

@@ -6,7 +6,7 @@ strengthen diagnostics before broadening the workflow model.
 
 ## Next
 
-### `wt doctor`
+### `ygg doctor`
 
 - Validate local and project YAML, repository references, hooks, configured file steps, and tools.
 - Detect stale or inconsistent Git worktree metadata.
@@ -22,7 +22,7 @@ strengthen diagnostics before broadening the workflow model.
 
 - Add Flutter, iOS, Rust, or other setup detection only after concrete repositories establish safe
   defaults.
-- Keep manually authored `.wt.yml` commands as the universal fallback.
+- Keep manually authored `.ygg.yml` commands as the universal fallback.
 
 ## Later, based on demonstrated need
 

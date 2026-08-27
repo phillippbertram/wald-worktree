@@ -3,7 +3,7 @@
 import { CommanderError } from "commander";
 import pc from "picocolors";
 import { createProgram } from "./cli/create-program.js";
-import { toErrorMessage, WtError } from "./domain/errors.js";
+import { toErrorMessage, YggError } from "./domain/errors.js";
 
 async function main(): Promise<void> {
   const program = createProgram();
@@ -15,13 +15,13 @@ async function main(): Promise<void> {
       return;
     }
 
-    if (error instanceof WtError && error.exitCode === 130) {
+    if (error instanceof YggError && error.exitCode === 130) {
       process.exitCode = 130;
       return;
     }
 
     process.stderr.write(`${pc.red(pc.bold("Error:"))} ${toErrorMessage(error)}\n`);
-    process.exitCode = error instanceof WtError ? error.exitCode : 1;
+    process.exitCode = error instanceof YggError ? error.exitCode : 1;
   }
 }
 

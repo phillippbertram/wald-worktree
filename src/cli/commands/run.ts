@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { z } from "zod";
-import { WtError } from "../../domain/errors.js";
+import { YggError } from "../../domain/errors.js";
 import { isInteractiveTerminal, searchSelect } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
 import { ensureTrusted, resolveWorktree, success } from "../helpers.js";
@@ -18,12 +18,12 @@ export type RunInput = z.output<typeof runInputSchema>;
 export function registerRunCommand(program: Command, context: CliContext): void {
   program
     .command("run")
-    .description("Run a named .wt.yml project task in a worktree")
-    .argument("[task]", "Task name from .wt.yml")
+    .description("Run a named .ygg.yml project task in a worktree")
+    .argument("[task]", "Task name from .ygg.yml")
     .argument("[worktree]", "Worktree name, branch, or path")
     .addHelpText(
       "after",
-      "\nExamples:\n  wt run verify feature-payment\n  wt run dev feature-payment\n",
+      "\nExamples:\n  ygg run verify feature-payment\n  ygg run dev feature-payment\n",
     )
     .action(async (task: unknown, worktree: unknown) => {
       await runProjectTask(parseCliInput(runInputSchema, { task, worktree }), context);
@@ -34,14 +34,14 @@ export async function runProjectTask(input: RunInput, context: CliContext): Prom
   const workspace = await context.workspaces.find();
   const worktree = await resolveWorktree(workspace, input.worktree, context.worktrees);
   const project = await context.workflow.projectForWorktree(worktree);
-  if (!project) throw new WtError(`No .wt.yml found in ${worktree.path}`);
+  if (!project) throw new YggError(`No .ygg.yml found in ${worktree.path}`);
   await ensureTrusted(workspace, project, context);
   let task = input.task;
   if (!task) {
     if (Object.keys(project.config.tasks).length === 0) {
-      throw new WtError("No tasks are configured in .wt.yml.");
+      throw new YggError("No tasks are configured in .ygg.yml.");
     }
-    if (!isInteractiveTerminal()) throw new WtError("Task is required without a TTY.");
+    if (!isInteractiveTerminal()) throw new YggError("Task is required without a TTY.");
     task =
       (await searchSelect(
         `Select a task for ${worktree.name}:`,
@@ -52,7 +52,7 @@ export async function runProjectTask(input: RunInput, context: CliContext): Prom
         })),
       )) ?? undefined;
   }
-  if (!task) throw new WtError("No task selected.");
+  if (!task) throw new YggError("No task selected.");
   await context.workflow.runTask(workspace, worktree, task, {
     output: context.output.stderr,
   });

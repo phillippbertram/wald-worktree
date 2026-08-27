@@ -45,7 +45,7 @@ describe("interactive init wizard", () => {
     prompts.texts = [];
     prompts.confirmations = [];
     prompts.choices = [];
-    temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "wt-init-wizard-test-"));
+    temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "ygg-init-wizard-test-"));
     repository = await createTestRepository(temporaryRoot);
     previousCwd = process.cwd();
     process.chdir(repository.source);
@@ -68,7 +68,7 @@ describe("interactive init wizard", () => {
     await initializeWorkspace({}, context);
 
     expect(prompts.choices[0]).toMatchObject({
-      question: "How should wt organize this repository?",
+      question: "How should ygg organize this repository?",
       labels: expect.arrayContaining(["Create a new workspace root (recommended)"]),
     });
     const workspace = await context.workspaces.find(target);

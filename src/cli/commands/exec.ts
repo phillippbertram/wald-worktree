@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { z } from "zod";
-import { WtError } from "../../domain/errors.js";
+import { YggError } from "../../domain/errors.js";
 import { isInteractiveTerminal, promptText } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
 import { resolveWorktree, writeLine } from "../helpers.js";
@@ -24,7 +24,7 @@ export function registerExecCommand(program: Command, context: CliContext): void
     .argument("[worktree]", "Worktree name, branch, or path")
     .argument("[command...]", "Command and arguments after --")
     .allowUnknownOption(true)
-    .addHelpText("after", "\nExample:\n  wt exec feature-payment -- pnpm test\n")
+    .addHelpText("after", "\nExample:\n  ygg exec feature-payment -- pnpm test\n")
     .action(async (worktree: unknown, command: unknown) => {
       const input = parseCliInput(execInputSchema, { worktree, command });
       const workspace = await context.workspaces.find();
@@ -34,10 +34,10 @@ export function registerExecCommand(program: Command, context: CliContext): void
         return;
       }
       if (!isInteractiveTerminal()) {
-        throw new WtError("Non-interactive execution requires: wt exec <worktree> -- <command>");
+        throw new YggError("Non-interactive execution requires: ygg exec <worktree> -- <command>");
       }
       const rawCommand = await promptText(`Command to run in ${selected.name}:`);
-      if (!rawCommand) throw new WtError("Command cannot be empty.");
+      if (!rawCommand) throw new YggError("Command cannot be empty.");
       writeLine(context.output.stderr, `Running through /bin/sh: ${rawCommand}`);
       await context.processes.runInteractiveShell(rawCommand, selected.path);
     });

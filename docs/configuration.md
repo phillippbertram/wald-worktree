@@ -1,12 +1,12 @@
 # Configuration
 
-`wt` has one local configuration, one local shared-file area, and one optional project
+`ygg` has one local configuration, one local shared-file area, and one optional project
 configuration. Both YAML documents are strict and versioned; unknown fields are errors.
 
 ## Local workspace configuration
 
-Dedicated workspaces store `.wt/workspace.yml`. Adopted repositories store
-`<git-common-dir>/wt/workspace.yml` and expose it through a `.wt` link in the worktree container.
+Dedicated workspaces store `.ygg/workspace.yml`. Adopted repositories store
+`<git-common-dir>/ygg/workspace.yml` and expose it through a `.ygg` link in the worktree container.
 This file is local and should not be committed. The terms `managed` and `adopted` are internal
 layout and safety states; the CLI describes them as a standalone workspace root or a retained
 existing checkout.
@@ -25,7 +25,7 @@ default_branch: main
 trusted_project_config: null
 ```
 
-All stored paths are relative to the configuration. `wt` canonicalizes them and enforces the
+All stored paths are relative to the configuration. `ygg` canonicalizes them and enforces the
 layout boundaries before using them.
 
 ### Workspace field reference
@@ -34,20 +34,20 @@ layout boundaries before using them.
 | --- | --- | --- |
 | `version` | `1` | Workspace schema version. |
 | `mode` | `managed` or `adopted` | Internal safety mode. `managed` uses `repo.git`; `adopted` protects an existing primary checkout. |
-| `paths.git` | relative path | Git common directory used for all worktree operations. Generated and validated by `wt`. |
-| `paths.worktrees` | relative path | Parent directory in which `wt` creates worktrees. |
-| `paths.primary_worktree` | relative path or `null` | Original checkout protected from `wt remove`; always `null` for a standalone bare workspace. |
+| `paths.git` | relative path | Git common directory used for all worktree operations. Generated and validated by `ygg`. |
+| `paths.worktrees` | relative path | Parent directory in which `ygg` creates worktrees. |
+| `paths.primary_worktree` | relative path or `null` | Original checkout protected from `ygg remove`; always `null` for a standalone bare workspace. |
 | `remote` | object or `null` | Optional remote used for fetch and remote-branch resolution. `null` keeps the workspace local-only. |
 | `remote.name` | string | Existing Git remote name such as `origin` or `upstream`. |
-| `remote.fetch_refspec` | string | Explicit branch mapping used when `wt create` fetches. |
+| `remote.fetch_refspec` | string | Explicit branch mapping used when `ygg create` fetches. |
 | `default_branch` | branch name | Default base, merge-check target, and preferred project-configuration branch. |
-| `trusted_project_config` | SHA-256 or `null` | Semantic hash of the locally trusted executable `.wt.yml` behavior. |
+| `trusted_project_config` | SHA-256 or `null` | Semantic hash of the locally trusted executable `.ygg.yml` behavior. |
 
 `default_branch` does three jobs:
 
 1. New branches start from its remote-tracking or local ref when `--from` is omitted.
 2. Safe removal checks whether a branch is merged into it.
-3. `wt` uses its worktree/ref for `.wt.yml` and `source: default` when there is no better current
+3. `ygg` uses its worktree/ref for `.ygg.yml` and `source: default` when there is no better current
    source.
 
 It does not switch existing branches, rename worktrees, or override an explicit `--from`.
@@ -58,8 +58,8 @@ The recommended flat standalone workspace uses `paths.worktrees: ..`:
 
 ```text
 project/
-├── .wt/workspace.yml
-├── .wt/shared/
+├── .ygg/workspace.yml
+├── .ygg/shared/
 ├── repo.git/
 ├── main/
 └── feature-payment/
@@ -69,8 +69,8 @@ A grouped standalone workspace uses a child path such as `paths.worktrees: ../wo
 
 ```text
 project/
-├── .wt/workspace.yml
-├── .wt/shared/
+├── .ygg/workspace.yml
+├── .ygg/shared/
 ├── repo.git/
 └── worktrees/
     ├── main/
@@ -78,17 +78,17 @@ project/
 ```
 
 For standalone workspaces, `paths.worktrees` must resolve to the workspace root or one of its
-descendants and must not overlap `.wt` or `repo.git`. Use `--worktrees-dir` during `wt init` rather
+descendants and must not overlap `.ygg` or `repo.git`. Use `--worktrees-dir` during `ygg init` rather
 than editing generated paths manually.
 
 When an existing checkout is retained, the worktree directory may be any safe directory outside
 the Git directory and primary checkout. The physical configuration and shared files live below
-`<git-common-dir>/wt`; the worktree container contains a `.wt` link to them. `wt config` prints the
+`<git-common-dir>/ygg`; the worktree container contains a `.ygg` link to them. `ygg config` prints the
 canonical `workspace_config`, `workspace_root`, `worktrees_path`, and `shared_path` for both layouts.
 
 ### Local shared files
 
-Every initialized workspace owns a `.wt/shared` directory. It is local, created with directory mode
+Every initialized workspace owns a `.ygg/shared` directory. It is local, created with directory mode
 `700`, and never committed. Project automation accesses it only through explicit trusted
 `source: shared` steps. Files placed there retain their own permissions; use mode `600` for secrets.
 
@@ -97,7 +97,7 @@ Every initialized workspace owns a `.wt/shared` directory. It is local, created 
 Generate a starting point interactively from detected Node package conventions:
 
 ```sh
-wt config init [worktree]
+ygg config init [worktree]
 ```
 
 The wizard detects npm, pnpm, Yarn, or Bun, package scripts, and files such as `.env.example`. It can
@@ -105,26 +105,26 @@ add an install hook, an environment copy step, a `verify` task, a separate `dev`
 `dev` package script, and a default tool. The long-running `dev` script is never added to the
 one-shot `verify` task.
 
-For scripts, use `wt config init --yes`; use `--force` separately when an existing file may be
-replaced. Interactive `wt init` offers the same wizard after retaining a checkout or creating the
+For scripts, use `ygg config init --yes`; use `--force` separately when an existing file may be
+replaced. Interactive `ygg init` offers the same wizard after retaining a checkout or creating the
 default worktree in a standalone workspace. Automatic project detection currently covers Node
 package managers; other ecosystems use manually configured commands.
 
-`.wt.yml` is repository-owned behavior. Review and commit it on the branch used as the base for
+`.ygg.yml` is repository-owned behavior. Review and commit it on the branch used as the base for
 future worktrees before expecting those worktrees to use it:
 
 ```sh
-wt config init
-git diff -- .wt.yml
-git add .wt.yml
+ygg config init
+git diff -- .ygg.yml
+git add .ygg.yml
 git commit -m "chore: configure worktree setup"
-wt config trust
+ygg config trust
 ```
 
-`wt` never commits or pushes this file automatically. Trust is semantic, so committing the reviewed
+`ygg` never commits or pushes this file automatically. Trust is semantic, so committing the reviewed
 file without changing its behavior does not invalidate an already recorded hash.
 
-The repository-owned `.wt.yml` supports this top-level schema:
+The repository-owned `.ygg.yml` supports this top-level schema:
 
 ```yaml
 version: 1
@@ -146,12 +146,12 @@ Every section except `version` is optional and receives the defaults above.
 | --- | --- | --- |
 | `version` | required `1` | Project schema version. |
 | `defaults.fetch` | `true` | Fetch the configured remote before resolving branches. |
-| `defaults.tool` | none | Editor or agent profile used by `wt open`/`wt create --open`. |
+| `defaults.tool` | none | Editor or agent profile used by `ygg open`/`ygg create --open`. |
 | `hooks.pre_create` | `[]` | Steps before `git worktree add`; no target checkout exists yet. |
 | `hooks.post_create` | `[]` | Installation and local-file setup after checkout creation. |
 | `hooks.pre_remove` | `[]` | Project checks that may stop removal before Git changes anything. |
 | `hooks.post_remove` | `[]` | Cleanup after Git removed the worktree. |
-| `tasks` | `{}` | Named workflows invoked with `wt run <task>`. |
+| `tasks` | `{}` | Named workflows invoked with `ygg run <task>`. |
 | `tools` | `{}` | Project-specific editor or agent profiles. |
 
 ### Complete example
@@ -169,7 +169,7 @@ defaults:
 hooks:
   pre_create:
     - type: command
-      argv: [node, -e, "process.exit(process.env.WT_BRANCH ? 0 : 1)"]
+      argv: [node, -e, "process.exit(process.env.YGG_BRANCH ? 0 : 1)"]
       cwd: workspace
       timeout_seconds: 30
 
@@ -197,7 +197,7 @@ hooks:
 
   post_remove:
     - type: command
-      argv: [node, -e, "console.log(process.env.WT_BRANCH)"]
+      argv: [node, -e, "console.log(process.env.YGG_BRANCH)"]
       cwd: workspace
       continue_on_error: true
 
@@ -245,7 +245,7 @@ combined with `argv`:
 
 ```yaml
 - type: command
-  shell: pnpm build && cp dist/app "$WT_WORKTREE_PATH/.local/app"
+  shell: pnpm build && cp dist/app "$YGG_WORKTREE_PATH/.local/app"
 ```
 
 `cwd` accepts `source`, `target`, or `workspace`. Its default is source for `pre_create`, workspace
@@ -255,11 +255,11 @@ During `pre_create`, the target worktree does not exist yet. On the first checko
 workspace there may also be no source worktree, so repository-local helper scripts should run in
 `post_create` or use a source that is known to exist.
 
-- `WT_EVENT`: hook name or `task:<name>`
-- `WT_WORKSPACE_ROOT`
-- `WT_SOURCE_PATH`
-- `WT_WORKTREE_PATH`
-- `WT_BRANCH`
+- `YGG_EVENT`: hook name or `task:<name>`
+- `YGG_WORKSPACE_ROOT`
+- `YGG_SOURCE_PATH`
+- `YGG_WORKTREE_PATH`
+- `YGG_BRANCH`
 
 | Field | Default | Purpose |
 | --- | --- | --- |
@@ -300,7 +300,7 @@ workspace there may also be no source worktree, so repository-local helper scrip
 | `current` | Worktree from which the command was invoked | Carry a worktree-local file into another checkout. It may be unavailable from the workspace root. |
 | `default` | Worktree on `default_branch` | Copy committed templates or stable local files from the main development checkout. |
 | `primary` | Original protected checkout | Reuse local files after keeping an existing checkout. It is unavailable in standalone bare workspaces. |
-| `shared` | Local `.wt/shared` directory | Central `.env`, credentials, caches, or editor configuration shared across worktrees. |
+| `shared` | Local `.ygg/shared` directory | Central `.env`, credentials, caches, or editor configuration shared across worktrees. |
 
 | Field | Default | Purpose |
 | --- | --- | --- |
@@ -340,7 +340,7 @@ hooks:
 
 The source-relative portion below `env` becomes the target-relative path, producing `.env`,
 `apps/api/.env`, and `apps/web/.env.local`. Editing a shared source updates every symlink
-immediately. A copied target changes only after the corresponding named task or `wt setup` runs
+immediately. A copied target changes only after the corresponding named task or `ygg setup` runs
 again. Because file steps can expose local data, their exact paths and glob patterns participate in
 the same project-configuration trust hash as commands.
 
@@ -361,12 +361,12 @@ safety inspection -> trust -> pre_remove -> git worktree remove -> post_remove
 ```mermaid
 flowchart LR
     subgraph Creation
-      C1[Resolve branch and .wt.yml] --> C2[Validate and trust]
+      C1[Resolve branch and .ygg.yml] --> C2[Validate and trust]
       C2 --> C3[pre_create]
       C3 --> C4[git worktree add]
       C4 --> C5[post_create]
       C5 --> C6[Ready]
-      C5 -- Failure --> C7[Kept for wt setup]
+      C5 -- Failure --> C7[Kept for ygg setup]
     end
 
     subgraph Removal
@@ -380,7 +380,7 @@ flowchart LR
 ```
 
 `pre_create` failure leaves no new worktree. `post_create` failure keeps the worktree and reports
-`wt setup <worktree>` for recovery. A `pre_remove` failure preserves the worktree.
+`ygg setup <worktree>` for recovery. A `pre_remove` failure preserves the worktree.
 
 ### Named tasks and tool profiles
 
@@ -401,19 +401,19 @@ tools:
     mode: foreground
 ```
 
-Run these with `wt run verify [worktree]` and `wt open [worktree] --tool app-agent`. Tool arguments
+Run these with `ygg run verify [worktree]` and `ygg open [worktree] --tool app-agent`. Tool arguments
 may contain `{path}`; the selected worktree is also the process working directory. `mode` is
 `foreground` or `detached`.
 
 | Field | Default | Purpose |
 | --- | --- | --- |
 | `tasks.<name>.description` | none | Human-readable text shown during interactive task selection. |
-| `tasks.<name>.steps` | required, non-empty | Ordered command/copy/symlink steps executed by `wt run`. |
+| `tasks.<name>.steps` | required, non-empty | Ordered command/copy/symlink steps executed by `ygg run`. |
 | `tools.<name>.description` | none | Human-readable editor or agent description. |
 | `tools.<name>.command` | required, non-empty | Argument array used to start the tool; `{path}` expands to the selected worktree. |
 | `tools.<name>.mode` | `foreground` | `foreground` waits and returns its exit status; `detached` starts independently. |
 
-Long-running tasks such as `wt run dev` stream their output in the foreground. `Ctrl-C` stops the
+Long-running tasks such as `ygg run dev` stream their output in the foreground. `Ctrl-C` stops the
 child process and exits with status 130 without reporting the interruption as a configuration
 failure.
 
@@ -422,15 +422,15 @@ commands are omitted from interactive selection.
 
 ## Trust
 
-Any non-empty hook, task, or custom tool makes `.wt.yml` executable configuration. `wt` hashes the
+Any non-empty hook, task, or custom tool makes `.ygg.yml` executable configuration. `ygg` hashes the
 validated, normalized behavior with SHA-256. This means comments, whitespace, and mapping order do
 not change trust, while behavioral changes do.
 
 ```sh
-wt config
-wt config trust --yes
-wt config untrust --yes
+ygg config
+ygg config trust --yes
+ygg config untrust --yes
 ```
 
-For a new standalone workspace without a checkout, these commands inspect `.wt.yml` directly from the
+For a new standalone workspace without a checkout, these commands inspect `.ygg.yml` directly from the
 configured default branch.

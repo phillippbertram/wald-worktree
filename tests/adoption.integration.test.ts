@@ -21,7 +21,7 @@ describe("adopting existing Git repositories", () => {
 
   beforeEach(async () => {
     temporaryRoot = await fs.realpath(
-      await fs.mkdtemp(path.join(os.tmpdir(), "wt-adoption-test-")),
+      await fs.mkdtemp(path.join(os.tmpdir(), "ygg-adoption-test-")),
     );
     repository = await createTestRepository(temporaryRoot);
     git = new GitClient();
@@ -62,8 +62,8 @@ describe("adopting existing Git repositories", () => {
     expect((await git.run(["status", "--porcelain=v1"], { cwd: repository.source })).stdout).toBe(
       statusBefore.stdout,
     );
-    expect((await fs.lstat(path.join(workspace.worktreeDir, ".wt"))).isSymbolicLink()).toBe(true);
-    expect((await fs.stat(path.join(repository.source, ".git", "wt"))).mode & 0o777).toBe(0o700);
+    expect((await fs.lstat(path.join(workspace.worktreeDir, ".ygg"))).isSymbolicLink()).toBe(true);
+    expect((await fs.stat(path.join(repository.source, ".git", "ygg"))).mode & 0o777).toBe(0o700);
 
     await expect(workspaces.find(repository.source)).resolves.toMatchObject({
       worktreeDir: workspace.worktreeDir,
@@ -84,7 +84,7 @@ describe("adopting existing Git repositories", () => {
     );
 
     const removal = await worktrees.inspectRemoval(workspace, repository.source);
-    expect(removal.hardBlockers).toEqual(["the primary checkout cannot be removed by wt"]);
+    expect(removal.hardBlockers).toEqual(["the primary checkout cannot be removed by ygg"]);
     await expect(worktrees.remove(workspace, removal.worktree, true)).rejects.toThrow(
       /primary checkout/u,
     );
@@ -191,7 +191,7 @@ describe("adopting existing Git repositories", () => {
 
   it("does not interpret the removed JSON configuration format", async () => {
     const root = path.join(temporaryRoot, "json-workspace");
-    const metadataDir = path.join(root, ".wt");
+    const metadataDir = path.join(root, ".ygg");
     await fs.mkdir(path.join(metadataDir, "env"), { recursive: true });
     await git.run(["clone", "--bare", "--", repository.remote, path.join(root, "repo.git")], {
       cwd: temporaryRoot,
@@ -199,14 +199,14 @@ describe("adopting existing Git repositories", () => {
     const removedConfig = {
       version: 1,
       gitDir: "repo.git",
-      envDir: ".wt/env",
+      envDir: ".ygg/env",
       remote: "origin",
       defaultBranch: "main",
     } as const;
     const configPath = path.join(metadataDir, "config.json");
     await fs.writeFile(configPath, `${JSON.stringify(removedConfig, null, 2)}\n`, "utf8");
 
-    await expect(workspaces.find(root)).rejects.toThrow(/No wt workspace/u);
+    await expect(workspaces.find(root)).rejects.toThrow(/No ygg workspace/u);
   });
 
   it("rejects absolute paths in an adopted workspace config", async () => {

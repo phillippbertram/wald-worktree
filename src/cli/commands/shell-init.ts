@@ -12,7 +12,7 @@ export function registerShellInitCommand(program: Command, context: CliContext):
     .argument("<shell>", "bash, zsh, or fish")
     .addHelpText(
       "after",
-      '\nExample for zsh:\n  eval "$(wt shell-init zsh)"\n\nAdd the same line to ~/.zshrc for permanent integration.\n',
+      '\nExample for zsh:\n  eval "$(ygg shell-init zsh)"\n\nAdd the same line to ~/.zshrc for permanent integration.\n',
     )
     .action((shell: unknown) => {
       const input = parseCliInput(shellInputSchema, { shell });

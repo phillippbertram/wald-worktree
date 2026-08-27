@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { WtError } from "../src/domain/errors.js";
+import { YggError } from "../src/domain/errors.js";
 import {
   parseWorktreePorcelain,
   slugifyBranch,
@@ -12,10 +12,10 @@ describe("worktree domain", () => {
     expect(slugifyBranch("release/1.2.0")).toBe("release-1.2.0");
   });
 
-  it.each(["", ".", "..", ".wt", "repo.git", "nested/name", "nested\\name", " line"])(
+  it.each(["", ".", "..", ".ygg", "repo.git", "nested/name", "nested\\name", " line"])(
     "rejects reserved or nested worktree name %s",
     (name) => {
-      expect(() => validateWorktreeName(name)).toThrow(WtError);
+      expect(() => validateWorktreeName(name)).toThrow(YggError);
     },
   );
 

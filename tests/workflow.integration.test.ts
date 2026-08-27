@@ -18,7 +18,7 @@ describe("configured worktree workflows", () => {
   let worktrees: WorktreeService;
 
   beforeEach(async () => {
-    temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "wt-workflow-test-"));
+    temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "ygg-workflow-test-"));
     repository = await createTestRepository(temporaryRoot);
     git = new GitClient();
     configs = new ConfigService();
@@ -39,7 +39,7 @@ defaults:
 hooks:
   pre_create:
     - type: command
-      argv: [node, -e, "require('node:fs').writeFileSync(process.env.WT_WORKSPACE_ROOT + '/pre-create.log', process.env.WT_BRANCH)"]
+      argv: [node, -e, "require('node:fs').writeFileSync(process.env.YGG_WORKSPACE_ROOT + '/pre-create.log', process.env.YGG_BRANCH)"]
       cwd: workspace
   post_create:
     - type: copy
@@ -51,20 +51,20 @@ hooks:
       from: shared.txt
       to: linked-shared.txt
     - type: command
-      argv: [node, -e, "require('node:fs').writeFileSync('post-create.log', process.env.WT_EVENT)"]
+      argv: [node, -e, "require('node:fs').writeFileSync('post-create.log', process.env.YGG_EVENT)"]
   pre_remove:
     - type: command
-      argv: [node, -e, "require('node:fs').writeFileSync(process.env.WT_WORKSPACE_ROOT + '/pre-remove.log', process.env.WT_BRANCH)"]
+      argv: [node, -e, "require('node:fs').writeFileSync(process.env.YGG_WORKSPACE_ROOT + '/pre-remove.log', process.env.YGG_BRANCH)"]
   post_remove:
     - type: command
-      argv: [node, -e, "require('node:fs').writeFileSync('post-remove.log', process.env.WT_EVENT)"]
+      argv: [node, -e, "require('node:fs').writeFileSync('post-remove.log', process.env.YGG_EVENT)"]
       cwd: workspace
 tasks:
   verify:
     description: Run the project check
     steps:
       - type: command
-        argv: [node, -e, "require('node:fs').writeFileSync('task.log', process.env.WT_EVENT)"]
+        argv: [node, -e, "require('node:fs').writeFileSync('task.log', process.env.YGG_EVENT)"]
 `,
       {
         "config.example": "EXAMPLE=true\n",
@@ -132,7 +132,7 @@ hooks:
     await configs.trust(workspace, plan.project);
 
     await expect(workflow.executeCreate(plan)).rejects.toThrow(
-      /Worktree was created[\s\S]*Retry with: wt setup/u,
+      /Worktree was created[\s\S]*Retry with: ygg setup/u,
     );
     await expect(worktrees.resolve(workspace, "main")).resolves.toMatchObject({ branch: "main" });
   });
@@ -434,12 +434,12 @@ async function commitProjectConfig(
   configuration: string,
   files: Record<string, string> = {},
 ): Promise<void> {
-  await fs.writeFile(path.join(repository.source, ".wt.yml"), configuration, "utf8");
+  await fs.writeFile(path.join(repository.source, ".ygg.yml"), configuration, "utf8");
   for (const [name, content] of Object.entries(files)) {
     await fs.writeFile(path.join(repository.source, name), content, "utf8");
   }
-  await gitRun(repository.source, ["add", ".wt.yml", ...Object.keys(files)]);
-  await gitRun(repository.source, ["commit", "-m", "add wt workflow"]);
+  await gitRun(repository.source, ["add", ".ygg.yml", ...Object.keys(files)]);
+  await gitRun(repository.source, ["commit", "-m", "add ygg workflow"]);
   await gitRun(repository.source, ["push", "origin", "main"]);
 }
 

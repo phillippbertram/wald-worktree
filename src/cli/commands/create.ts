@@ -1,6 +1,6 @@
 import { type Command, Option } from "commander";
 import { z } from "zod";
-import { toErrorMessage, WtError } from "../../domain/errors.js";
+import { toErrorMessage, YggError } from "../../domain/errors.js";
 import type { Worktree } from "../../domain/types.js";
 import { builtInToolNames } from "../../services/tool-service.js";
 import { runTask } from "../../ui/terminal.js";
@@ -55,7 +55,7 @@ export function registerCreateCommand(program: Command, context: CliContext): vo
     .addOption(new Option("--print-path").hideHelp())
     .addHelpText(
       "after",
-      `\nBuilt-in tools: ${builtInToolNames.join(", ")}\n\nExamples:\n  wt create feature/payment --cd\n  wt create hotfix/payment --from release/1.x --cd\n  wt create feature/review --tool codex\n`,
+      `\nBuilt-in tools: ${builtInToolNames.join(", ")}\n\nExamples:\n  ygg create feature/payment --cd\n  ygg create hotfix/payment --from release/1.x --cd\n  ygg create feature/review --tool codex\n`,
     )
     .action(
       async (
@@ -104,7 +104,7 @@ export async function createWorktree(input: CreateInput, context: CliContext): P
         project: await context.workflow.projectForWorktree(created),
       });
     } catch (error) {
-      throw new WtError(
+      throw new YggError(
         `Worktree was created at ${created.path}, but opening it failed: ${toErrorMessage(error)}`,
         { cause: error },
       );
@@ -121,7 +121,7 @@ export async function createWorktree(input: CreateInput, context: CliContext): P
         `Shell integration is not active for this invocation. Enter with: cd ${shellQuote(created.path)}`,
       );
     } else if (!input.open && !input.tool) {
-      writeLine(context.output.stdout, `Next: wt cd ${shellQuote(created.name)}`);
+      writeLine(context.output.stdout, `Next: ygg cd ${shellQuote(created.name)}`);
       writeLine(context.output.stdout, `Without shell integration: cd ${shellQuote(created.path)}`);
     }
   }

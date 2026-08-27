@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { z } from "zod";
-import { WtError } from "../../domain/errors.js";
+import { YggError } from "../../domain/errors.js";
 import type { Worktree } from "../../domain/types.js";
 import { confirm, isInteractiveTerminal } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
@@ -46,13 +46,16 @@ export async function pruneWorktrees(input: PruneInput, context: CliContext): Pr
 
   printPrunePreview(candidates, context.output.stdout);
   if (!input.apply) {
-    writeLine(context.output.stdout, "Preview only. Run wt prune --apply to remove this metadata.");
+    writeLine(
+      context.output.stdout,
+      "Preview only. Run ygg prune --apply to remove this metadata.",
+    );
     return;
   }
 
   if (!input.yes) {
     if (!isInteractiveTerminal()) {
-      throw new WtError("Non-interactive pruning requires --apply --yes.");
+      throw new YggError("Non-interactive pruning requires --apply --yes.");
     }
     const accepted = await confirm(
       `Prune metadata for ${candidates.map((worktree) => worktree.name).join(", ")}?`,
