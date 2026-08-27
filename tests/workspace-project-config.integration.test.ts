@@ -194,6 +194,9 @@ tasks:
     for (const [event, result] of results) {
       expect(result.exitCode, result.stderr).toBe(0);
       expect(result.stdout).toContain(`Completed ${event} hook for main`);
+      expect(result.stderr).toContain(`Hook        ${event}`);
+      expect(result.stderr).toMatch(/1\s+RUNNING\s+command/u);
+      expect(result.stderr).toMatch(/1\s+DONE\s+command/u);
     }
     expect(results.get("pre_create")?.stderr).toContain(
       "Manual pre_create runs against existing worktree main",
@@ -231,6 +234,8 @@ tasks:
     const setup = await runCli(workspace, "setup", "main");
     expect(setup.exitCode, setup.stderr).toBe(0);
     expect(setup.stdout).toContain("Completed setup for main");
+    expect(setup.stderr).toContain("Hook        post_create");
+    expect(setup.stderr).toMatch(/1\s+DONE\s+command/u);
     expect((await fs.readFile(logPath, "utf8")).trim().split("\n").slice(-2)).toEqual([
       `changed:post_create|${worktree}|${worktree}`,
       `changed:post_create|${worktree}|${worktree}`,

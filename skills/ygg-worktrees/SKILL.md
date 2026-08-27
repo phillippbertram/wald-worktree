@@ -39,4 +39,6 @@ shared files.
 If effective project configuration is untrusted, inspect both reported sources plus the hooks,
 tasks, and tools before running `ygg config trust --yes`. Formatting-only edits preserve semantic
 trust, but changed behavior in either source requires a new decision. Use
-`ygg hook run <event> <worktree>` to test a hook without creating or removing a worktree.
+`ygg hook run <event> <worktree>` to test a hook without creating or removing a worktree. Treat
+`UNCHANGED` and configured `SKIPPED` file rows as successful no-ops; inspect `FAILED` target
+conflicts before choosing `on_existing: skip` or `on_existing: replace` in the trusted configuration.

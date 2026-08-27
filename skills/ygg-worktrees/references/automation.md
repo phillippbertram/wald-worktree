@@ -55,5 +55,13 @@ explicit source directory while preserving repository-relative paths:
 
 Glob steps process files only, validate every destination before changing targets, and require
 `optional: true` when no match should be accepted. Copy and symlink steps print scoped source and
-target paths for every processed file. Optional missing sources and empty globs print a skip reason;
-non-optional cases remain errors.
+target paths for every processed file. Commands print their exact configured invocation and resolved
+working directory before execution, followed by the outcome; environment values are never printed.
+Each hook or named task has its own labeled output block. Consecutive hooks and the individual step
+groups inside a block are separated by blank lines; every step prints `RUNNING` before execution.
+
+An already correct symlink is `UNCHANGED`. Other existing targets fail safely by default. Configure
+`on_existing: skip` to preserve them with a `SKIPPED` status or `on_existing: replace` to remove and
+recreate them. Do not look for a runtime `--force`: replacement is intentionally part of the trusted
+configuration. Legacy `overwrite: true` remains compatible with `on_existing: replace`. Optional
+missing sources and empty globs print a skip reason; non-optional cases remain errors.

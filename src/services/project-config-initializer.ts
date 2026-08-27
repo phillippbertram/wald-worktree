@@ -70,7 +70,7 @@ export class ProjectConfigInitializer {
         from: inspection.environmentExample,
         to: ".env",
         optional: true,
-        overwrite: false,
+        onExisting: "error",
         continueOnError: false,
       });
     }

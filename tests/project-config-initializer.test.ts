@@ -55,6 +55,7 @@ describe("project configuration initialization", () => {
         type: "copy",
         from: ".env.example",
         to: ".env",
+        onExisting: "error",
       }),
     ]);
     expect(config.tasks.verify?.steps).toEqual([

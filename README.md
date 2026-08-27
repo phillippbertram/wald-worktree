@@ -178,6 +178,10 @@ explicitly without creating or removing a worktree:
 ygg hook run post_create feature-payment
 ```
 
+Repeated setup is safe for an already correct symlink: Ygg reports it as `UNCHANGED`. Configure
+`on_existing: skip` or `on_existing: replace` explicitly when a different existing target should
+be preserved or replaced.
+
 ## Pick the workflow that fits your day
 
 | Goal                                  | Create                                                     | Finish                                                                  |

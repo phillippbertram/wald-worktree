@@ -360,7 +360,7 @@ workspace there may also be no source worktree, so repository-local helper scrip
   from: .env.example
   to: .env
   optional: true
-  overwrite: false
+  on_existing: skip
 
 - type: symlink
   source: primary
@@ -389,7 +389,8 @@ workspace there may also be no source worktree, so repository-local helper scrip
 | `glob` | none | One positive relative pattern evaluated below `from`; matched file paths are preserved below `to`. |
 | `to` | required | Exact target without `glob`; target directory with `glob`. |
 | `optional` | `false` | Skip a missing exact source or a glob with no file matches. |
-| `overwrite` | `false` | Replace an existing target only when explicitly enabled. |
+| `on_existing` | `error` | Handle a conflicting target with `error`, `skip`, or `replace`. |
+| `overwrite` | none | Legacy alias: `false` means `error`, `true` means `replace`. Do not combine it with `on_existing`. |
 | `continue_on_error` | `false` | Warn and continue after a failed file step. |
 
 Source and target paths must be relative and remain inside their configured roots after resolving
@@ -400,10 +401,17 @@ Without `glob`, `from` and `to` retain their exact file-or-directory behavior. W
 must be a directory and only matches that resolve to files are processed. The pattern cannot be
 absolute, negated, or contain a `..` path segment. Directories are not independent matches.
 
-All matches and destinations are sorted and validated before the first target is changed. Existing
-targets therefore fail the complete step unless `overwrite: true` is set. A glob `copy` rejects
-matched source symlinks; a glob `symlink` may resolve a source symlink only when its target is a file
-inside the configured source root. `continue_on_error` applies to the complete multi-file step.
+All matches and destinations are sorted and validated before the first target is changed. A symlink
+that already resolves to the intended real source is idempotent and reports `UNCHANGED`, even with
+the default policy. Other existing files, directories, or different and broken symlinks follow
+`on_existing`: `error` preserves the complete step and fails, `skip` preserves only conflicting
+targets while processing the rest, and `replace` removes and recreates them. There is deliberately
+no runtime `--force` for automation; replacement stays part of the reviewed and trusted behavior.
+
+A glob `copy` rejects matched source symlinks. A glob `symlink` may resolve a source symlink only
+when its target is a file inside the configured source root. `continue_on_error` applies to the
+complete multi-file step. Legacy `overwrite` remains accepted, and equivalent legacy/new policies
+produce the same semantic trust hash.
 
 For centrally edited monorepo environment files, preserve their repository-relative structure:
 
@@ -424,24 +432,46 @@ again; `ygg hook run post_create` is the equivalent general hook command. Becaus
 expose local data, their exact paths and glob patterns participate in the same project-configuration
 trust hash as commands.
 
-Successful file steps report the effective source and target using their configured scopes:
+Every non-empty automation run reports its selected worktree, branch, target path, and one status
+row per command or file operation:
 
 ```text
-Symlinked shared:env/.env -> target:.env
-Copied default:config.example -> target:config.local
+Hook        post_create
+Worktree    feature-payment
+Branch      feature/payment
+Path        /workspace/feature-payment
+
+STEP  STATUS     TYPE      SOURCE / COMMAND                    TARGET / CWD                  NOTE
+1     RUNNING    command   pnpm install --frozen-lockfile      /workspace/feature-payment
+1     DONE       command   pnpm install --frozen-lockfile      /workspace/feature-payment
+
+2     RUNNING    symlink   shared:env/.env                     target:.env
+2     UNCHANGED  symlink   shared:env/.env                     target:.env                   already linked
+
+3     RUNNING    symlink   shared:env/local                    target:.local
+3     SKIPPED    symlink   shared:env/local                    target:.local                 target exists
+
+4     RUNNING    copy      default:config.example              target:config.local
+4     REPLACED   copy      default:config.example              target:config.local           existing target
 ```
 
-Glob steps print one line per processed file in deterministic order. When `overwrite: true` replaces
-an existing target, the line includes `(replaced existing target)`. Optional steps also explain why
-nothing changed instead of staying silent:
+Each lifecycle hook receives its own labeled block; consecutive hooks are separated by a blank
+line. Named tasks use the same layout with a `Task` heading. Within either block, every configured
+step forms a separate group: `RUNNING` is printed before validation or execution, followed by the
+result. Glob results remain together under their shared step number.
 
-```text
-Skipped optional symlink shared:env/.env -> target:.env (source not found)
-Skipped optional copy shared:env/**/*.missing -> target:optional (no files matched)
-```
+Command argument arrays retain visible argument boundaries; shell expressions show the actual
+`/bin/sh -c` invocation and the resolved working directory. Child output remains unmodified between
+`RUNNING` and the result. Environment values are never printed or expanded.
 
-An unavailable `current`, `default`, or `primary` source is reported as `source unavailable`.
-Non-optional missing sources, empty globs, and target conflicts remain errors.
+File operations report `CREATED`, `UNCHANGED`, `SKIPPED`, `REPLACED`, or `FAILED` after their
+`RUNNING` row, with scoped source and target paths. Glob results remain sorted. Optional missing
+sources and empty globs use `SKIPPED` with `source not found`, `source unavailable`, or
+`no files matched` in the note. A target conflict under the default policy uses `FAILED` and points
+to `on_existing: skip|replace`; `continue_on_error` adds `continuing` before the next step begins.
+
+Non-optional missing sources and empty globs remain errors. Statuses, worktree and branch names, and
+paths are colored in a terminal while redirected output remains readable plain text.
 
 ### Lifecycle
 

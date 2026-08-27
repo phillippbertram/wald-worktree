@@ -45,6 +45,7 @@ export type Worktree = {
 
 export type StepSource = "current" | "default" | "primary" | "shared";
 export type StepWorkingDirectory = "source" | "target" | "workspace";
+export type ExistingTargetPolicy = "error" | "skip" | "replace";
 
 type StepBase = {
   continueOnError: boolean;
@@ -66,7 +67,7 @@ export type CopyStep = StepBase & {
   glob?: string;
   to: string;
   optional: boolean;
-  overwrite: boolean;
+  onExisting: ExistingTargetPolicy;
 };
 
 export type SymlinkStep = StepBase & {
@@ -76,7 +77,7 @@ export type SymlinkStep = StepBase & {
   glob?: string;
   to: string;
   optional: boolean;
-  overwrite: boolean;
+  onExisting: ExistingTargetPolicy;
 };
 
 export type AutomationStep = CommandStep | CopyStep | SymlinkStep;

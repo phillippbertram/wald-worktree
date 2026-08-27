@@ -185,7 +185,10 @@ ygg run [task] [worktree]
 
 Runs a named effective project-configuration task in the selected worktree. Omitting the task opens
 an interactive task selection; non-interactive use requires the task name. Tasks require trusted
-project configuration and stream command output in the foreground.
+project configuration and stream command output in the foreground. Every named task receives its
+own `Task` block with resolved worktree, branch, target path, command, and working directory. Each
+step prints `RUNNING` before execution followed by its result; configured environment values are
+not printed.
 
 ```sh
 ygg run verify feature-payment
@@ -207,6 +210,12 @@ run uses an existing selected worktree as `YGG_WORKTREE_PATH`. Consequently, man
 and `post_remove` runs are useful for testing behavior but do not reproduce the absent-target state
 of their automatic lifecycle phase; Ygg prints a warning for these events.
 
+Automation rows report command outcomes and each copy/symlink source and target. An already correct
+symlink is `UNCHANGED`; a configured `on_existing: skip` conflict is `SKIPPED` and does not fail the
+hook. Each hook has its own labeled block, consecutive lifecycle hooks have a blank line between
+them, and the steps inside the block are visually grouped. See
+[configuration](configuration.md#file-steps) for conflict policies and status meanings.
+
 ```sh
 ygg hook run post_create feature-payment
 ygg hook run pre_remove feature-payment
@@ -220,7 +229,8 @@ ygg setup [worktree]
 
 Compatibility shortcut for `ygg hook run post_create [worktree]`. This remains the recovery path
 after setup failed during creation. The effective project configuration must be trusted and contain
-at least one `post_create` step.
+at least one `post_create` step. It uses the same structured automation output and conflict policies
+as the general hook command.
 
 ## `ygg remove`
 

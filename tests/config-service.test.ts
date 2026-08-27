@@ -72,6 +72,104 @@ tasks:
     expect(changed.hash).not.toBe(first.hash);
   });
 
+  it("supports explicit target policies without invalidating equivalent legacy trust", () => {
+    const legacyError = configs.parseProjectConfig(
+      `version: 1
+hooks:
+  post_create:
+    - type: symlink
+      source: shared
+      from: env/.env
+      to: .env
+      overwrite: false
+`,
+      ".ygg.yml",
+    );
+    const explicitError = configs.parseProjectConfig(
+      `version: 1
+hooks:
+  post_create:
+    - type: symlink
+      source: shared
+      from: env/.env
+      to: .env
+      on_existing: error
+`,
+      ".ygg.yml",
+    );
+    const legacyReplace = configs.parseProjectConfig(
+      `version: 1
+hooks:
+  post_create:
+    - type: symlink
+      source: shared
+      from: env/.env
+      to: .env
+      overwrite: true
+`,
+      ".ygg.yml",
+    );
+    const explicitReplace = configs.parseProjectConfig(
+      `version: 1
+hooks:
+  post_create:
+    - type: symlink
+      source: shared
+      from: env/.env
+      to: .env
+      on_existing: replace
+`,
+      ".ygg.yml",
+    );
+    const skip = configs.parseProjectConfig(
+      `version: 1
+hooks:
+  post_create:
+    - type: symlink
+      source: shared
+      from: env/.env
+      to: .env
+      on_existing: skip
+`,
+      ".ygg.yml",
+    );
+
+    expect(explicitError.config.hooks.post_create[0]).toMatchObject({ onExisting: "error" });
+    expect(explicitReplace.config.hooks.post_create[0]).toMatchObject({ onExisting: "replace" });
+    expect(skip.config.hooks.post_create[0]).toMatchObject({ onExisting: "skip" });
+    expect(explicitError.hash).toBe(legacyError.hash);
+    expect(explicitError.hash).toBe(
+      "5e1acb26c770d14432090f8493125651da944e4519a4fef926b0e5722f7d6b73",
+    );
+    expect(explicitReplace.hash).toBe(legacyReplace.hash);
+    expect(explicitReplace.hash).toBe(
+      "233805b3051a791b72e1d01a1f6668285f487a1bb8523dd0386408f0c852eeb5",
+    );
+    expect(skip.hash).not.toBe(explicitError.hash);
+    expect(skip.hash).not.toBe(explicitReplace.hash);
+    expect(configs.formatProjectConfig(skip.config)).toContain("on_existing: skip");
+    expect(summarizeExecutableConfig(skip)).toContain(
+      "hook post_create: symlink shared:env/.env -> .env [on_existing=skip]",
+    );
+  });
+
+  it("rejects ambiguous new and legacy target policies", () => {
+    expect(() =>
+      configs.parseProjectConfig(
+        `version: 1
+hooks:
+  post_create:
+    - type: copy
+      from: config.example
+      to: config.local
+      on_existing: skip
+      overwrite: true
+`,
+        ".ygg.yml",
+      ),
+    ).toThrow(/cannot define both 'on_existing' and legacy 'overwrite'/u);
+  });
+
   it("rejects unknown fields and ambiguous command execution", () => {
     expect(() =>
       configs.parseProjectConfig(

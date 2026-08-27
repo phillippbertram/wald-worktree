@@ -540,6 +540,10 @@ tools:
       { cwd: workspace, reject: false },
     );
     expect(created.exitCode, created.stderr).toBe(0);
+    expect(created.stderr).toContain("Hook        post_create");
+    expect(created.stderr).toContain("Worktree    main");
+    expect(created.stderr).toMatch(/1\s+RUNNING\s+command/u);
+    expect(created.stderr).toMatch(/1\s+DONE\s+command/u);
     expect(await fs.readFile(path.join(workspace, "main", "hook.log"), "utf8")).toBe("post_create");
     expect(await fs.readFile(path.join(workspace, "main", "tool.log"), "utf8")).toBe(
       await fs.realpath(path.join(workspace, "main")),
@@ -551,6 +555,8 @@ tools:
       reject: false,
     });
     expect(setup.exitCode, setup.stderr).toBe(0);
+    expect(setup.stderr).toContain("Hook        post_create");
+    expect(setup.stderr).toMatch(/1\s+DONE\s+command/u);
     expect(await fs.readFile(path.join(workspace, "main", "hook.log"), "utf8")).toBe("post_create");
 
     const task = await execa(process.execPath, cliArguments("run", "verify", "main"), {
@@ -558,13 +564,27 @@ tools:
       reject: false,
     });
     expect(task.exitCode, task.stderr).toBe(0);
+    expect(task.stderr).toContain("Task        verify");
+    expect(task.stderr).toMatch(/1\s+RUNNING\s+command/u);
+    expect(task.stderr).toMatch(/1\s+DONE\s+command/u);
     expect(await fs.readFile(path.join(workspace, "main", "task.log"), "utf8")).toBe("task:verify");
+
+    const coloredTask = await execa(process.execPath, cliArguments("run", "verify", "main"), {
+      cwd: workspace,
+      reject: false,
+      env: { FORCE_COLOR: "1", NO_COLOR: undefined },
+    });
+    expect(coloredTask.exitCode, coloredTask.stderr).toBe(0);
+    expect(coloredTask.stderr).toContain("\u001b[");
+    expect(coloredTask.stderr).toContain("RUNNING");
+    expect(coloredTask.stderr).toContain("DONE");
 
     const interrupted = await execa(process.execPath, cliArguments("run", "interrupt", "main"), {
       cwd: workspace,
       reject: false,
     });
     expect(interrupted.exitCode).toBe(130);
+    expect(interrupted.stderr).toMatch(/1\s+FAILED\s+command/u);
     expect(interrupted.stderr).not.toContain("Error:");
     expect(interrupted.stdout).not.toContain("Completed task interrupt");
 

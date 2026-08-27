@@ -65,7 +65,16 @@ tasks:
     description: Run the project check
     steps:
       - type: command
-        argv: [node, -e, "require('node:fs').writeFileSync('task.log', process.env.YGG_EVENT)"]
+        argv: [node, -e, "require('node:fs').writeFileSync('task.log', process.env.YGG_EVENT); console.log('child-output')"]
+        env:
+          SECRET_VALUE: do-not-print
+  continue:
+    steps:
+      - type: command
+        shell: exit 9
+        continue_on_error: true
+      - type: command
+        argv: [node, -e, "require('node:fs').writeFileSync('continued.log', 'yes')"]
 `,
       {
         "config.example": "EXAMPLE=true\n",
@@ -85,7 +94,13 @@ tasks:
 
     if (!plan.project) throw new Error("Expected project configuration.");
     await configs.trust(workspace, plan.project);
-    const created = await workflow.executeCreate(plan);
+    const lifecycleOutput = new PassThrough();
+    const created = await workflow.executeCreate(plan, { output: lifecycleOutput });
+    const renderedLifecycle = readOutput(lifecycleOutput);
+    expect(renderedLifecycle).toContain("Hook        pre_create");
+    expect(renderedLifecycle).toContain("\n\nHook        post_create");
+    expect(renderedLifecycle).toContain("\n\n2     RUNNING");
+    expect(renderedLifecycle).toContain("\n\n3     RUNNING");
 
     expect(await fs.readFile(path.join(workspace.root, "pre-create.log"), "utf8")).toBe("main");
     expect(await fs.readFile(path.join(created.path, "config.local"), "utf8")).toBe(
@@ -96,10 +111,34 @@ tasks:
       "post_create",
     );
 
-    await workflow.runTask(workspace, created, "verify");
+    const taskOutput = new PassThrough();
+    await workflow.runTask(workspace, created, "verify", { output: taskOutput });
     expect(await fs.readFile(path.join(created.path, "task.log"), "utf8")).toBe("task:verify");
+    const renderedTask = readOutput(taskOutput);
+    expect(renderedTask).toContain("Task        verify");
+    expect(renderedTask).toContain(`Worktree    ${created.name}`);
+    expect(renderedTask).toContain(`Path        ${created.path}`);
+    expect(renderedTask).toMatch(/1\s+RUNNING\s+command\s+node -e/u);
+    expect(renderedTask).toMatch(/1\s+DONE\s+command\s+node -e/u);
+    expect(renderedTask.indexOf("RUNNING")).toBeLessThan(renderedTask.indexOf("child-output"));
+    expect(renderedTask.indexOf("child-output")).toBeLessThan(renderedTask.indexOf("DONE"));
+    expect(renderedTask).not.toContain("do-not-print");
 
-    for (const generated of ["config.local", "linked-shared.txt", "post-create.log", "task.log"]) {
+    const continuedOutput = new PassThrough();
+    await workflow.runTask(workspace, created, "continue", { output: continuedOutput });
+    const renderedContinued = readOutput(continuedOutput);
+    expect(renderedContinued).toMatch(/1\s+FAILED\s+command/u);
+    expect(renderedContinued).toContain("continuing");
+    expect(renderedContinued).toMatch(/2\s+DONE\s+command/u);
+    expect(await fs.readFile(path.join(created.path, "continued.log"), "utf8")).toBe("yes");
+
+    for (const generated of [
+      "config.local",
+      "linked-shared.txt",
+      "post-create.log",
+      "task.log",
+      "continued.log",
+    ]) {
       await fs.rm(path.join(created.path, generated), { force: true });
     }
     const removal = await workflow.planRemove(workspace, created.name);
@@ -189,9 +228,15 @@ hooks:
     if (!plan.project) throw new Error("Expected project configuration.");
     await configs.trust(workspace, plan.project);
 
-    await expect(workflow.executeCreate(plan)).rejects.toThrow(
+    const output = new PassThrough();
+    await expect(workflow.executeCreate(plan, { output })).rejects.toThrow(
       /Worktree was created[\s\S]*Retry with: ygg setup/u,
     );
+    const rendered = readOutput(output);
+    expect(rendered).toContain("Hook        post_create");
+    expect(rendered).toMatch(/1\s+RUNNING\s+command\s+\/bin\/sh -c "exit 23\\n"/u);
+    expect(rendered).toMatch(/1\s+FAILED\s+command/u);
+    expect(rendered).toContain("exit code 23");
     await expect(worktrees.resolve(workspace, "main")).resolves.toMatchObject({ branch: "main" });
   });
 
@@ -216,6 +261,33 @@ hooks:
       from: config/tool.json
       to: .local/tool.json
 tasks:
+  link-local:
+    steps:
+      - type: symlink
+        source: shared
+        from: env/.env
+        to: .env
+  skip-link:
+    steps:
+      - type: symlink
+        source: shared
+        from: env/.env
+        to: .env
+        on_existing: skip
+  replace-link:
+    steps:
+      - type: symlink
+        source: shared
+        from: env/.env
+        to: .env
+        on_existing: replace
+  skip-local:
+    steps:
+      - type: copy
+        source: shared
+        from: config/tool.json
+        to: .local/tool.json
+        on_existing: skip
   sync-local:
     steps:
       - type: copy
@@ -249,6 +321,12 @@ tasks:
         from: .env
         to: unavailable.env
         optional: true
+  directory-conflict:
+    steps:
+      - type: copy
+        source: shared
+        from: config/tool.json
+        to: .local/conflict
 `,
     );
     const workspace = await workspaces.initialize(
@@ -276,13 +354,17 @@ tasks:
     const createOutput = new PassThrough();
     const created = await workflow.executeCreate(plan, { output: createOutput });
 
-    expect(readOutput(createOutput)).toBe(
-      [
-        "Symlinked shared:env/.env -> target:.env",
-        "Symlinked shared:env/apps/api/.env -> target:apps/api/.env",
-        "Copied shared:config/tool.json -> target:.local/tool.json",
-        "",
-      ].join("\n"),
+    const renderedCreate = readOutput(createOutput);
+    expect(renderedCreate).toContain("Hook        post_create");
+    expect(renderedCreate).toContain("STEP  STATUS");
+    expect(renderedCreate.match(/RUNNING\s+(?:symlink|copy)/gu)).toHaveLength(3);
+    expect(renderedCreate.indexOf("RUNNING")).toBeLessThan(renderedCreate.indexOf("CREATED"));
+    expect(renderedCreate).toMatch(/1\s+CREATED\s+symlink\s+shared:env\/\.env\s+target:\.env/u);
+    expect(renderedCreate).toMatch(
+      /2\s+CREATED\s+symlink\s+shared:env\/apps\/api\/\.env\s+target:apps\/api\/\.env/u,
+    );
+    expect(renderedCreate).toMatch(
+      /3\s+CREATED\s+copy\s+shared:config\/tool\.json\s+target:\.local\/tool\.json/u,
     );
 
     const rootLink = await fs.readlink(path.join(created.path, ".env"));
@@ -294,20 +376,52 @@ tasks:
     expect(await fs.readFile(path.join(created.path, ".local", "tool.json"), "utf8")).toBe(
       '{"version":1}\n',
     );
-    await expect(workflow.runHook(workspace, created, "post_create")).rejects.toThrow(
-      /Target path already exists/u,
+    const rerunOutput = new PassThrough();
+    await expect(
+      workflow.runHook(workspace, created, "post_create", { output: rerunOutput }),
+    ).rejects.toThrow(
+      /Automation step 3 \(copy target:\.local\/tool\.json\) failed[\s\S]*on_existing/u,
     );
+    const renderedRerun = readOutput(rerunOutput);
+    expect(renderedRerun).toMatch(/1\s+UNCHANGED\s+symlink[\s\S]*already linked/u);
+    expect(renderedRerun).toMatch(/2\s+UNCHANGED\s+symlink[\s\S]*already linked/u);
+    expect(renderedRerun).toMatch(
+      /3\s+FAILED\s+copy[\s\S]*target:\.local\/tool\.json[\s\S]*on_existing/u,
+    );
+
+    const unchangedOutput = new PassThrough();
+    await workflow.runTask(workspace, created, "link-local", { output: unchangedOutput });
+    expect(readOutput(unchangedOutput)).toMatch(/1\s+UNCHANGED\s+symlink[\s\S]*already linked/u);
+
+    await fs.rm(path.join(created.path, ".env"));
+    await fs.symlink("missing.env", path.join(created.path, ".env"));
+    const conflictOutput = new PassThrough();
+    await expect(
+      workflow.runTask(workspace, created, "link-local", { output: conflictOutput }),
+    ).rejects.toThrow(/Target target:\.env already exists/u);
+    expect(readOutput(conflictOutput)).toMatch(/1\s+FAILED\s+symlink[\s\S]*Target[\s\S]*exists/u);
+    expect(await fs.readlink(path.join(created.path, ".env"))).toBe("missing.env");
+
+    const skipLinkOutput = new PassThrough();
+    await workflow.runTask(workspace, created, "skip-link", { output: skipLinkOutput });
+    expect(readOutput(skipLinkOutput)).toMatch(/1\s+SKIPPED\s+symlink[\s\S]*target exists/u);
+    expect(await fs.readlink(path.join(created.path, ".env"))).toBe("missing.env");
+
+    const replaceLinkOutput = new PassThrough();
+    await workflow.runTask(workspace, created, "replace-link", { output: replaceLinkOutput });
+    expect(readOutput(replaceLinkOutput)).toMatch(/1\s+REPLACED\s+symlink[\s\S]*existing target/u);
+    expect(await fs.readFile(path.join(created.path, ".env"), "utf8")).toBe("ROOT=true\n");
     const optionalOutput = new PassThrough();
     await workflow.runTask(workspace, created, "optional-local", { output: optionalOutput });
-    expect(readOutput(optionalOutput)).toBe(
-      "Skipped optional copy shared:missing.txt -> target:optional.txt (source not found)\n",
+    expect(readOutput(optionalOutput)).toMatch(
+      /1\s+SKIPPED\s+copy\s+shared:missing\.txt\s+target:optional\.txt\s+source not found/u,
     );
     const unavailableOutput = new PassThrough();
     await workflow.runTask(workspace, created, "optional-unavailable", {
       output: unavailableOutput,
     });
-    expect(readOutput(unavailableOutput)).toBe(
-      "Skipped optional symlink primary:.env -> target:unavailable.env (source unavailable)\n",
+    expect(readOutput(unavailableOutput)).toMatch(
+      /1\s+SKIPPED\s+symlink\s+primary:\.env\s+target:unavailable\.env\s+source unavailable/u,
     );
     await expect(fs.stat(path.join(created.path, "optional.txt"))).rejects.toMatchObject({
       code: "ENOENT",
@@ -321,13 +435,28 @@ tasks:
       '{"version":2}\n',
       "utf8",
     );
+    const skipOutput = new PassThrough();
+    await workflow.runTask(workspace, created, "skip-local", { output: skipOutput });
+    expect(readOutput(skipOutput)).toMatch(/1\s+SKIPPED\s+copy[\s\S]*target exists/u);
+    expect(await fs.readFile(path.join(created.path, ".local", "tool.json"), "utf8")).toBe(
+      '{"version":1}\n',
+    );
     const overwriteOutput = new PassThrough();
     await workflow.runTask(workspace, created, "sync-local", { output: overwriteOutput });
-    expect(readOutput(overwriteOutput)).toBe(
-      "Copied shared:config/tool.json -> target:.local/tool.json (replaced existing target)\n",
+    expect(readOutput(overwriteOutput)).toMatch(
+      /1\s+REPLACED\s+copy[\s\S]*target:\.local\/tool\.json[\s\S]*existing target/u,
     );
     expect(await fs.readFile(path.join(created.path, ".local", "tool.json"), "utf8")).toBe(
       '{"version":2}\n',
+    );
+
+    await fs.mkdir(path.join(created.path, ".local", "conflict"));
+    await fs.writeFile(path.join(created.path, ".local", "conflict", "marker"), "keep\n");
+    await expect(workflow.runTask(workspace, created, "directory-conflict")).rejects.toThrow(
+      /Target target:\.local\/conflict already exists/u,
+    );
+    expect(await fs.readFile(path.join(created.path, ".local", "conflict", "marker"), "utf8")).toBe(
+      "keep\n",
     );
 
     const outside = path.join(temporaryRoot, "outside-secret");
@@ -397,6 +526,14 @@ tasks:
         from: fixtures
         glob: "**/*.json"
         to: generated
+  skip-fixtures:
+    steps:
+      - type: copy
+        source: shared
+        from: fixtures
+        glob: "**/*.json"
+        to: generated
+        on_existing: skip
   overwrite-fixtures:
     steps:
       - type: copy
@@ -465,13 +602,15 @@ tasks:
     const createOutput = new PassThrough();
     const created = await workflow.executeCreate(plan, { output: createOutput });
 
-    expect(readOutput(createOutput)).toBe(
-      [
-        "Symlinked shared:env/.env -> target:.env",
-        "Symlinked shared:env/apps/api/.env -> target:apps/api/.env",
-        "Symlinked shared:env/apps/web/.env.local -> target:apps/web/.env.local",
-        "",
-      ].join("\n"),
+    const renderedCreate = readOutput(createOutput);
+    expect(renderedCreate).toContain("Hook        post_create");
+    expect(renderedCreate).toMatch(/1\s+RUNNING\s+symlink\s+shared:env\/\*\*\/\.env\*/u);
+    expect(renderedCreate).toMatch(/1\s+CREATED\s+symlink\s+shared:env\/\.env\s+target:\.env/u);
+    expect(renderedCreate).toMatch(
+      /1\s+CREATED\s+symlink\s+shared:env\/apps\/api\/\.env\s+target:apps\/api\/\.env/u,
+    );
+    expect(renderedCreate).toMatch(
+      /1\s+CREATED\s+symlink\s+shared:env\/apps\/web\/\.env\.local\s+target:apps\/web\/\.env\.local/u,
     );
 
     for (const file of [".env", "apps/api/.env", "apps/web/.env.local"]) {
@@ -482,14 +621,18 @@ tasks:
       "API=true\n",
     );
 
+    const rerunOutput = new PassThrough();
+    await workflow.runHook(workspace, created, "post_create", { output: rerunOutput });
+    expect(readOutput(rerunOutput).match(/UNCHANGED\s+symlink/gu)).toHaveLength(3);
+
     await workflow.runTask(workspace, created, "snapshot-env");
     expect(
       await fs.readFile(path.join(created.path, ".snapshots", "apps", "web", ".env.local"), "utf8"),
     ).toBe("WEB=true\n");
     const optionalOutput = new PassThrough();
     await workflow.runTask(workspace, created, "optional-empty", { output: optionalOutput });
-    expect(readOutput(optionalOutput)).toBe(
-      "Skipped optional copy shared:env/**/*.missing -> target:optional (no files matched)\n",
+    expect(readOutput(optionalOutput)).toMatch(
+      /1\s+SKIPPED\s+copy\s+shared:env\/\*\*\/\*\.missing\s+target:optional\s+no files matched/u,
     );
     await expect(fs.stat(path.join(created.path, "optional"))).rejects.toMatchObject({
       code: "ENOENT",
@@ -500,14 +643,30 @@ tasks:
 
     await fs.mkdir(path.join(created.path, "generated"), { recursive: true });
     await fs.writeFile(path.join(created.path, "generated", "b.json"), "existing\n");
-    await expect(workflow.runTask(workspace, created, "preflight-conflict")).rejects.toThrow(
-      /Target path already exists/u,
+    const conflictOutput = new PassThrough();
+    await expect(
+      workflow.runTask(workspace, created, "preflight-conflict", { output: conflictOutput }),
+    ).rejects.toThrow(
+      /Automation step 1 \(copy target:generated\/b\.json\) failed[\s\S]*on_existing/u,
+    );
+    expect(readOutput(conflictOutput)).toMatch(
+      /1\s+FAILED\s+copy[\s\S]*target:generated\/b\.json[\s\S]*on_existing/u,
     );
     await expect(fs.stat(path.join(created.path, "generated", "a.json"))).rejects.toMatchObject({
       code: "ENOENT",
     });
 
-    await workflow.runTask(workspace, created, "overwrite-fixtures");
+    const skipOutput = new PassThrough();
+    await workflow.runTask(workspace, created, "skip-fixtures", { output: skipOutput });
+    const renderedSkip = readOutput(skipOutput);
+    expect(renderedSkip).toMatch(/1\s+CREATED\s+copy[\s\S]*target:generated\/a\.json/u);
+    expect(renderedSkip).toMatch(
+      /1\s+SKIPPED\s+copy[\s\S]*target:generated\/b\.json[\s\S]*target exists/u,
+    );
+
+    const overwriteOutput = new PassThrough();
+    await workflow.runTask(workspace, created, "overwrite-fixtures", { output: overwriteOutput });
+    expect(readOutput(overwriteOutput).match(/REPLACED\s+copy/gu)).toHaveLength(2);
     expect(await fs.readFile(path.join(created.path, "generated", "a.json"), "utf8")).toBe(
       '{"a":1}\n',
     );

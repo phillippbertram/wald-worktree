@@ -85,23 +85,38 @@ const fileStepShape = {
     .optional(),
   to: z.string().min(1),
   optional: z.boolean().default(false),
-  overwrite: z.boolean().default(false),
+  on_existing: z.enum(["error", "skip", "replace"]).optional(),
+  overwrite: z.boolean().optional(),
   ...stepBaseShape,
 };
+
+function validateExistingTargetPolicy(
+  value: { on_existing?: "error" | "skip" | "replace"; overwrite?: boolean },
+  context: z.RefinementCtx,
+): void {
+  if (value.on_existing !== undefined && value.overwrite !== undefined) {
+    context.addIssue({
+      code: "custom",
+      message: "file steps cannot define both 'on_existing' and legacy 'overwrite'",
+    });
+  }
+}
 
 const copyStepFileSchema = z
   .object({
     type: z.literal("copy"),
     ...fileStepShape,
   })
-  .strict();
+  .strict()
+  .superRefine(validateExistingTargetPolicy);
 
 const symlinkStepFileSchema = z
   .object({
     type: z.literal("symlink"),
     ...fileStepShape,
   })
-  .strict();
+  .strict()
+  .superRefine(validateExistingTargetPolicy);
 
 const automationStepFileSchema = z.union([
   commandStepFileSchema,
@@ -738,7 +753,7 @@ function fromAutomationStepFile(step: AutomationStepFile): AutomationStep {
     glob: step.glob,
     to: step.to,
     optional: step.optional,
-    overwrite: step.overwrite,
+    onExisting: step.on_existing ?? (step.overwrite === true ? "replace" : "error"),
     continueOnError: step.continue_on_error,
   };
 }
@@ -762,7 +777,8 @@ function toAutomationStepFile(step: AutomationStep): AutomationStepFile {
     glob: step.glob,
     to: step.to,
     optional: step.optional,
-    overwrite: step.overwrite,
+    on_existing: step.onExisting === "error" ? undefined : step.onExisting,
+    overwrite: undefined,
     continue_on_error: step.continueOnError,
   };
 }
@@ -774,10 +790,34 @@ function invalidConfigurationError(configPath: string, error: z.ZodError): YggEr
   return new YggError(`Configuration is invalid: ${configPath}\n${details}`);
 }
 
-function semanticHash(value: unknown): string {
+function semanticHash(value: ProjectConfig): string {
   return createHash("sha256")
-    .update(JSON.stringify(canonicalize(value)))
+    .update(JSON.stringify(canonicalize(toTrustCompatibleProjectConfig(value))))
     .digest("hex");
+}
+
+function toTrustCompatibleProjectConfig(config: ProjectConfig): unknown {
+  const convertStep = (step: AutomationStep): unknown => {
+    if (step.type === "command") return step;
+    const { onExisting, ...legacyStep } = step;
+    return {
+      ...legacyStep,
+      overwrite: onExisting === "replace",
+      ...(onExisting === "skip" ? { onExisting } : {}),
+    };
+  };
+  return {
+    ...config,
+    hooks: Object.fromEntries(
+      Object.entries(config.hooks).map(([event, steps]) => [event, steps.map(convertStep)]),
+    ),
+    tasks: Object.fromEntries(
+      Object.entries(config.tasks).map(([name, task]) => [
+        name,
+        { ...task, steps: task.steps.map(convertStep) },
+      ]),
+    ),
+  };
 }
 
 function canonicalize(value: unknown): unknown {
@@ -808,7 +848,8 @@ function describeStep(step: AutomationStep): string {
     return step.argv?.join(" ") ?? step.shell ?? "command";
   }
   const source = step.glob ? path.posix.join(step.from, step.glob) : step.from;
-  return `${step.type} ${step.source}:${source} -> ${step.to}`;
+  const policy = step.onExisting === "error" ? "" : ` [on_existing=${step.onExisting}]`;
+  return `${step.type} ${step.source}:${source} -> ${step.to}${policy}`;
 }
 
 function isSafeGlobPattern(pattern: string): boolean {

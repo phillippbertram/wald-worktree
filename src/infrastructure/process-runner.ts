@@ -72,15 +72,19 @@ export class ProcessRunner {
 
   private async run(command: string, args: string[], options: ProcessOptions): Promise<void> {
     const output = (options.output ?? process.stderr) as Writable;
-    const result = await execa(command, args, {
+    const subprocess = execa(command, args, {
       cwd: options.cwd,
       env: options.env,
       reject: false,
       stdin: process.stdin.isTTY ? "inherit" : "ignore",
-      stdout: output,
-      stderr: output,
+      stdout: "pipe",
+      stderr: "pipe",
+      all: true,
+      buffer: false,
       timeout: options.timeoutMs,
-    }).catch((error: unknown) => {
+    });
+    subprocess.all?.pipe(output, { end: false });
+    const result = await subprocess.catch((error: unknown) => {
       throw new YggError(`Could not start command: ${command}`, { cause: error });
     });
     if (result.timedOut) {
