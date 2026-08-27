@@ -97,6 +97,21 @@ describe("managed Git workspace", () => {
     await expect(worktrees.resolve(workspace, "main")).resolves.toMatchObject({ path: main.path });
   });
 
+  it("copies local Git objects independently for managed workspaces", async () => {
+    const git = new GitClient();
+    const target = path.join(temporaryRoot, "independent-workspace");
+    const commit = (await git.run(["rev-parse", "HEAD"], { cwd: repository.source })).stdout;
+
+    const workspace = await workspaces.initialize(repository.source, target, temporaryRoot);
+
+    const sourceObject = await fs.stat(
+      looseObjectPath(path.join(repository.source, ".git"), commit),
+    );
+    const targetObject = await fs.stat(looseObjectPath(workspace.gitDir, commit));
+    expect(targetObject.dev).toBe(sourceObject.dev);
+    expect(targetObject.ino).not.toBe(sourceObject.ino);
+  });
+
   it("creates a standalone local-only workspace without changing the source checkout", async () => {
     const git = new GitClient();
     await git.run(["switch", "-c", "feature/local"], { cwd: repository.source });
@@ -267,3 +282,7 @@ describe("managed Git workspace", () => {
     expect(inspection.blockers).toHaveLength(2);
   });
 });
+
+function looseObjectPath(gitDir: string, object: string): string {
+  return path.join(gitDir, "objects", object.slice(0, 2), object.slice(2));
+}

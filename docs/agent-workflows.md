@@ -1,37 +1,80 @@
 # Agent workflows
 
-`ygg` treats an agent like any other tool attached to a concrete worktree. It creates the isolated
-checkout, prepares it through trusted hooks, and starts the configured process there. The agent
-itself remains responsible for its edits and commits.
+Ygg gives every coding agent a concrete Git worktree. Agents no longer share staged, unstaged,
+untracked, or generated files just because their tasks belong to the same repository.
 
-## Start an agent
-
-Built-in foreground profiles:
-
-```sh
-ygg open feature/payment --tool codex
-ygg open feature/payment --tool claude
+```mermaid
+flowchart TB
+    Git["Shared Git repository<br/>commits · branches · remotes"]
+    Git --> Api["feature-api/<br/>API worktree"]
+    Git --> Ui["feature-ui/<br/>UI worktree"]
+    Api --> Codex["Codex process"]
+    Ui --> App["Codex App process"]
 ```
 
-The `codex-app` profile opens the selected directory in the Codex desktop app. Project-specific
-agents can be declared under `tools` in `.ygg.yml`.
+Commits remain visible through the shared repository. Files, `HEAD`, the index, dependencies, and
+agent processes stay with their worktree. Ports, databases, containers, and external services are
+not automatically isolated; coordinate them separately.
 
-## Recommended sequence
+## Run two tasks in parallel
+
+**Starting point:** an API task and a UI task must progress independently.
 
 ```sh
-ygg create feature/payment --tool codex
-ygg run verify feature/payment
+ygg create feature/api
+ygg create feature/ui
+ygg list
 ```
 
-Choose one destination while creating: `--tool` opens the agent, while `--cd` enters the worktree
-through shell integration. They are intentionally not combined.
+```text
+project/
+├── feature-api/             Codex edits and commits feature/api here
+└── feature-ui/              Codex App edits and commits feature/ui here
+```
 
-Agents should use `ygg list --json` and `ygg cd <worktree>` for discovery instead of deriving paths.
-They should run configured project actions through `ygg run`, because those actions share the same
-validation and trust boundary as lifecycle hooks.
+Built-in profiles cover Code, Cursor, Zed, Codex, Codex App, and Claude. A repository can define
+additional profiles under `tools` in `.ygg.yml`.
 
-`ygg` deliberately does not orchestrate multiple agents, transfer patches, or infer handoffs. Those
-operations require explicit ownership and permission models and remain outside v1.
+Open foreground agents from separate terminals:
+
+```sh
+# Terminal A
+ygg open feature-api --tool codex
+
+# Terminal B
+ygg open feature-ui --tool codex-app
+```
+
+Each agent remains responsible for its own edits and commits. If the project exposes a `verify`
+task, verify and remove the completed worktrees separately:
+
+```sh
+ygg run verify feature-api
+ygg remove feature-api
+
+ygg run verify feature-ui
+ygg remove feature-ui
+```
+
+Removal preserves each branch. If another person or agent still needs a worktree, do not remove it
+without an explicit handoff.
+
+## Operating rules for agents
+
+- Discover state with `ygg list --json`; do not guess paths from branch names.
+- Resolve a path with `ygg cd <worktree>`.
+- Prefer direct commands in non-interactive sessions.
+- Run shared project actions through `ygg run` so configured order, environment, timeouts, and trust
+  checks remain consistent.
+- Use either `--tool` to open an agent or `--cd` to enter the worktree during creation; they cannot
+  be combined.
+- Inspect dirty, unmerged, and locked state before any forced removal.
+
+Ygg deliberately does not orchestrate multiple agents, transfer patches, or infer handoffs. Those
+operations require ownership and permission models outside the v1 workspace lifecycle.
+
+See [Worktrees explained](worktrees.md#four-everyday-workflows) for the general worktree model and
+[Configuration](configuration.md#named-tasks-and-tool-profiles) for custom tools and tasks.
 
 ## Portable Agent Skill
 
@@ -39,5 +82,5 @@ operations require explicit ownership and permission models and remain outside v
 and use the CLI safely. Copy that directory into the skill location supported by the agent host, or
 include it with the repository so the host can discover it.
 
-The skill routes detailed creation/lifecycle questions to its focused references, keeping the
+The skill routes detailed creation and lifecycle questions to focused references, keeping its
 default context small.

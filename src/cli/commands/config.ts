@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import { z } from "zod";
 import { YggError } from "../../domain/errors.js";
-import { confirm, isInteractiveTerminal } from "../../ui/terminal.js";
+import { confirm, isInteractiveTerminal, isPromptBackError } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
 import {
   printTrustSummary,
@@ -39,9 +39,7 @@ export function registerConfigCommand(program: Command, context: CliContext): vo
         worktree,
         ...(options as object),
       });
-      const workspace = await context.workspaces.find();
-      const selected = await resolveWorktree(workspace, input.worktree, context.worktrees);
-      await initializeProjectConfiguration(selected.path, input, context);
+      await initializeProjectConfigurationForWorktree(input, context);
     });
 
   config
@@ -79,6 +77,31 @@ export function registerConfigCommand(program: Command, context: CliContext): vo
       await context.configs.untrust(workspace);
       await success("Project configuration is no longer trusted.", context.output);
     });
+}
+
+export async function initializeProjectConfigurationForWorktree(
+  input: z.output<typeof initializationInputSchema>,
+  context: CliContext,
+): Promise<void> {
+  const workspace = await context.workspaces.find();
+  const canChooseWorktree = !input.worktree && (await context.worktrees.list(workspace)).length > 1;
+  let forcePrompt = false;
+  let initialPath: string | undefined;
+  while (true) {
+    const selected = await resolveWorktree(workspace, input.worktree, context.worktrees, {
+      forcePrompt,
+      initialPath,
+      navigation: forcePrompt ? "cancel" : undefined,
+    });
+    initialPath = selected.path;
+    try {
+      await initializeProjectConfiguration(selected.path, input, context);
+      return;
+    } catch (error) {
+      if (!isPromptBackError(error) || !canChooseWorktree) throw error;
+      forcePrompt = true;
+    }
+  }
 }
 
 export async function showConfiguration(context: CliContext): Promise<void> {

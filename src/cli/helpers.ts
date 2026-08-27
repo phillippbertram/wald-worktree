@@ -6,6 +6,8 @@ import type { WorktreeService } from "../services/worktree-service.js";
 import {
   confirm,
   isInteractiveTerminal,
+  isPromptBackError,
+  type PromptNavigation,
   printStatus,
   promptText,
   searchSelect,
@@ -17,15 +19,23 @@ export async function resolveWorktree(
   workspace: Workspace,
   identifier: string | undefined,
   worktrees: WorktreeService,
+  options: {
+    forcePrompt?: boolean;
+    initialPath?: string;
+    navigation?: PromptNavigation;
+  } = {},
 ): Promise<Worktree> {
   if (identifier) return await worktrees.resolve(workspace, identifier);
   const current = await worktrees.current(workspace);
-  if (current) return current;
+  if (current && !options.forcePrompt) return current;
   const all = await worktrees.list(workspace);
   if (all.length === 0) throw new YggError("The workspace has no worktrees. Use ygg create.");
   if (all.length === 1) return all[0] as Worktree;
   if (!isInteractiveTerminal()) throw new YggError("Specify a worktree without a TTY.");
-  const selected = await selectWorktree(all);
+  const selected = await selectWorktree(all, {
+    navigation: options.navigation,
+    initialValue: options.initialPath ?? current?.path,
+  });
   if (!selected) throw new YggError("No worktree selected.");
   return selected;
 }
@@ -54,6 +64,7 @@ export async function ensureTrusted(
   workspace: Workspace,
   project: ProjectConfigDocument | null,
   context: CliContext,
+  options: { navigation?: PromptNavigation } = {},
 ): Promise<void> {
   if (context.configs.isTrusted(workspace, project) || !project) return;
   if (!isInteractiveTerminal()) {
@@ -62,7 +73,11 @@ export async function ensureTrusted(
     );
   }
   printTrustSummary(project, context.output);
-  if (!(await confirm("Trust this project configuration until its behavior changes?"))) {
+  if (
+    !(await confirm("Trust this project configuration until its behavior changes?", false, {
+      navigation: options.navigation,
+    }))
+  ) {
     throw new YggError("Project configuration was not trusted; no configured actions were run.");
   }
   await context.configs.trust(workspace, project);
@@ -86,15 +101,28 @@ export async function chooseBranch(
     }
   }
   const createValue = "__create_new_branch__";
-  const selected = await searchSelect("Select a branch or create a new one:", [
-    { label: "Create a new branch", value: createValue },
-    ...unique.values(),
-  ]);
-  if (!selected) throw new YggError("No branch selected.");
-  if (selected !== createValue) return selected;
-  const branch = await promptText("New branch name:");
-  if (!branch) throw new YggError("Branch cannot be empty.");
-  return branch;
+  let selectedValue: string | undefined;
+  let branchValue: string | undefined;
+  while (true) {
+    const selected = await searchSelect(
+      "Create › Branch · Select a branch or create a new one:",
+      [{ label: "Create a new branch", value: createValue }, ...unique.values()],
+      { navigation: "cancel", initialValue: selectedValue },
+    );
+    selectedValue = selected;
+    if (selected !== createValue) return selected;
+    try {
+      const branch = await promptText("Create › New branch · Branch name:", branchValue, {
+        navigation: "back",
+      });
+      branchValue = branch;
+      if (!branch) throw new YggError("Branch cannot be empty.");
+      return branch;
+    } catch (error) {
+      if (isPromptBackError(error)) continue;
+      throw error;
+    }
+  }
 }
 
 export function optionValueIfExplicit<T>(command: Command, name: string, value: T): T | undefined {

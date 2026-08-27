@@ -10,6 +10,7 @@ import type {
 import {
   confirm,
   isInteractiveTerminal,
+  isPromptBackError,
   printKeyValueTable,
   runTask,
   selectManyValues,
@@ -46,12 +47,16 @@ export async function initializeProjectConfiguration(
   const inspection = await runTask("Inspecting project", () =>
     context.projectConfigs.inspect(root),
   );
-  const templateOptions = options.yes
-    ? detectedDefaults(inspection)
-    : await promptForTemplate(inspection);
-  const config = context.projectConfigs.createConfig(inspection, templateOptions);
+  let templateOptions = options.yes ? detectedDefaults(inspection) : undefined;
+  let promptState: TemplatePromptState | undefined;
+  let resumeAtLastStep = false;
 
-  if (!options.yes) {
+  while (!templateOptions) {
+    const prompted = await promptForTemplate(inspection, promptState, resumeAtLastStep);
+    promptState = prompted.state;
+    templateOptions = prompted.options;
+    const config = context.projectConfigs.createConfig(inspection, templateOptions);
+
     await printKeyValueTable([
       ["Package manager", inspection.packageManager ?? "none"],
       ["Install hook", templateOptions.install ? "yes" : "no"],
@@ -62,11 +67,19 @@ export async function initializeProjectConfiguration(
     ]);
     writeLine(context.output.stdout, "");
     context.output.stdout.write(context.configs.formatProjectConfig(config));
-    if (!(await confirm(`Write ${projectConfigFileName}?`, true))) {
-      writeLine(context.output.stdout, "Cancelled.");
-      return null;
+    try {
+      if (!(await confirm(`Write ${projectConfigFileName}?`, true, { navigation: "back" }))) {
+        writeLine(context.output.stdout, "Cancelled.");
+        return null;
+      }
+    } catch (error) {
+      if (!isPromptBackError(error)) throw error;
+      templateOptions = undefined;
+      resumeAtLastStep = true;
     }
   }
+
+  const config = context.projectConfigs.createConfig(inspection, templateOptions);
 
   const document = await runTask(`Writing ${projectConfigFileName}`, () =>
     context.configs.writeProjectConfig(inspection.root, config, { overwrite }),
@@ -84,49 +97,135 @@ export async function initializeProjectConfiguration(
 
 async function promptForTemplate(
   inspection: ProjectSetupInspection,
-): Promise<ProjectConfigTemplateOptions> {
-  const fetch = await confirm("Fetch before resolving branches by default?", true);
-  const install = inspection.installCommand
-    ? await confirm(`Run '${inspection.installCommand.join(" ")}' after creating a worktree?`, true)
-    : false;
-  const copyEnvironment = inspection.environmentExample
-    ? await confirm(`Copy ${inspection.environmentExample} to .env after creation?`, true)
-    : false;
-  const development = inspection.developmentScript
-    ? await confirm("Create a 'dev' task from the detected package script?", true)
-    : false;
+  initialState: TemplatePromptState | undefined,
+  resumeAtLastStep: boolean,
+): Promise<{ options: ProjectConfigTemplateOptions; state: TemplatePromptState }> {
   const verificationScripts = inspection.scripts.filter(
     (script) => script !== inspection.developmentScript,
   );
-  const scripts =
-    verificationScripts.length > 0
-      ? await selectManyValues(
-          "Select package scripts for the verify task:",
-          verificationScripts.map((script) => ({
-            label: script,
-            value: script,
-            checked: inspection.recommendedScripts.includes(script),
-          })),
-        )
-      : [];
-  const selectedTool = await selectValue("Default editor or agent:", [
-    { label: "No default", value: "__none__" },
-    { label: "Visual Studio Code", value: "code" },
-    { label: "Cursor", value: "cursor" },
-    { label: "Zed", value: "zed" },
-    { label: "Codex CLI", value: "codex" },
-    { label: "Codex desktop app", value: "codex-app" },
-    { label: "Claude Code", value: "claude" },
-  ]);
+  const steps: TemplateStep[] = [
+    "fetch",
+    ...(inspection.installCommand ? (["install"] as const) : []),
+    ...(inspection.environmentExample ? (["environment"] as const) : []),
+    ...(inspection.developmentScript ? (["development"] as const) : []),
+    ...(verificationScripts.length > 0 ? (["verification", "scripts"] as const) : []),
+    "tool",
+  ];
+  const state: TemplatePromptState = { ...initialState };
+  let index = resumeAtLastStep ? steps.length - 1 : 0;
+  while (index < steps.length) {
+    const step = steps[index] as TemplateStep;
+    const navigation = index === 0 ? "cancel" : "back";
+    try {
+      switch (step) {
+        case "fetch":
+          state.fetch = await confirm(
+            "Configure › Repository · Fetch before resolving branches by default?",
+            state.fetch ?? true,
+            { navigation },
+          );
+          break;
+        case "install":
+          state.install = await confirm(
+            `Configure › Setup · Run '${inspection.installCommand?.join(" ")}' after creating a worktree?`,
+            state.install ?? true,
+            { navigation },
+          );
+          break;
+        case "environment":
+          state.copyEnvironment = await confirm(
+            `Configure › Setup · Copy ${inspection.environmentExample} to .env after creation?`,
+            state.copyEnvironment ?? true,
+            { navigation },
+          );
+          break;
+        case "development":
+          state.development = await confirm(
+            "Configure › Tasks · Create a 'dev' task from the detected package script?",
+            state.development ?? true,
+            { navigation },
+          );
+          break;
+        case "verification":
+          state.createVerification = await confirm(
+            "Configure › Tasks · Create a 'verify' task from detected package scripts?",
+            state.createVerification ?? true,
+            { navigation },
+          );
+          if (!state.createVerification) state.scripts = [];
+          break;
+        case "scripts":
+          if (!state.createVerification) {
+            index += 1;
+            continue;
+          }
+          state.scripts = await selectManyValues(
+            "Configure › Tasks · Select package scripts for the verify task:",
+            verificationScripts.map((script) => ({
+              label: script,
+              value: script,
+              checked: inspection.recommendedScripts.includes(script),
+            })),
+            {
+              navigation,
+              initialValues: state.scripts ?? inspection.recommendedScripts,
+            },
+          );
+          break;
+        case "tool":
+          state.tool = await selectValue(
+            "Configure › Tool · Default editor or agent:",
+            [
+              { label: "No default", value: "__none__" },
+              { label: "Visual Studio Code", value: "code" },
+              { label: "Cursor", value: "cursor" },
+              { label: "Zed", value: "zed" },
+              { label: "Codex CLI", value: "codex" },
+              { label: "Codex desktop app", value: "codex-app" },
+              { label: "Claude Code", value: "claude" },
+            ],
+            { navigation, initialValue: state.tool ?? "__none__" },
+          );
+          break;
+      }
+      index += 1;
+    } catch (error) {
+      if (!isPromptBackError(error) || index === 0) throw error;
+      index -= 1;
+      if (steps[index] === "scripts" && !state.createVerification) index -= 1;
+    }
+  }
   return {
-    fetch,
-    install,
-    copyEnvironment,
-    scripts,
-    development,
-    tool: selectedTool && selectedTool !== "__none__" ? selectedTool : undefined,
+    options: {
+      fetch: state.fetch ?? true,
+      install: state.install ?? false,
+      copyEnvironment: state.copyEnvironment ?? false,
+      scripts: state.createVerification ? (state.scripts ?? []) : [],
+      development: state.development ?? false,
+      tool: state.tool && state.tool !== "__none__" ? state.tool : undefined,
+    },
+    state,
   };
 }
+
+type TemplateStep =
+  | "fetch"
+  | "install"
+  | "environment"
+  | "development"
+  | "verification"
+  | "scripts"
+  | "tool";
+
+type TemplatePromptState = {
+  fetch?: boolean;
+  install?: boolean;
+  copyEnvironment?: boolean;
+  development?: boolean;
+  createVerification?: boolean;
+  scripts?: string[];
+  tool?: string;
+};
 
 function detectedDefaults(inspection: ProjectSetupInspection): ProjectConfigTemplateOptions {
   return {

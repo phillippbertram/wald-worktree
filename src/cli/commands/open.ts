@@ -3,7 +3,12 @@ import { z } from "zod";
 import { toErrorMessage, YggError } from "../../domain/errors.js";
 import type { ProjectConfigDocument, Worktree } from "../../domain/types.js";
 import { builtInToolNames } from "../../services/tool-service.js";
-import { isInteractiveTerminal, searchSelect } from "../../ui/terminal.js";
+import {
+  isInteractiveTerminal,
+  isPromptBackError,
+  type PromptNavigation,
+  searchSelect,
+} from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
 import { ensureTrusted, resolveWorktree, success } from "../helpers.js";
 import { nonEmptyCliString, parseCliInput } from "../input.js";
@@ -27,38 +32,82 @@ export function registerOpenCommand(program: Command, context: CliContext): void
     )
     .action(async (worktree: unknown, options: unknown) => {
       const input = parseCliInput(openInputSchema, { worktree, ...(options as object) });
-      const workspace = await context.workspaces.find();
-      const selected = await resolveWorktree(workspace, input.worktree, context.worktrees);
-      await openSelectedWorktree(selected, input.tool, context);
+      await openWorktree(input.worktree, input.tool, context);
     });
+}
+
+export async function openWorktree(
+  requestedWorktree: string | undefined,
+  requestedTool: string | undefined,
+  context: CliContext,
+): Promise<void> {
+  const workspace = await context.workspaces.find();
+  const canChooseWorktree =
+    !requestedWorktree && (await context.worktrees.list(workspace)).length > 1;
+  let forcePrompt = false;
+  let initialPath: string | undefined;
+  while (true) {
+    const selected = await resolveWorktree(workspace, requestedWorktree, context.worktrees, {
+      forcePrompt,
+      initialPath,
+      navigation: forcePrompt ? "cancel" : undefined,
+    });
+    initialPath = selected.path;
+    try {
+      await openSelectedWorktree(selected, requestedTool, context, {
+        promptNavigation: canChooseWorktree ? "back" : "cancel",
+      });
+      return;
+    } catch (error) {
+      if (!isPromptBackError(error) || !canChooseWorktree || requestedTool) throw error;
+      forcePrompt = true;
+    }
+  }
 }
 
 export async function openSelectedWorktree(
   worktree: Worktree,
   requestedTool: string | undefined,
   context: CliContext,
-  options: { silent?: boolean; project?: ProjectConfigDocument | null } = {},
+  options: {
+    silent?: boolean;
+    project?: ProjectConfigDocument | null;
+    promptNavigation?: PromptNavigation;
+  } = {},
 ): Promise<void> {
   const workspace = await context.workspaces.find();
   const project =
     options.project === undefined
       ? await context.workflow.projectForWorktree(worktree)
       : options.project;
-  await ensureTrusted(workspace, project, context);
   const available = await context.tools.availableProfiles(project);
   if (available.length === 0) throw new YggError("No supported editor or agent tool is available.");
   let tool = requestedTool ?? project?.config.defaults.tool;
-  if (!tool) {
-    if (!isInteractiveTerminal()) throw new YggError("Tool is required without a TTY. Use --tool.");
-    tool =
-      (await searchSelect(
-        `Open ${worktree.name} with:`,
+  const promptForTool = !tool;
+  while (true) {
+    if (!tool) {
+      if (!isInteractiveTerminal()) {
+        throw new YggError("Tool is required without a TTY. Use --tool.");
+      }
+      tool = await searchSelect(
+        `Open › Tool · Open ${worktree.name} with:`,
         available.map(({ name, profile }) => ({
           label: name,
           value: name,
           description: profile.description,
         })),
-      )) ?? undefined;
+        { navigation: options.promptNavigation ?? "cancel", initialValue: tool },
+      );
+    }
+    try {
+      await ensureTrusted(workspace, project, context, {
+        navigation: promptForTool ? "back" : "cancel",
+      });
+      break;
+    } catch (error) {
+      if (!isPromptBackError(error) || !promptForTool) throw error;
+      tool = undefined;
+    }
   }
   if (!tool) throw new YggError("No tool selected.");
   try {

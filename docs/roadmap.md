@@ -10,7 +10,9 @@ strengthen diagnostics before broadening the workflow model.
 
 - Validate local and project YAML, repository references, hooks, configured file steps, and tools.
 - Detect stale or inconsistent Git worktree metadata.
-- Print safe repair commands without exposing environment-file contents.
+- Print safe repair commands without exposing environment-file contents, including
+  `git worktree repair` after manual moves and `git worktree lock` for portable worktrees.
+- Keep diagnosis preview-only; do not repair or unlock worktrees automatically.
 
 ### Release readiness
 

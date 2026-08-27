@@ -1,6 +1,14 @@
-import { checkbox, input, confirm as inquirerConfirm, search, select } from "@inquirer/prompts";
+import {
+  checkbox,
+  input,
+  confirm as inquirerConfirm,
+  Separator,
+  search,
+  select,
+} from "@inquirer/prompts";
 import ora from "ora";
 import pc from "picocolors";
+import { YggError } from "../domain/errors.js";
 import type { Worktree } from "../domain/types.js";
 
 type Choice = {
@@ -8,7 +16,36 @@ type Choice = {
   value: string;
   description?: string;
   checked?: boolean;
+  group?: string;
 };
+
+export type PromptNavigation = "back" | "cancel" | "exit";
+
+type PromptOptions = {
+  navigation?: PromptNavigation;
+  initialValue?: string;
+  initialValues?: string[];
+};
+
+const backChoiceValue = "\u0000ygg-prompt-back";
+
+export class PromptBackError extends Error {
+  constructor() {
+    super("Interactive prompt went back.");
+    this.name = "PromptBackError";
+  }
+}
+
+export class PromptExitError extends YggError {
+  constructor(options?: { cause?: unknown }) {
+    super("Interactive prompt was interrupted.", { ...options, exitCode: 130 });
+    this.name = "PromptExitError";
+  }
+}
+
+export function isPromptBackError(error: unknown): error is PromptBackError {
+  return error instanceof PromptBackError;
+}
 
 export function isInteractiveTerminal(): boolean {
   return Boolean(process.stdin.isTTY && process.stdout.isTTY);
@@ -30,18 +67,28 @@ export async function runTask<T>(label: string, task: () => Promise<T>): Promise
   }
 }
 
-export async function confirm(question: string, defaultValue = false): Promise<boolean> {
-  return (
-    (await promptOrNull(() =>
-      inquirerConfirm({
-        message: question,
-        default: defaultValue,
-      }),
-    )) ?? false
+export async function confirm(
+  question: string,
+  defaultValue = false,
+  options: PromptOptions = {},
+): Promise<boolean> {
+  return await promptWithNavigation(
+    (signal) =>
+      inquirerConfirm(
+        {
+          message: promptMessage(question, options.navigation),
+          default: defaultValue,
+        },
+        { signal },
+      ),
+    options.navigation,
   );
 }
 
-export async function selectWorktree(worktrees: Worktree[]): Promise<Worktree | null> {
+export async function selectWorktree(
+  worktrees: Worktree[],
+  options: PromptOptions = {},
+): Promise<Worktree | null> {
   const selectedPath = await searchSelect(
     "Select a worktree:",
     worktrees.map((worktree) => ({
@@ -49,55 +96,87 @@ export async function selectWorktree(worktrees: Worktree[]): Promise<Worktree | 
       value: worktree.path,
       description: `${worktree.role}, ${worktree.state}`,
     })),
+    options,
   );
   return worktrees.find((worktree) => worktree.path === selectedPath) ?? null;
 }
 
-export async function selectValue(question: string, options: Choice[]): Promise<string | null> {
-  return await promptOrNull(() =>
-    select({
-      message: question,
-      choices: options.map(toInquirerChoice),
-      pageSize: 10,
-    }),
+export async function selectValue(
+  question: string,
+  choices: Choice[],
+  options: PromptOptions = {},
+): Promise<string> {
+  const selected = await promptWithNavigation(
+    (signal) =>
+      select(
+        {
+          message: promptMessage(question, options.navigation),
+          choices: toInquirerChoices(withBackChoice(choices, options.navigation)),
+          default: options.initialValue,
+          pageSize: 10,
+        },
+        { signal },
+      ),
+    options.navigation,
   );
+  return unwrapBackChoice(selected);
 }
 
-export async function searchSelect(question: string, options: Choice[]): Promise<string | null> {
-  return await promptOrNull(() =>
-    search({
-      message: question,
-      pageSize: 10,
-      source: (term) => {
-        const normalized = term?.trim().toLocaleLowerCase() ?? "";
-        return options
-          .filter((option) =>
-            `${option.label} ${option.description ?? ""}`.toLocaleLowerCase().includes(normalized),
-          )
-          .map(toInquirerChoice);
-      },
-    }),
+export async function searchSelect(
+  question: string,
+  choices: Choice[],
+  options: PromptOptions = {},
+): Promise<string> {
+  const selected = await promptWithNavigation(
+    (signal) =>
+      search(
+        {
+          message: promptMessage(question, options.navigation),
+          pageSize: 10,
+          default: options.initialValue,
+          source: (term) => {
+            const normalized = term?.trim().toLocaleLowerCase() ?? "";
+            const matches = choices.filter((option) =>
+              `${option.label} ${option.description ?? ""}`
+                .toLocaleLowerCase()
+                .includes(normalized),
+            );
+            return withBackChoice(matches, options.navigation).map(toInquirerChoice);
+          },
+        },
+        { signal },
+      ),
+    options.navigation,
   );
+  return unwrapBackChoice(selected);
 }
 
-export async function selectManyValues(question: string, options: Choice[]): Promise<string[]> {
-  return (
-    (await promptOrNull(() =>
-      checkbox({
-        message: question,
-        choices: options.map((option) => ({
-          ...toInquirerChoice(option),
-          checked: option.checked,
-        })),
-        pageSize: 10,
-      }),
-    )) ?? []
+export async function selectManyValues(
+  question: string,
+  choices: Choice[],
+  options: PromptOptions = {},
+): Promise<string[]> {
+  return await promptWithNavigation(
+    (signal) =>
+      checkbox(
+        {
+          message: promptMessage(question, options.navigation),
+          choices: choices.map((option) => ({
+            ...toInquirerChoice(option),
+            checked: options.initialValues?.includes(option.value) ?? option.checked,
+          })),
+          pageSize: 10,
+        },
+        { signal },
+      ),
+    options.navigation,
   );
 }
 
 export async function selectManyWorktrees(
   question: string,
   worktrees: Worktree[],
+  options: PromptOptions = {},
 ): Promise<Worktree[]> {
   const selectedPaths = await selectManyValues(
     question,
@@ -106,21 +185,29 @@ export async function selectManyWorktrees(
       value: worktree.path,
       description: worktree.state,
     })),
+    options,
   );
   return worktrees.filter((worktree) => selectedPaths.includes(worktree.path));
 }
 
-export async function promptText(question: string, defaultValue?: string): Promise<string> {
+export async function promptText(
+  question: string,
+  defaultValue?: string,
+  options: PromptOptions = {},
+): Promise<string> {
   return (
-    (
-      await promptOrNull(() =>
-        input({
-          message: question,
-          default: defaultValue,
-        }),
-      )
-    )?.trim() ?? ""
-  );
+    await promptWithNavigation(
+      (signal) =>
+        input(
+          {
+            message: promptMessage(question, options.navigation),
+            default: defaultValue,
+          },
+          { signal },
+        ),
+      options.navigation,
+    )
+  ).trim();
 }
 
 export async function printWorktreeTable(worktrees: Worktree[]): Promise<void> {
@@ -210,13 +297,61 @@ function toInquirerChoice(option: Choice): {
   };
 }
 
-async function promptOrNull<T>(prompt: () => Promise<T>): Promise<T | null> {
+function toInquirerChoices(
+  choices: Choice[],
+): Array<ReturnType<typeof toInquirerChoice> | Separator> {
+  const rendered: Array<ReturnType<typeof toInquirerChoice> | Separator> = [];
+  let previousGroup: string | undefined;
+  for (const choice of choices) {
+    if (choice.group && choice.group !== previousGroup) {
+      rendered.push(new Separator(choice.group));
+    }
+    rendered.push(toInquirerChoice(choice));
+    previousGroup = choice.group;
+  }
+  return rendered;
+}
+
+function withBackChoice(choices: Choice[], navigation: PromptNavigation | undefined): Choice[] {
+  if (navigation !== "back") return choices;
+  return [
+    ...choices,
+    {
+      label: "← Back",
+      value: backChoiceValue,
+      description: "Return to the previous step.",
+    },
+  ];
+}
+
+function unwrapBackChoice(value: string): string {
+  if (value === backChoiceValue) throw new PromptBackError();
+  return value;
+}
+
+function promptMessage(question: string, navigation: PromptNavigation | undefined): string {
+  const action = navigation ?? "cancel";
+  return `${question} ${pc.dim(`[Esc ${action} · Ctrl+C exit]`)}`;
+}
+
+async function promptWithNavigation<T>(
+  prompt: (signal: AbortSignal) => Promise<T>,
+  _navigation: PromptNavigation | undefined,
+): Promise<T> {
+  const controller = new AbortController();
+  const onKeypress = (_input: string, key: { name?: string; ctrl?: boolean } | undefined): void => {
+    if (key?.name === "escape" && !key.ctrl) controller.abort();
+  };
+  process.stdin.on("keypress", onKeypress);
   try {
-    return await prompt();
+    return await prompt(controller.signal);
   } catch (error) {
+    if (error instanceof Error && error.name === "AbortPromptError") throw new PromptBackError();
     if (error instanceof Error && error.name === "ExitPromptError") {
-      return null;
+      throw new PromptExitError({ cause: error });
     }
     throw error;
+  } finally {
+    process.stdin.off("keypress", onKeypress);
   }
 }

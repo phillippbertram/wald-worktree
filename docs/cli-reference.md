@@ -3,6 +3,9 @@
 This document describes the complete public `ygg` command surface. Run `ygg <command> --help` for the
 same signatures and concise inline examples.
 
+For the underlying mental model and visual workflows, start with
+[Worktrees explained](worktrees.md).
+
 ## General behavior
 
 ```text
@@ -10,7 +13,20 @@ ygg [--version] [--help] <command>
 ```
 
 Run `ygg` without a command for the guided menu. Direct commands are deterministic and are preferred
-for scripts and agents.
+for scripts and agents. The guided menu remains open after an action, refreshes the workspace state,
+and returns to the action list. Expected command errors are shown there without closing the session.
+
+Interactive prompts use the same navigation throughout:
+
+| Input | Behavior |
+| --- | --- |
+| `Esc` | Return one prompt step; cancel at a command's first prompt; exit from the main menu. |
+| `← Back` | Visible back action in nested single-choice menus. |
+| `Ctrl-C` | Exit the complete Ygg process with status 130. |
+
+Entered values and selections are retained when moving back. `No`, empty text, and empty checkbox
+selections remain regular answers rather than cancellation signals. Navigation does not cross an
+already completed workspace or worktree mutation.
 
 A worktree identifier may be its directory name, branch, or path. When an optional identifier is
 omitted, `ygg` uses the current worktree, the only worktree, or an interactive selection. Without a
@@ -27,8 +43,26 @@ ygg init --adopt [path] [options]
 ```
 
 Without explicit arguments in a terminal, `ygg init` inspects the current directory and guides the
-user through keeping an existing checkout or creating a standalone workspace. With `repository`, it
-clones a remote or local Git repository into a standalone workspace.
+user through keeping an existing checkout or creating a standalone workspace. Outside a Git
+repository, it offers separate paths for cloning a remote URL or selecting a local checkout or bare
+repository. A selected local repository gets the same keep-or-copy choice. With `repository`, the
+direct command clones a remote or local repository into a standalone workspace.
+
+The guided flow validates the target, previews absolute paths and the resulting directory tree, then
+asks `Initialize this workspace?`. Workspace creation, the optional default-branch worktree, and
+the optional `.ygg.yml` wizard are separate phases. Declining a later phase keeps the initialized
+workspace and prints the corresponding next command.
+
+The source, repository settings, destination, worktree layout, and final plan form a navigable
+sequence. After workspace creation, `Esc` only cancels the optional worktree or project-automation
+phase; it cannot return to the source or layout choices.
+
+When retaining a checkout, relative worktree-directory names resolve beside it and absolute paths
+are used directly. A bare source is described as a repository rather than a checkout. Local
+standalone clones use independent object files without hardlinks; working-tree and ignored files,
+stashes, and detached commits without a branch are not copied. Empty repositories without a
+committed branch are not supported yet. See [workspace layouts](worktrees.md#workspace-layouts) for
+the visual comparison.
 
 | Argument or option | Meaning |
 | --- | --- |
@@ -44,6 +78,7 @@ clones a remote or local Git repository into a standalone workspace.
 
 Non-interactive adoption requires `--adopt` and `--yes`. Clone mode cannot be combined with adoption
 options. Initialization never moves or deletes an existing checkout and never commits `.ygg.yml`.
+Direct and non-interactive invocations do not show the guided preview.
 
 ```sh
 ygg init git@github.com:example/project.git ~/dev/project

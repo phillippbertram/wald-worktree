@@ -3,7 +3,7 @@ import { z } from "zod";
 import { toErrorMessage, YggError } from "../../domain/errors.js";
 import type { Worktree } from "../../domain/types.js";
 import { builtInToolNames } from "../../services/tool-service.js";
-import { runTask } from "../../ui/terminal.js";
+import { isPromptBackError, runTask } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
 import {
   chooseBranch,
@@ -104,6 +104,13 @@ export async function createWorktree(input: CreateInput, context: CliContext): P
         project: await context.workflow.projectForWorktree(created),
       });
     } catch (error) {
+      if (isPromptBackError(error)) {
+        await success(
+          `Created ${created.name} at ${created.path}; opening was cancelled.`,
+          context.output,
+        );
+        return created;
+      }
       throw new YggError(
         `Worktree was created at ${created.path}, but opening it failed: ${toErrorMessage(error)}`,
         { cause: error },

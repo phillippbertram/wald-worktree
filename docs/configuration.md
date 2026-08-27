@@ -3,6 +3,9 @@
 `ygg` has one local configuration, one local shared-file area, and one optional project
 configuration. Both YAML documents are strict and versioned; unknown fields are errors.
 
+Read [Worktrees explained](worktrees.md) first if the distinction between the shared repository and
+per-worktree state is unfamiliar.
+
 ## Local workspace configuration
 
 Dedicated workspaces store `.ygg/workspace.yml`. Adopted repositories store
@@ -86,6 +89,21 @@ the Git directory and primary checkout. The physical configuration and shared fi
 `<git-common-dir>/ygg`; the worktree container contains a `.ygg` link to them. `ygg config` prints the
 canonical `workspace_config`, `workspace_root`, `worktrees_path`, and `shared_path` for both layouts.
 
+```text
+parent/
+├── project/                         existing primary checkout
+│   └── .git/ygg/
+│       ├── workspace.yml
+│       └── shared/
+└── project-worktrees/
+    └── .ygg -> ../project/.git/ygg
+```
+
+The conceptual shared-versus-local boundary is shown in
+[Shared and independent state](worktrees.md#shared-and-independent-state). A separate workspace
+copied from a local repository starts with independent Git object files and does not use local clone
+hardlinks.
+
 ### Local shared files
 
 Every initialized workspace owns a `.ygg/shared` directory. It is local, created with directory mode
@@ -103,12 +121,22 @@ ygg config init [worktree]
 The wizard detects npm, pnpm, Yarn, or Bun, package scripts, and files such as `.env.example`. It can
 add an install hook, an environment copy step, a `verify` task, a separate `dev` task for an exact
 `dev` package script, and a default tool. The long-running `dev` script is never added to the
-one-shot `verify` task.
+one-shot `verify` task. Interactive setup asks whether to create the `verify` task before offering
+individual scripts; declining or selecting no scripts omits the task.
+
+`Esc` returns to the preceding wizard step and restores the previous answer as its default. Nested
+single-choice prompts also show `← Back`; `Ctrl-C` exits Ygg. From the final preview, going back
+returns to the tool choice without discarding the other detected setup decisions.
 
 For scripts, use `ygg config init --yes`; use `--force` separately when an existing file may be
-replaced. Interactive `ygg init` offers the same wizard after retaining a checkout or creating the
-default worktree in a standalone workspace. Automatic project detection currently covers Node
-package managers; other ecosystems use manually configured commands.
+replaced. `--yes` keeps the detected recommended verify scripts. Interactive `ygg init` offers the
+same wizard after retaining a checkout or creating the default worktree in a standalone workspace.
+Automatic project detection currently covers Node package managers; other ecosystems use manually
+configured commands.
+
+During guided initialization this wizard is presented as a separate optional phase after the
+workspace and, for standalone layouts, the first worktree are ready. Cancelling it does not roll back
+the initialized workspace.
 
 `.ygg.yml` is repository-owned behavior. Review and commit it on the branch used as the base for
 future worktrees before expecting those worktrees to use it:

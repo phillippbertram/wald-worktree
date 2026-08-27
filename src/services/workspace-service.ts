@@ -18,6 +18,20 @@ export type ManagedInitializationOptions = {
   worktreeDir?: string;
 };
 
+export type ManagedInitializationPlan = {
+  root: string;
+  gitDir: string;
+  metadataDir: string;
+  sharedDir: string;
+  worktreeDir: string;
+  configPath: string;
+  rootExisted: boolean;
+};
+
+export type AdoptionValidation = {
+  worktreeDirExisted: boolean;
+};
+
 export type AdoptionWorktree = Pick<
   Worktree,
   "path" | "branch" | "branchRef" | "locked" | "lockReason" | "prunable"
@@ -58,30 +72,22 @@ export class WorkspaceService {
     startDirectory = process.cwd(),
     options: ManagedInitializationOptions = {},
   ): Promise<Workspace> {
-    const root = path.resolve(startDirectory, directory ?? humanizeRepositoryName(repository));
-    const gitDir = path.join(root, "repo.git");
-    const metadataDir = path.join(root, ".ygg");
-    const sharedDir = path.join(metadataDir, "shared");
-    const worktreeDir = resolveManagedWorktreeDir(root, options.worktreeDir);
-    const configPath = path.join(metadataDir, workspaceConfigFileName);
-    const rootExisted = await this.pathExists(root);
-
-    if (rootExisted) {
-      const entries = await fs.readdir(root);
-      if (entries.length > 0) {
-        throw new YggError(`Target directory is not empty: ${root}`);
-      }
-    } else {
-      await fs.mkdir(root, { recursive: true });
-    }
+    const plan = await this.planManagedInitialization(
+      repository,
+      directory,
+      startDirectory,
+      options,
+    );
+    const { root, gitDir, metadataDir, sharedDir, worktreeDir, configPath, rootExisted } = plan;
 
     try {
+      if (!rootExisted) await fs.mkdir(root, { recursive: true });
       await fs.mkdir(metadataDir, { mode: 0o700 });
       await fs.mkdir(sharedDir, { mode: 0o700 });
       if (worktreeDir !== root) {
         await fs.mkdir(worktreeDir, { recursive: true });
       }
-      await this.git.run(["clone", "--bare", "--", repository, gitDir], {
+      await this.git.run(["clone", "--bare", "--no-hardlinks", "--", repository, gitDir], {
         cwd: startDirectory,
       });
       const remote = createRemote("origin");
@@ -123,6 +129,44 @@ export class WorkspaceService {
       }
       throw error;
     }
+  }
+
+  async planManagedInitialization(
+    repository: string,
+    directory?: string,
+    startDirectory = process.cwd(),
+    options: ManagedInitializationOptions = {},
+  ): Promise<ManagedInitializationPlan> {
+    const requestedRoot = path.resolve(
+      startDirectory,
+      directory ?? humanizeRepositoryName(repository),
+    );
+    const rootExisted = await this.pathExists(requestedRoot);
+    const root = rootExisted ? await canonicalPath(requestedRoot) : requestedRoot;
+    if (rootExisted) {
+      const stat = await fs.stat(root);
+      if (!stat.isDirectory()) {
+        throw new YggError(`Target path is not a directory: ${root}`);
+      }
+      const entries = await fs.readdir(root);
+      if (entries.length > 0) {
+        throw new YggError(`Target directory is not empty: ${root}`);
+      }
+    }
+
+    const gitDir = path.join(root, "repo.git");
+    const metadataDir = path.join(root, ".ygg");
+    const sharedDir = path.join(metadataDir, "shared");
+    const worktreeDir = resolveManagedWorktreeDir(root, options.worktreeDir);
+    return {
+      root,
+      gitDir,
+      metadataDir,
+      sharedDir,
+      worktreeDir,
+      configPath: path.join(metadataDir, workspaceConfigFileName),
+      rootExisted,
+    };
   }
 
   async inspectAdoption(
@@ -246,21 +290,13 @@ export class WorkspaceService {
       throw new YggError("Could not determine the default branch.");
     }
 
-    const root = path.resolve(startDirectory, directory);
-    const gitDir = path.join(root, "repo.git");
-    const metadataDir = path.join(root, ".ygg");
-    const sharedDir = path.join(metadataDir, "shared");
-    const worktreeDir = resolveManagedWorktreeDir(root, options.worktreeDir);
-    const configPath = path.join(metadataDir, workspaceConfigFileName);
-    const rootExisted = await this.pathExists(root);
-    if (rootExisted) {
-      const entries = await fs.readdir(root);
-      if (entries.length > 0) {
-        throw new YggError(`Target directory is not empty: ${root}`);
-      }
-    } else {
-      await fs.mkdir(root, { recursive: true });
-    }
+    const plan = await this.planManagedInitialization(
+      inspection.source,
+      directory,
+      startDirectory,
+      options,
+    );
+    const { root, gitDir, metadataDir, sharedDir, worktreeDir, configPath, rootExisted } = plan;
 
     const cloneSource = inspection.primaryWorktree ?? inspection.gitDir;
     const remoteUrl = inspection.remoteName
@@ -268,12 +304,13 @@ export class WorkspaceService {
       : null;
 
     try {
+      if (!rootExisted) await fs.mkdir(root, { recursive: true });
       await fs.mkdir(metadataDir, { mode: 0o700 });
       await fs.mkdir(sharedDir, { mode: 0o700 });
       if (worktreeDir !== root) {
         await fs.mkdir(worktreeDir, { recursive: true });
       }
-      await this.git.run(["clone", "--bare", "--", cloneSource, gitDir], {
+      await this.git.run(["clone", "--bare", "--no-hardlinks", "--", cloneSource, gitDir], {
         cwd: startDirectory,
       });
       await this.git.run(["remote", "remove", "origin"], { gitDir, reject: false });
@@ -329,45 +366,16 @@ export class WorkspaceService {
     if (inspection.existingWorkspace) {
       return inspection.existingWorkspace;
     }
-    if (inspection.remoteSelectionRequired) {
-      throw new YggError("Multiple remotes found. Select one with --remote or use --no-remote.");
-    }
-    if (!inspection.defaultBranch) {
+    await this.validateAdoption(inspection);
+    const defaultBranch = inspection.defaultBranch;
+    if (!defaultBranch) {
       throw new YggError("Could not determine the default branch. Use --default-branch.");
     }
-    if (inspection.worktreeDirSelectionRequired) {
-      throw new YggError("Could not select a safe worktree directory. Use --worktrees-dir.");
-    }
-
-    await this.validateWorktreeDir(inspection.worktreeDir, inspection.gitDir);
-    if (inspection.remoteName) {
-      const remotes = await this.readRemotes(inspection.gitDir);
-      if (!remotes.includes(inspection.remoteName)) {
-        throw new YggError(`Git remote no longer exists: ${inspection.remoteName}`);
-      }
-    }
-    await this.validateDefaultBranch(
-      inspection.gitDir,
-      inspection.defaultBranch,
-      inspection.remoteName,
-    );
 
     const metadataDir = inspection.metadataDir;
     const configPath = path.join(metadataDir, workspaceConfigFileName);
     const markerPath = path.join(inspection.worktreeDir, ".ygg");
-    const metadataExisted = await this.pathExists(metadataDir);
     const worktreeDirExisted = await this.pathExists(inspection.worktreeDir);
-    const markerExisted = await lstatOrNull(markerPath);
-
-    if (metadataExisted) {
-      throw new YggError(`Adoption metadata already exists without a valid config: ${metadataDir}`);
-    }
-    if (markerExisted) {
-      throw new YggError(`Worktree directory already contains a .ygg entry: ${markerPath}`);
-    }
-    if (worktreeDirExisted && !(await fs.stat(inspection.worktreeDir)).isDirectory()) {
-      throw new YggError(`Worktree directory is not a directory: ${inspection.worktreeDir}`);
-    }
 
     let createdMetadata = false;
     let createdMarker = false;
@@ -393,7 +401,7 @@ export class WorkspaceService {
             : null,
         },
         remote: inspection.remoteName ? createRemote(inspection.remoteName) : null,
-        defaultBranch: inspection.defaultBranch,
+        defaultBranch,
         trustedProjectConfig: null,
       };
 
@@ -413,6 +421,49 @@ export class WorkspaceService {
       }
       throw error;
     }
+  }
+
+  async validateAdoption(inspection: AdoptionInspection): Promise<AdoptionValidation> {
+    if (inspection.remoteSelectionRequired) {
+      throw new YggError("Multiple remotes found. Select one with --remote or use --no-remote.");
+    }
+    if (!inspection.defaultBranch) {
+      throw new YggError("Could not determine the default branch. Use --default-branch.");
+    }
+    if (inspection.worktreeDirSelectionRequired) {
+      throw new YggError("Could not select a safe worktree directory. Use --worktrees-dir.");
+    }
+
+    await this.validateWorktreeDir(inspection.worktreeDir, inspection.gitDir);
+    if (inspection.remoteName) {
+      const remotes = await this.readRemotes(inspection.gitDir);
+      if (!remotes.includes(inspection.remoteName)) {
+        throw new YggError(`Git remote no longer exists: ${inspection.remoteName}`);
+      }
+    }
+    await this.validateDefaultBranch(
+      inspection.gitDir,
+      inspection.defaultBranch,
+      inspection.remoteName,
+    );
+
+    const metadataExisted = await this.pathExists(inspection.metadataDir);
+    const worktreeDirExisted = await this.pathExists(inspection.worktreeDir);
+    const markerPath = path.join(inspection.worktreeDir, ".ygg");
+    const markerExisted = await lstatOrNull(markerPath);
+
+    if (metadataExisted) {
+      throw new YggError(
+        `Adoption metadata already exists without a valid config: ${inspection.metadataDir}`,
+      );
+    }
+    if (markerExisted) {
+      throw new YggError(`Worktree directory already contains a .ygg entry: ${markerPath}`);
+    }
+    if (worktreeDirExisted && !(await fs.stat(inspection.worktreeDir)).isDirectory()) {
+      throw new YggError(`Worktree directory is not a directory: ${inspection.worktreeDir}`);
+    }
+    return { worktreeDirExisted };
   }
 
   async find(startDirectory = process.cwd()): Promise<Workspace> {
@@ -561,7 +612,25 @@ export class WorkspaceService {
       reject: false,
     });
     if (localHead.exitCode === 0) {
-      return localHead.stdout.replace(/^refs\/heads\//u, "");
+      const branch = localHead.stdout.replace(/^refs\/heads\//u, "");
+      if (
+        await this.git.succeeds(
+          ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}^{commit}`],
+          { gitDir },
+        )
+      ) {
+        return branch;
+      }
+    }
+
+    const commit = await this.git.run(["rev-list", "--all", "--max-count=1"], {
+      gitDir,
+      reject: false,
+    });
+    if (commit.exitCode === 0 && !commit.stdout) {
+      throw new YggError(
+        "Repository has no commits. Ygg requires an existing branch with at least one commit.",
+      );
     }
 
     throw new YggError("Could not determine the repository's default branch.");

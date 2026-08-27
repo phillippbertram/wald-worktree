@@ -2,51 +2,93 @@
 
 **Ygg — Git workspaces, rooted together.**
 
-Ygg turns Git worktrees into predictable development environments. Keep a feature, a hotfix, a
-review, and a coding agent open at the same time without cloning the repository again or constantly
-switching one checkout back and forth.
+Keep your feature open. Fix production in parallel. Review a teammate's branch without stashing half
+your day away. Ygg turns Git worktrees into tidy, ready-to-use development environments.
 
-Git remains the source of truth. `ygg` adds stable paths, branch resolution, repeatable setup,
-navigation, editor and agent launching, trusted project tasks, and safe cleanup.
+![Yggdrasil connecting one Git repository to several independent worktrees](docs/assets/yggdrasil-worktrees.png)
 
 ## 🌿 Why Ygg?
 
-Ygg is short for **Yggdrasil**, the world tree from Norse mythology. Yggdrasil connects different
-worlds through one living structure; Ygg applies that image to Git workspaces. The shared Git
-repository forms the roots and trunk, while each worktree is an independent branch or connected
-world with its own checked-out files, dependencies, and running processes. They remain rooted in the
-same Git history even while work continues in parallel.
+Ygg is short for **Yggdrasil**, the world tree from Norse mythology. Its roots and trunk hold
+different worlds together without turning them into the same place.
+
+That is the idea behind Ygg: one Git repository forms the shared root, while every feature, hotfix,
+review, or coding agent grows in its own worktree. Each world gets its own files and processes, but
+they all stay connected through the same Git history.
 
 ## 🌱 Why worktrees?
 
-A Git branch names a line of development, but a normal checkout still shows only one branch at a
-time. Switching branches replaces the files in that directory. An urgent fix therefore often means
-stashing unfinished work, stopping processes, switching dependencies, and later rebuilding the
-previous context.
+Branches are excellent at organizing history, but a normal checkout still gives you only one set of
+files at a time. A worktree turns another branch into another real project folder.
 
-[Git worktrees](https://git-scm.com/docs/git-worktree) attach multiple working directories to one
-repository. They share Git history and refs, while each worktree has its own checked-out files,
-`HEAD`, and index. That makes workflows possible that branching alone does not provide in one
-checkout:
+[Git worktrees](https://git-scm.com/docs/git-worktree) let one repository support several of these
+folders at once. No repeated cloning, no forced context switch, and no need to hide unfinished work
+just to look at something else.
 
-- keep unfinished feature files untouched while fixing production;
-- compare or test two branches side by side;
-- run separate development processes without repeatedly switching files;
-- give each editor or coding agent an isolated checkout;
-- review a remote branch while continuing work elsewhere.
+When production breaks during unfinished feature work, that changes the workflow:
 
-The [Git branching introduction](https://git-scm.com/book/en/v2/Git-Branching-Branches-in-a-Nutshell)
-explains branches themselves. Worktrees complement them; they do not replace them.
+```mermaid
+flowchart TB
+    Problem["Production bug<br/>feature has uncommitted work"]
 
-Native `git worktree` commands provide the foundation. `ygg` handles the repeated policy around
-them: where checkouts live, whether a branch is local or remote, which setup runs, how local files
-arrive, which tool opens, and whether cleanup is safe.
+    Problem --> Switch["One checkout"]
+    Switch --> Stash["Stash or create a WIP commit"]
+    Stash --> Change["Switch branch and rebuild context"]
+    Change --> Fix1["Fix and verify"]
+    Fix1 --> Return["Switch back and restore the feature"]
 
-## 🌲 Quick start
+    Problem --> Parallel["Worktrees with Ygg"]
+    Parallel --> Keep["Keep the feature folder untouched"]
+    Keep --> Fix2["Create, fix, and verify in a hotfix folder"]
+    Fix2 --> Remove["Remove the finished folder"]
+```
+
+The useful boundary is simple:
+
+| Shared through Git | Independent in each worktree |
+| --- | --- |
+| Commits and Git objects | Checked-out files |
+| Branches and tags | `HEAD` and index |
+| Remotes and fetched refs | Dependencies and build output |
+| Stashes and normal repository config | Editors and running processes |
+
+Separate folders isolate files, not external resources. Two development servers may still compete
+for the same port or database.
+
+### A quick rule of thumb
+
+| Situation | Best fit |
+| --- | --- |
+| An urgent task would interrupt unfinished work | Create another worktree. |
+| A review or test must run beside current development | Create another worktree. |
+| Two editors or agents must not share staged or generated files | Give each one a worktree. |
+| One small task is active and switching has no setup cost | A normal branch switch is enough. |
+
+Want a gentler tour through the idea? [Worktrees explained](docs/worktrees.md) walks through the
+mental model, real examples, layouts, and common pitfalls.
+
+## 🌲 What Ygg adds
+
+Git already provides the powerful `git worktree` foundation. Ygg takes care of the ceremony around
+it: predictable paths, branch resolution, trusted setup, navigation, tools, and safe cleanup.
+
+```mermaid
+flowchart TB
+    Intent["Create a feature, hotfix, review, or agent workspace"]
+    Intent --> Ygg["Ygg"]
+    Ygg --> Resolve["Resolve local or remote branch"]
+    Resolve --> Create["Create at a predictable path"]
+    Create --> Setup["Run trusted setup and link local files"]
+    Setup --> Open["Enter it or open an editor or agent"]
+    Open --> Safe["Verify and remove with safety checks"]
+    Safe --> Git["Git worktree and repository state"]
+```
+
+## 🚀 Get started
 
 Requirements: Node.js 22.13 or newer, pnpm 11, and Git.
 
-The CLI is not published to npm yet. Install it from this repository:
+Until Ygg is published to npm, install it directly from this repository:
 
 ```sh
 git clone git@github.com:phillippbertram/ygg-worktree.git
@@ -56,46 +98,92 @@ pnpm run link:global
 ygg --help
 ```
 
-Ygg is a clean rename of the earlier private `worktree-cli` prototype. Legacy `.wt` workspaces and
-`.wt.yml` files are not migrated automatically; initialize them again with Ygg or rename them
-manually before use.
+### 1. Set up your workspace
 
-Create a standalone workspace from a remote repository:
+From a remote repository:
 
 ```sh
 ygg init git@github.com:example/project.git ~/dev/project
-cd ~/dev/project
-ygg create main --cd
-ygg create feature/payment --tool code
 ```
 
-The default layout keeps one shared Git repository and multiple independent checkouts together:
-
-```text
-project/
-├── .ygg/
-│   ├── workspace.yml
-│   └── shared/
-├── repo.git/
-├── main/
-└── feature-payment/
-```
-
-Already have a checkout? Run the guided setup from it:
+Or keep an existing checkout exactly where it is and use the guided setup:
 
 ```sh
 cd ~/dev/project
 ygg init
 ```
 
-Choose whether to keep that checkout and place new worktrees beside it, or create a new standalone
-workspace from its committed history. The original checkout is never moved or deleted. Run `ygg`
-without arguments for an interactive home with the current workspace, worktree count, and a changing
-Ygg thought before the guided menu.
+Ygg validates the choices, previews absolute paths and the resulting tree, and asks before
+initializing anything. See [workspace layouts](docs/worktrees.md#workspace-layouts) for standalone,
+grouped, and retained-checkout variants.
 
-## Shell integration
+### Prefer a guided menu?
 
-Shell integration lets `ygg cd` and `ygg create --cd` change the current terminal:
+Run `ygg` without a command. The menu stays open, refreshes the workspace after every action, and
+always brings you back to an up-to-date overview.
+
+| Key or choice | Result |
+| --- | --- |
+| `Enter` | Accept the highlighted or entered value. |
+| `Esc` | Go back one step; at the first prompt cancel the command, and in the main menu exit. |
+| `← Back` | Visible equivalent to `Esc` in nested single-choice menus. |
+| `Ctrl-C` | Exit Ygg immediately with status 130. |
+
+Previous answers remain selected when moving back. Choosing `No`, submitting empty text, or making
+an empty checkbox selection keeps its normal meaning and is not treated as `Esc`. Once a workspace
+or worktree has been created, navigation never rolls that change back; cancelling optional setup
+instead prints what remains and how to continue later.
+
+### 2. Add your first worktrees
+
+```sh
+cd ~/dev/project
+ygg create main --cd
+ygg create feature/payment --tool code
+```
+
+The recommended flat workspace is easy to scan:
+
+```text
+project/
+├── .ygg/                    local Ygg configuration and shared files
+├── repo.git/                shared Git repository, no files checked out here
+├── main/                    main branch worktree
+└── feature-payment/         feature/payment branch worktree
+```
+
+Branch separators become hyphens in default directory names. Use `ygg list` to see the exact branch,
+state, and path of every worktree.
+
+### 3. Work, verify, and tidy up
+
+```sh
+ygg list
+ygg run verify feature-payment
+ygg remove feature-payment
+```
+
+`ygg run verify` is available when the repository defines that task in `.ygg.yml`. Removal checks
+for modified files, unmerged work, and locks before deleting the linked checkout. It never deletes
+the branch. If project setup failed during creation, fix the cause and retry it with `ygg setup
+feature-payment`.
+
+## 🌿 Pick the workflow that fits your day
+
+| Goal | Create | Finish |
+| --- | --- | --- |
+| Fix production beside unfinished work | `ygg create hotfix/payment --from release/1.x --tool code` | `ygg remove hotfix-payment` |
+| Review a remote branch locally | `ygg create contributor/payment-fix --tool code` | Run the configured checks, then remove it |
+| Run a long test beside development | `ygg create experiment/migration --cd` | Remove it after the experiment |
+| Give two agents separate files | `ygg create feature/api` and `ygg create feature/ui` | Open each agent in a separate terminal; verify and remove independently |
+
+Ygg reuses a local branch, tracks a matching branch from the configured remote, or creates a new
+branch from the default branch. Use `--from HEAD` only when new work should start from the current
+worktree's exact commit.
+
+## Move between worktrees without friction
+
+Shell integration lets `ygg cd` and `ygg create --cd` take you straight to the selected worktree:
 
 ```sh
 # zsh
@@ -108,163 +196,56 @@ eval "$(ygg completion bash)"
 ygg completion fish | source
 ```
 
-Add the matching line to your shell configuration to enable it in future terminals. Without the
-integration, `ygg cd` prints the canonical path and `ygg create --cd` prints a normal `cd` fallback.
+Add the matching line to your shell configuration once and navigation feels just like a built-in
+shell command. Without it, `ygg cd` still prints the canonical path and `ygg create --cd` prints a
+normal `cd` fallback.
 
-## 🌿 Everyday development flows
+## Make every worktree feel ready
 
-### Fix production without disturbing a feature
-
-Keep the current feature checkout, processes, and uncommitted files exactly as they are:
-
-```sh
-# In the existing feature worktree
-ygg create hotfix/payment --from release/1.x --tool code
-
-# After the hotfix is merged
-ygg remove hotfix-payment
-```
-
-The hotfix has its own directory and dependencies. Removal checks for dirty files, an unmerged
-branch, and locks before deleting the worktree directory. The branch itself is preserved.
-
-### Review a remote branch beside your own work
-
-```sh
-ygg create contributor/payment-fix --tool code
-ygg run verify contributor-payment-fix
-ygg remove contributor-payment-fix
-```
-
-After fetching, `ygg create` reuses a local branch, tracks a matching remote branch, or creates a new
-branch from the configured default branch. Branch separators become hyphens in directory names, so
-`contributor/payment-fix` becomes `contributor-payment-fix`.
-
-### Give parallel agents separate checkouts
-
-```sh
-ygg create feature/api --tool codex
-ygg create feature/ui --tool codex-app
-ygg list
-```
-
-Built-in profiles cover Code, Cursor, Zed, Codex, Codex App, and Claude. A repository can define
-additional profiles in `.ygg.yml`. Each agent receives a real Git checkout instead of sharing staged,
-unstaged, and generated files with another task.
-
-### Start stacked work from the current commit
-
-```sh
-cd ~/dev/project/feature-base
-ygg create feature/follow-up --from HEAD --cd
-```
-
-An explicit `--from HEAD` resolves the commit of the worktree from which the command is run. Without
-`--from`, a new branch always starts from the workspace's configured default branch.
-
-### Prepare every worktree the same way
-
-Commit a `.ygg.yml` so every developer gets the same install and task flow while local secrets stay
-outside Git:
-
-```yaml
-version: 1
-
-hooks:
-  post_create:
-    - type: command
-      argv: [pnpm, install, --frozen-lockfile]
-    - type: symlink
-      source: shared
-      from: env
-      glob: "**/.env*"
-      to: .
-
-tasks:
-  verify:
-    description: Run checks before review
-    steps:
-      - type: command
-        argv: [pnpm, lint]
-      - type: command
-        argv: [pnpm, test]
-  dev:
-    steps:
-      - type: command
-        argv: [pnpm, dev]
-```
-
-Place centrally maintained files below `.ygg/shared/env` using repository-relative paths:
-
-```text
-.ygg/shared/env/
-├── .env
-├── apps/api/.env
-└── apps/web/.env.local
-```
-
-The single glob step creates `.env`, `apps/api/.env`, and `apps/web/.env.local` in each target
-worktree. `symlink` keeps them connected to the shared files; use `copy` for independent snapshots.
-
-Create and review the project configuration before trusting it:
+A repository can commit `.ygg.yml` so a fresh worktree does not feel half-finished. Install
+dependencies, copy or link local files, expose named tasks, and define editor or agent profiles once
+for the whole project.
 
 ```sh
 ygg config init
 git diff -- .ygg.yml
-git add .ygg.yml
-git commit -m "chore: configure worktree setup"
 ygg config trust
 ```
 
-Hooks, tasks, file steps, and custom tools are executable behavior. Formatting-only YAML changes
-preserve trust; behavioral changes require a new approval. If `post_create` fails, the new checkout
-is kept so setup can be retried:
+See [Configuration](docs/configuration.md) for the YAML schema, local shared files, lifecycle hooks,
+tasks, tools, and trust model. Ygg always asks you to review and trust executable project behavior
+locally before running it.
 
-```sh
-ygg setup feature-payment
-```
+## Clean up with confidence
 
-### Remove worktrees and prune stale metadata
-
-These commands solve different cleanup problems:
-
-| Goal | Command | What it removes |
+| Goal | Command | Result |
 | --- | --- | --- |
-| Finish with an existing worktree | `ygg remove feature-payment` | The checked-out directory, never the branch. |
-| Inspect metadata for a directory deleted outside Git | `ygg prune` | Nothing; this is a preview. |
-| Apply that metadata cleanup | `ygg prune --apply` | Only stale Git worktree registrations. |
+| Finish with an existing worktree | `ygg remove feature-payment` | Removes the checkout directory, never the branch. |
+| Inspect metadata for a directory deleted outside Git | `ygg prune` | Preview only; changes nothing. |
+| Apply that metadata cleanup | `ygg prune --apply` | Removes only stale Git worktree registrations. |
 
-Scripts must confirm destructive actions explicitly:
+Let Ygg do the tidying instead of moving or deleting linked worktree folders manually. `ygg remove`
+checks their state first; `ygg prune` is the recovery path for administrative metadata after a
+folder is already missing.
 
-```sh
-ygg remove feature-payment --yes
-ygg prune --apply --yes
-```
+## Keep exploring
 
-`ygg prune` never deletes a directory or branch. Locked registrations are preserved.
-
-## 🌳 Configuration model
-
-Configuration and local files have separate owners:
-
-| Location | Owner | Purpose |
-| --- | --- | --- |
-| `.ygg/workspace.yml` | Local workspace | Git, worktree, remote, default-branch, and trust state. |
-| `.ygg/shared/` | Local workspace | Secrets and shared local files used by trusted setup steps. |
-| `.ygg.yml` | Git repository | Committed hooks, tasks, file steps, and tool profiles. |
-
-Use `ygg config` to print the resolved workspace, worktree, shared-file, and project-configuration
-paths.
-
-## Documentation
-
+- [Worktrees explained](docs/worktrees.md): mental model, visual workflows, layouts, and pitfalls.
 - [CLI reference](docs/cli-reference.md): every command, argument, option, and non-interactive rule.
-- [Configuration](docs/configuration.md): complete YAML schema, trust model, hooks, tasks, files, and
-  tools.
-- [Agent workflows](docs/agent-workflows.md): using isolated worktrees with coding agents.
+- [Configuration](docs/configuration.md): YAML schema, trust model, hooks, tasks, files, and tools.
+- [Agent workflows](docs/agent-workflows.md): isolated worktrees for coding agents.
 - [Roadmap](docs/roadmap.md): intentionally deferred capabilities.
 
-## Development
+## ☕ Support Ygg
+
+If Ygg saves you a few stashes, context switches, or accidental branch mix-ups, you can support its
+development with a coffee:
+
+<a href="https://www.buymeacoffee.com/phillippbertram" target="_blank">
+  <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="60" width="217" />
+</a>
+
+## Build Ygg with us
 
 ```sh
 pnpm lint
@@ -273,8 +254,11 @@ pnpm test
 pnpm build
 ```
 
-Remove the global source link with `pnpm run unlink:global`. For development without a global link,
-use `pnpm dev -- --help`.
+Remove the global source link with `pnpm run unlink:global`. To explore the CLI without installing
+it globally, use `pnpm dev -- --help`.
+
+Ygg is a clean rename of the earlier private `worktree-cli` prototype. Legacy `.wt` workspaces and
+`.wt.yml` files are not migrated automatically.
 
 ## License
 
