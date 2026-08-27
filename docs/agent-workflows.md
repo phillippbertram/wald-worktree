@@ -64,6 +64,21 @@ ygg remove feature-ui
 Removal preserves each branch. If another person or agent still needs a worktree, do not remove it
 without an explicit handoff.
 
+## Hand off unfinished code
+
+When unfinished local code should continue on a fresh branch, run the handoff from its current
+worktree:
+
+```sh
+ygg handoff feature/review --tool codex
+```
+
+Ygg creates the branch at the current `HEAD`, reproduces staged, unstaged, and non-ignored untracked
+state in the new worktree, verifies both sides, and keeps the source unchanged. `ygg create
+feature/review --carry` uses the same lifecycle. This transfers code only: start the new editor or
+agent separately, and explicitly pass it any task context. Running processes and agent sessions do
+not move between worktrees.
+
 ## Operating rules for agents
 
 - Start with `ygg status --json` to understand the current context and local tracking state.
@@ -74,10 +89,12 @@ without an explicit handoff.
   checks remain consistent.
 - Use either `--tool` to open an agent or `--cd` to enter the worktree during creation; they cannot
   be combined.
+- Use `ygg handoff <new-branch>` only when duplicating the current local code is intended; after
+  success, the changes exist in both worktrees.
 - Inspect dirty, unmerged, and locked state before any forced removal.
 
-Ygg deliberately does not orchestrate multiple agents, transfer patches, or infer handoffs. Those
-operations require ownership and permission models outside the v1 workspace lifecycle.
+Ygg deliberately does not orchestrate multiple agents or transfer running sessions. Its handoff is
+limited to a verified copy of local code into a fresh worktree.
 
 See [Ygg Flow](worktrees.md#ygg-flow) for the recommended workspace layout,
 [four everyday workflows](worktrees.md#four-everyday-workflows) for the general worktree model, and

@@ -12,6 +12,7 @@ export type AddWorktreeOptions = {
   from?: string;
   name?: string;
   fetch?: boolean;
+  newBranchOnly?: boolean;
 };
 
 export type PreparedAddWorktree = {
@@ -41,6 +42,11 @@ export type RemovalInspection = {
   merged: boolean;
   blockers: string[];
   hardBlockers: string[];
+};
+
+export type MoveWorktreePlan = {
+  worktree: Worktree;
+  target: string;
 };
 
 export class WorktreeService {
@@ -120,7 +126,7 @@ export class WorktreeService {
         `Branch ${options.branch} is already checked out at ${existingCheckout.path}`,
       );
     }
-    if (await pathExists(target)) {
+    if (await pathEntryExists(target)) {
       throw new YggError(
         `Worktree directory already exists: ${target}. Choose another directory with --name <directory>.`,
       );
@@ -128,6 +134,10 @@ export class WorktreeService {
 
     const localExists = await this.refExists(workspace, branchRef);
     const remoteExists = remoteRef ? await this.refExists(workspace, remoteRef) : false;
+
+    if (options.newBranchOnly && (localExists || remoteExists)) {
+      throw new YggError(`Carry target must be a new branch: ${options.branch}`);
+    }
 
     if (localExists) {
       return {
@@ -303,6 +313,120 @@ export class WorktreeService {
     await this.git.run(args, { gitDir: workspace.gitDir });
   }
 
+  async listMoveCandidates(workspace: Workspace, cwd = process.cwd()): Promise<Worktree[]> {
+    const worktrees = await this.list(workspace);
+    const current = await this.currentFromList(worktrees, cwd);
+    const worktreeRoot = await canonicalPath(workspace.worktreeDir);
+    const candidates: Worktree[] = [];
+    for (const worktree of worktrees) {
+      if (
+        worktree.role === "primary" ||
+        worktree.path === current?.path ||
+        worktree.state === "missing" ||
+        worktree.locked ||
+        (await canonicalPath(path.dirname(worktree.path))) !== worktreeRoot ||
+        (await this.hasSubmodules(worktree))
+      ) {
+        continue;
+      }
+      candidates.push(worktree);
+    }
+    return candidates;
+  }
+
+  async prepareMove(
+    workspace: Workspace,
+    identifier: string,
+    newName: string,
+    cwd = process.cwd(),
+  ): Promise<MoveWorktreePlan> {
+    validateWorktreeName(newName);
+    const [worktree, current] = await Promise.all([
+      this.resolve(workspace, identifier),
+      this.current(workspace, cwd),
+    ]);
+    if (worktree.role === "primary") {
+      throw new YggError(`Refusing to rename the primary checkout: ${worktree.path}`);
+    }
+    if (worktree.path === current?.path) {
+      throw new YggError(
+        `Refusing to rename the current worktree: ${worktree.path}. Run ygg rename from the workspace or another worktree.`,
+      );
+    }
+    if (worktree.state === "missing") {
+      throw new YggError(`Refusing to rename a missing worktree: ${worktree.path}`);
+    }
+    if (worktree.locked) {
+      throw new YggError(`Refusing to rename a locked worktree: ${worktree.path}`);
+    }
+
+    const worktreeRoot = await canonicalPath(workspace.worktreeDir);
+    if ((await canonicalPath(path.dirname(worktree.path))) !== worktreeRoot) {
+      throw new YggError(
+        `Refusing to rename a worktree outside the configured worktree root: ${worktree.path}`,
+      );
+    }
+    if (await this.hasSubmodules(worktree)) {
+      throw new YggError(`Refusing to rename a worktree containing submodules: ${worktree.path}`);
+    }
+
+    const target = path.resolve(workspace.worktreeDir, newName);
+    if (!isPathInside(workspace.worktreeDir, target)) {
+      throw new YggError("Worktree directory must stay inside the configured worktree root.");
+    }
+    if (target === worktree.path) {
+      throw new YggError(`Worktree is already named ${newName}.`);
+    }
+    if (await pathEntryExists(target)) {
+      throw new YggError(`Worktree directory already exists: ${target}`);
+    }
+    return { worktree, target };
+  }
+
+  async move(workspace: Workspace, plan: MoveWorktreePlan): Promise<Worktree> {
+    await this.git.run(["worktree", "move", plan.worktree.path, plan.target], {
+      gitDir: workspace.gitDir,
+    });
+    const moved = (await this.list(workspace)).find((worktree) => worktree.path === plan.target);
+    if (
+      !moved ||
+      moved.branchRef !== plan.worktree.branchRef ||
+      moved.head !== plan.worktree.head
+    ) {
+      throw new YggError(
+        `Git moved the worktree, but its identity could not be verified at ${plan.target}`,
+      );
+    }
+    return moved;
+  }
+
+  async rollbackCreated(
+    workspace: Workspace,
+    worktree: Worktree,
+    expectedHead: string,
+  ): Promise<void> {
+    const current = (await this.list(workspace)).find(
+      (candidate) => candidate.path === worktree.path,
+    );
+    if (
+      !current ||
+      current.head !== expectedHead ||
+      current.branchRef !== worktree.branchRef ||
+      !current.branchRef ||
+      current.locked
+    ) {
+      throw new YggError(
+        `Refusing to roll back a created worktree whose Git identity changed: ${worktree.path}`,
+      );
+    }
+    await this.git.run(["worktree", "remove", "--force", current.path], {
+      gitDir: workspace.gitDir,
+    });
+    await this.git.run(["update-ref", "-d", current.branchRef, expectedHead], {
+      gitDir: workspace.gitDir,
+    });
+  }
+
   private async validateBranch(workspace: Workspace, branch: string): Promise<void> {
     const valid = await this.git.succeeds(["check-ref-format", "--branch", branch], {
       gitDir: workspace.gitDir,
@@ -345,6 +469,17 @@ export class WorktreeService {
     return await this.git.succeeds(["show-ref", "--verify", "--quiet", reference], {
       gitDir: workspace.gitDir,
     });
+  }
+
+  private async hasSubmodules(worktree: Worktree): Promise<boolean> {
+    const result = await this.git.run(["ls-files", "--stage", "-z"], {
+      cwd: worktree.path,
+      reject: false,
+    });
+    return (
+      result.exitCode === 0 &&
+      result.stdout.split("\0").some((entry) => entry.startsWith("160000 "))
+    );
   }
 
   private async readState(worktree: ParsedWorktree): Promise<WorktreeState> {
@@ -480,6 +615,18 @@ export function parseWorktreePorcelain(output: string): ParsedWorktree[] {
 async function pathExists(target: string): Promise<boolean> {
   try {
     await fs.access(target);
+    return true;
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      return false;
+    }
+    throw error;
+  }
+}
+
+async function pathEntryExists(target: string): Promise<boolean> {
+  try {
+    await fs.lstat(target);
     return true;
   } catch (error) {
     if (error instanceof Error && "code" in error && error.code === "ENOENT") {

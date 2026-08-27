@@ -88,6 +88,9 @@ describe("adopting existing Git repositories", () => {
     await expect(worktrees.remove(workspace, removal.worktree, true)).rejects.toThrow(
       /primary checkout/u,
     );
+    await expect(
+      worktrees.prepareMove(workspace, repository.source, "renamed-primary", workspace.worktreeDir),
+    ).rejects.toThrow(/primary checkout/u);
   });
 
   it("repairs a deleted worktree container, metadata link, and shared directory", async () => {

@@ -132,6 +132,15 @@ export async function chooseBranch(
   }
 }
 
+export async function chooseNewBranch(
+  prompt = "Create › New branch · Branch name:",
+): Promise<string> {
+  if (!isInteractiveTerminal()) throw new YggError("Branch is required without a TTY.");
+  const branch = await promptText(prompt, undefined, { navigation: "cancel" });
+  if (!branch) throw new YggError("Branch cannot be empty.");
+  return branch;
+}
+
 export function optionValueIfExplicit<T>(command: Command, name: string, value: T): T | undefined {
   return command.getOptionValueSource(name) === "cli" ? value : undefined;
 }

@@ -4,6 +4,7 @@ import { YggError } from "../domain/errors.js";
 export type GitRunOptions = {
   cwd?: string;
   gitDir?: string;
+  input?: string;
   reject?: boolean;
   stripFinalNewline?: boolean;
 };
@@ -20,8 +21,9 @@ export class GitClient {
 
     const result = await execa("git", commandArgs, {
       cwd: options.cwd,
+      input: options.input,
       reject: false,
-      stdin: "ignore",
+      stdin: options.input === undefined ? "ignore" : undefined,
       stripFinalNewline: options.stripFinalNewline ?? true,
     }).catch((error: unknown) => {
       throw new YggError("Git could not be started. Is Git installed and available in PATH?", {

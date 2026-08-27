@@ -11,6 +11,7 @@ describe("CLI contract", () => {
     expect(program.commands.map((command) => command.name())).toEqual([
       "init",
       "create",
+      "handoff",
       "status",
       "list",
       "cd",
@@ -19,6 +20,7 @@ describe("CLI contract", () => {
       "run",
       "hook",
       "setup",
+      "rename",
       "remove",
       "prune",
       "uninit",
@@ -78,6 +80,15 @@ describe("CLI contract", () => {
     ).rejects.toThrow(/--cd: Cannot be combined with --open or --tool/u);
   });
 
+  it("rejects incompatible carry options before touching a workspace", async () => {
+    const output = new PassThrough();
+    const program = createProgram({ stdout: output, stderr: output });
+
+    await expect(
+      program.parseAsync(["node", "ygg", "create", "feature/review", "--carry", "--from", "main"]),
+    ).rejects.toThrow(/--carry: Cannot be combined with --from/u);
+  });
+
   it("validates project configuration scope combinations before workspace discovery", async () => {
     const output = new PassThrough();
     const program = createProgram({ stdout: output, stderr: output });
@@ -101,6 +112,7 @@ describe("CLI contract", () => {
       .find((command) => command.name() === "hook")
       ?.commands.find((command) => command.name() === "run");
     const create = program.commands.find((command) => command.name() === "create");
+    const handoff = program.commands.find((command) => command.name() === "handoff");
     const open = program.commands.find((command) => command.name() === "open");
     let captured = "";
     output.setEncoding("utf8");
@@ -116,6 +128,7 @@ describe("CLI contract", () => {
     const rootHelp = captureHelp(program);
     const initHelp = captureHelp(init);
     const createHelp = captureHelp(create);
+    const handoffHelp = captureHelp(handoff);
     const openHelp = captureHelp(open);
     const configInitHelp = captureHelp(configInit);
     const hookRunHelp = captureHelp(hookRun);
@@ -131,7 +144,10 @@ describe("CLI contract", () => {
     expect(initHelp).toContain("cloned repositories");
     expect(initHelp).toContain("--config-scope <scope>");
     expect(createHelp).toContain("ygg create feature/payment --cd");
+    expect(createHelp).toContain("--carry");
     expect(createHelp).toContain("codex-app");
+    expect(handoffHelp).toContain("code state only");
+    expect(handoffHelp).toContain("does not move a running editor, process, or agent session");
     expect(openHelp).toContain("ygg open feature-payment --tool code");
     expect(configInitHelp).toContain("--scope <scope>");
     expect(configInitHelp).toContain("--from-project");

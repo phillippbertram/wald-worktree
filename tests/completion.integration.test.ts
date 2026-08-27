@@ -123,18 +123,28 @@ tools:
 
     expect(commands.exitCode, commands.stderr).toBe(0);
     expect(suggestionValues(commands.stdout)).toEqual(
-      expect.arrayContaining(["init", "create", "status", "config", "completion"]),
+      expect.arrayContaining([
+        "init",
+        "create",
+        "handoff",
+        "status",
+        "rename",
+        "config",
+        "completion",
+      ]),
     );
     expect(suggestionValues(commands.stdout)).not.toContain("complete");
     expect(suggestionValues(commands.stdout)).not.toContain("shell-init");
     expect(suggestionValues(options.stdout)).toEqual(
-      expect.arrayContaining(["--from", "--name", "--tool", "--help"]),
+      expect.arrayContaining(["--from", "--name", "--carry", "--tool", "--help"]),
     );
     expect(suggestionValues(shells.stdout)).toEqual(["zsh", "bash", "fish"]);
   });
 
   it("completes branches and worktrees with descriptions", async () => {
     const branches = await runCli(workspace, "complete", "--", "create", "");
+    const carryBranches = await runCli(workspace, "complete", "--", "create", "--carry", "");
+    const handoffBranches = await runCli(workspace, "complete", "--", "handoff", "");
     const hookEvents = await runCli(workspace, "complete", "--", "hook", "run", "");
     const hookWorktrees = await runCli(
       workspace,
@@ -150,6 +160,12 @@ tools:
     expect(branches.stdout).toContain("feature/local\tlocal branch");
     expect(branches.stdout).toContain("feature/remote\torigin branch");
     expect(branches.stdout.match(/^main\t/gmu)).toHaveLength(1);
+    expect(suggestionValues(carryBranches.stdout)).not.toEqual(
+      expect.arrayContaining(["main", "feature/local", "feature/remote"]),
+    );
+    expect(suggestionValues(handoffBranches.stdout)).not.toEqual(
+      expect.arrayContaining(["main", "feature/local", "feature/remote"]),
+    );
     expect(suggestionValues(hookEvents.stdout)).toEqual([
       "pre_create",
       "post_create",
@@ -160,7 +176,7 @@ tools:
       expect.arrayContaining(["main", "feature-local"]),
     );
 
-    for (const command of ["cd", "open", "setup", "remove", "exec"]) {
+    for (const command of ["cd", "open", "setup", "rename", "remove", "exec"]) {
       const worktrees = await runCli(workspace, "complete", "--", command, "");
       expect(worktrees.exitCode, worktrees.stderr).toBe(0);
       expect(worktrees.stdout).toMatch(/feature-local\tfeature\/local \(modified\)/u);
@@ -182,7 +198,7 @@ tools:
     expect(suggestionValues(configWorktree.stdout)).toEqual(
       expect.arrayContaining(["main", "feature-local"]),
     );
-    for (const command of ["create", "open"]) {
+    for (const command of ["create", "handoff", "open"]) {
       const tools = await runCli(workspace, "complete", "--", command, "--tool", "");
       expect(tools.exitCode, tools.stderr).toBe(0);
       expect(tools.stdout).toContain("fixture-agent\tFixture agent");

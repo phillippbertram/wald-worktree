@@ -9,6 +9,11 @@ import type {
   RemovalInspection,
   WorktreeService,
 } from "./worktree-service.js";
+import {
+  WorktreeTransferService,
+  type WorktreeTransferSnapshot,
+  type WorktreeTransferSummary,
+} from "./worktree-transfer-service.js";
 
 type WorktreeContext = {
   current: Worktree | null;
@@ -21,6 +26,18 @@ export type CreatePlan = WorktreeContext & {
   prepared: PreparedAddWorktree;
   project: ProjectConfigDocument | null;
   trusted: boolean;
+  carrySource: Worktree | null;
+};
+
+export type CreatedWorktree = Worktree & {
+  carry?: {
+    sourcePath: string;
+    summary: WorktreeTransferSummary;
+  };
+};
+
+export type CreateWorktreeOptions = AddWorktreeOptions & {
+  carry?: boolean;
 };
 
 export type RemovePlan = WorktreeContext & {
@@ -36,27 +53,43 @@ export class WorktreeWorkflowService {
     private readonly worktrees: WorktreeService,
     private readonly configs = new ConfigService(),
     private readonly automation = new AutomationService(),
+    private readonly transfers = new WorktreeTransferService(git),
   ) {}
 
-  async planCreate(workspace: Workspace, options: AddWorktreeOptions): Promise<CreatePlan> {
+  async planCreate(workspace: Workspace, options: CreateWorktreeOptions): Promise<CreatePlan> {
     const context = await this.readWorktreeContext(workspace);
     const sourceDocument = await this.readSourceProjectConfig(workspace, context);
-    const from = await this.resolveRequestedBase(options.from, context.current);
+    if (options.carry && options.from) {
+      throw new YggError(
+        "Cannot combine carry with an explicit base; carry always starts at HEAD.",
+      );
+    }
+    if (options.carry && !context.current) {
+      throw new YggError("Run ygg create --carry from inside the source worktree.");
+    }
+    const from = await this.resolveRequestedBase(
+      options.carry ? "HEAD" : options.from,
+      context.current,
+    );
     const prepared = await this.worktrees.prepareAdd(workspace, {
       ...options,
       from,
+      newBranchOnly: options.carry,
       fetch: options.fetch ?? sourceDocument?.config.defaults.fetch ?? true,
     });
-    const project = await this.configs.resolveProjectConfigAtRevision(
-      this.git,
-      workspace,
-      prepared.projectRevision,
-    );
+    const project = options.carry
+      ? sourceDocument
+      : await this.configs.resolveProjectConfigAtRevision(
+          this.git,
+          workspace,
+          prepared.projectRevision,
+        );
     return {
       workspace,
       prepared,
       project,
       trusted: this.configs.isTrusted(workspace, project),
+      carrySource: options.carry ? context.current : null,
       ...context,
     };
   }
@@ -67,7 +100,7 @@ export class WorktreeWorkflowService {
       trustProjectConfig?: boolean;
       output?: NodeJS.WritableStream;
     } = {},
-  ): Promise<Worktree> {
+  ): Promise<CreatedWorktree> {
     await this.ensureTrusted(plan.workspace, plan.project, options.trustProjectConfig);
     const preCreateContext = this.automationContext(
       plan,
@@ -78,12 +111,49 @@ export class WorktreeWorkflowService {
     );
     await this.automation.runHook(plan.project, "pre_create", preCreateContext);
 
-    const created = await this.worktrees.createPrepared(plan.workspace, plan.prepared);
-    const targetProject = await this.configs.resolveProjectConfig(plan.workspace, created.path);
-    if ((plan.project?.hash ?? null) !== (targetProject?.hash ?? null)) {
-      throw new YggError(
-        `Worktree was created at ${created.path}, but its effective project configuration does not match the configuration inspected before creation. Review the worktree before running hooks.`,
+    let snapshot: WorktreeTransferSnapshot | undefined;
+    if (plan.carrySource) {
+      const sourceProject = await this.configs.resolveProjectConfig(
+        plan.workspace,
+        plan.carrySource.path,
       );
+      if ((sourceProject?.hash ?? null) !== (plan.project?.hash ?? null)) {
+        throw new YggError(
+          "The effective project configuration changed after pre-create. Review and trust it, then retry the carry.",
+        );
+      }
+      snapshot = await this.transfers.capture(plan.carrySource.path);
+      const refreshedSource = await this.worktrees.resolve(plan.workspace, plan.carrySource.path);
+      if (
+        refreshedSource.path !== plan.carrySource.path ||
+        refreshedSource.branchRef !== plan.carrySource.branchRef ||
+        refreshedSource.head !== snapshot.head ||
+        plan.prepared.strategy.type !== "new" ||
+        plan.prepared.strategy.base !== snapshot.head
+      ) {
+        throw new YggError(
+          "The source worktree or its HEAD changed after pre-create. Review it, then retry the carry.",
+        );
+      }
+    }
+
+    const created = await this.worktrees.createPrepared(plan.workspace, plan.prepared);
+    let targetProject: ProjectConfigDocument | null;
+    try {
+      if (snapshot) {
+        await this.transfers.apply(snapshot, created.path);
+      }
+      targetProject = await this.configs.resolveProjectConfig(plan.workspace, created.path);
+      if ((plan.project?.hash ?? null) !== (targetProject?.hash ?? null)) {
+        throw new YggError(
+          `Worktree was created at ${created.path}, but its effective project configuration does not match the configuration inspected before creation. Review the worktree before running hooks.`,
+        );
+      }
+    } catch (error) {
+      if (snapshot) {
+        await this.rollbackFailedCarry(plan.workspace, created, snapshot, error);
+      }
+      throw error;
     }
 
     try {
@@ -106,7 +176,35 @@ export class WorktreeWorkflowService {
       );
     }
 
-    return created;
+    return snapshot
+      ? {
+          ...created,
+          carry: {
+            sourcePath: snapshot.sourcePath,
+            summary: snapshot.summary,
+          },
+        }
+      : created;
+  }
+
+  private async rollbackFailedCarry(
+    workspace: Workspace,
+    created: Worktree,
+    snapshot: WorktreeTransferSnapshot,
+    error: unknown,
+  ): Promise<never> {
+    try {
+      await this.worktrees.rollbackCreated(workspace, created, snapshot.head);
+    } catch (rollbackError) {
+      throw new YggError(
+        `Carrying local changes failed: ${toErrorMessage(error)}\nAutomatic rollback did not complete: ${toErrorMessage(rollbackError)}\nInspect the target path ${created.path} and branch ${created.branch}; preserve anything useful before manual cleanup.`,
+        { cause: error },
+      );
+    }
+    throw new YggError(
+      `Carrying local changes failed and the created worktree and branch were rolled back: ${toErrorMessage(error)}`,
+      { cause: error },
+    );
   }
 
   async planRemove(workspace: Workspace, identifier: string): Promise<RemovePlan> {

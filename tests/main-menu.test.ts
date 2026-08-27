@@ -17,6 +17,8 @@ const interactions = vi.hoisted(() => ({
   findWorkspaceOrNull: vi.fn(),
   initializeWorkspace: vi.fn(),
   createWorktree: vi.fn(),
+  handoffWorktree: vi.fn(),
+  renameWorktree: vi.fn(),
   runProjectHook: vi.fn(),
   uninitializeWorkspace: vi.fn(),
 }));
@@ -64,6 +66,22 @@ vi.mock("../src/cli/commands/create.js", async (importOriginal) => {
   };
 });
 
+vi.mock("../src/cli/commands/handoff.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/cli/commands/handoff.js")>();
+  return {
+    ...actual,
+    handoffWorktree: interactions.handoffWorktree,
+  };
+});
+
+vi.mock("../src/cli/commands/rename.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/cli/commands/rename.js")>();
+  return {
+    ...actual,
+    renameWorktree: interactions.renameWorktree,
+  };
+});
+
 vi.mock("../src/cli/commands/hook.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/cli/commands/hook.js")>();
   return {
@@ -92,6 +110,8 @@ describe("interactive main menu", () => {
       interactions.events.push("init");
     });
     interactions.createWorktree.mockReset();
+    interactions.handoffWorktree.mockReset();
+    interactions.renameWorktree.mockReset();
     interactions.runProjectHook.mockReset();
     interactions.uninitializeWorkspace.mockReset();
   });
@@ -125,8 +145,43 @@ describe("interactive main menu", () => {
           description: "Run a configured hook without changing Git state.",
           group: "Project automation",
         }),
+        expect.objectContaining({
+          label: "Hand off current work",
+          group: "Common",
+        }),
+        expect.objectContaining({
+          label: "Rename worktree",
+          group: "Maintenance",
+        }),
       ]),
     });
+  });
+
+  it("runs guided handoff and rename only when their context is available", async () => {
+    const workspace = { root: "/tmp/ygg-project" } as Workspace;
+    const current = { name: "main", branch: "main" } as Worktree;
+    const linked = { name: "feature", branch: "feature/work", role: "linked" } as Worktree;
+    interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
+    interactions.selections = ["handoff", "rename", "exit"];
+
+    await runMainMenu(new Command().name("ygg"), createContext(current, [current, linked]));
+
+    expect(interactions.handoffWorktree).toHaveBeenCalledWith(
+      { cd: false, open: false, printPath: false },
+      expect.anything(),
+    );
+    expect(interactions.renameWorktree).toHaveBeenCalledWith({}, expect.anything());
+  });
+
+  it("hides handoff outside a worktree and rename without a valid target", async () => {
+    const workspace = { root: "/tmp/ygg-project" } as Workspace;
+    interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
+
+    await runMainMenu(new Command().name("ygg"), createContext(null, []));
+
+    const labels = interactions.selectCalls[0]?.options.map((option) => option.label) ?? [];
+    expect(labels).not.toContain("Hand off current work");
+    expect(labels).not.toContain("Rename worktree");
   });
 
   it("refreshes workspace state and returns to the menu after an action", async () => {
@@ -218,6 +273,9 @@ function createContext(current: Worktree | null, worktrees: Worktree[]): CliCont
     worktrees: {
       current: vi.fn().mockResolvedValue(current),
       list: vi.fn().mockResolvedValue(worktrees),
+      listMoveCandidates: vi
+        .fn()
+        .mockResolvedValue(worktrees.filter((worktree) => worktree.role !== "primary")),
     },
   } as unknown as CliContext;
 }

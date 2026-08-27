@@ -26,6 +26,91 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     await fs.rm(temporaryRoot, { force: true, recursive: true });
   });
 
+  it("carries local code through create and handoff, then renames only the directory", async () => {
+    const workspace = path.join(temporaryRoot, "carry-workspace");
+    await execa(process.execPath, cliArguments("init", repository.remote, workspace), {
+      cwd: temporaryRoot,
+    });
+    await execa(process.execPath, cliArguments("create", "main", "--no-fetch"), {
+      cwd: workspace,
+    });
+    const source = path.join(workspace, "main");
+    const canonicalSource = await fs.realpath(source);
+    await fs.writeFile(path.join(source, "README.md"), "# staged\n", "utf8");
+    await execa("git", ["add", "README.md"], { cwd: source });
+    await fs.appendFile(path.join(source, "README.md"), "unstaged\n", "utf8");
+    await fs.writeFile(path.join(source, "local.bin"), Buffer.from([0, 10, 255]));
+    const sourceStatus = await execa(
+      "git",
+      ["status", "--porcelain=v1", "-z", "--untracked-files=all"],
+      { cwd: source },
+    );
+
+    const carried = await execa(
+      process.execPath,
+      cliArguments("create", "feature/carried", "--carry", "--no-fetch"),
+      { cwd: source, reject: false },
+    );
+    expect(carried.exitCode, carried.stderr).toBe(0);
+    expect(carried.stdout).toContain("with carried local changes");
+    expect(carried.stdout).toContain("Carried: 1 staged, 1 unstaged, 1 untracked");
+    expect(carried.stdout).toContain(`Source kept unchanged: ${canonicalSource}`);
+    expect(carried.stdout).toContain("Next: ygg cd 'feature-carried'");
+    const carriedPath = path.join(workspace, "feature-carried");
+    const carriedStatus = await execa(
+      "git",
+      ["status", "--porcelain=v1", "-z", "--untracked-files=all"],
+      { cwd: carriedPath },
+    );
+    expect(carriedStatus.stdout).toBe(sourceStatus.stdout);
+
+    const handedOff = await execa(
+      process.execPath,
+      cliArguments("handoff", "feature/handed", "--no-fetch"),
+      { cwd: source, reject: false },
+    );
+    expect(handedOff.exitCode, handedOff.stderr).toBe(0);
+    expect(handedOff.stdout).toContain("with carried local changes");
+    expect(handedOff.stdout).toContain(`Source kept unchanged: ${canonicalSource}`);
+
+    const pathOnly = await execa(
+      process.execPath,
+      cliArguments("handoff", "feature/path-only", "--no-fetch", "--cd", "--print-path"),
+      { cwd: source, reject: false },
+    );
+    expect(pathOnly.exitCode, pathOnly.stderr).toBe(0);
+    expect(pathOnly.stdout).toBe(await fs.realpath(path.join(workspace, "feature-path-only")));
+
+    const renamed = await execa(
+      process.execPath,
+      cliArguments("rename", "feature-carried", "review-ready"),
+      { cwd: workspace, reject: false },
+    );
+    expect(renamed.exitCode, renamed.stderr).toBe(0);
+    expect(renamed.stdout).toContain("Renamed feature-carried to review-ready");
+    expect(renamed.stdout).toContain("Branch kept: feature/carried");
+    await expect(fs.stat(carriedPath)).rejects.toMatchObject({ code: "ENOENT" });
+    expect(await fs.readFile(path.join(workspace, "review-ready", "README.md"), "utf8")).toBe(
+      "# staged\nunstaged\n",
+    );
+    const status = await execa(process.execPath, cliArguments("status", "--json"), {
+      cwd: path.join(workspace, "review-ready"),
+    });
+    expect(JSON.parse(status.stdout).current).toMatchObject({
+      name: "review-ready",
+      branch: "feature/carried",
+      state: "modified",
+    });
+    const listed = await execa(process.execPath, cliArguments("list", "--json"), {
+      cwd: workspace,
+    });
+    expect(JSON.parse(listed.stdout)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "review-ready", branch: "feature/carried" }),
+      ]),
+    );
+  });
+
   it("initializes, creates, lists, and safely removes through the non-TTY command interface", async () => {
     const workspace = path.join(temporaryRoot, "workspace");
 
@@ -615,5 +700,16 @@ tools:
     expect(await fs.readFile(path.join(workspace, "main", "tool.log"), "utf8")).toBe(
       await fs.realpath(path.join(workspace, "main")),
     );
+
+    const handedOff = await execa(
+      process.execPath,
+      cliArguments("handoff", "feature/tool-handoff", "--no-fetch", "--tool", "fixture-agent"),
+      { cwd: path.join(workspace, "main"), reject: false },
+    );
+    expect(handedOff.exitCode, handedOff.stderr).toBe(0);
+    expect(handedOff.stdout).toContain("with carried local changes");
+    expect(
+      await fs.readFile(path.join(workspace, "feature-tool-handoff", "tool.log"), "utf8"),
+    ).toBe(await fs.realpath(path.join(workspace, "feature-tool-handoff")));
   });
 });

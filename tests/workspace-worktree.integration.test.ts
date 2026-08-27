@@ -281,6 +281,126 @@ describe("managed Git workspace", () => {
     expect(inspection.merged).toBe(false);
     expect(inspection.blockers).toHaveLength(2);
   });
+
+  it("renames a dirty linked worktree while preserving its Git identity and files", async () => {
+    const workspace = await workspaces.initialize(
+      repository.remote,
+      path.join(temporaryRoot, "rename-workspace"),
+    );
+    const feature = await worktrees.add(workspace, {
+      branch: "feature/rename",
+      fetch: false,
+    });
+    await fs.writeFile(path.join(feature.path, "untracked.txt"), "keep me\n", "utf8");
+
+    const plan = await worktrees.prepareMove(
+      workspace,
+      feature.name,
+      "renamed-feature",
+      workspace.root,
+    );
+    const moved = await worktrees.move(workspace, plan);
+
+    expect(moved).toMatchObject({
+      name: "renamed-feature",
+      branch: feature.branch,
+      branchRef: feature.branchRef,
+      head: feature.head,
+      state: "modified",
+    });
+    expect(moved.path).toBe(path.join(workspace.worktreeDir, "renamed-feature"));
+    await expect(fs.stat(feature.path)).rejects.toMatchObject({ code: "ENOENT" });
+    expect(await fs.readFile(path.join(moved.path, "untracked.txt"), "utf8")).toBe("keep me\n");
+  });
+
+  it("renames a clean linked worktree without changing its branch or HEAD", async () => {
+    const workspace = await workspaces.initialize(
+      repository.remote,
+      path.join(temporaryRoot, "clean-rename-workspace"),
+    );
+    const feature = await worktrees.add(workspace, {
+      branch: "feature/clean-rename",
+      fetch: false,
+    });
+
+    const moved = await worktrees.move(
+      workspace,
+      await worktrees.prepareMove(workspace, feature.name, "clean-renamed", workspace.root),
+    );
+
+    expect(moved).toMatchObject({
+      name: "clean-renamed",
+      branch: feature.branch,
+      branchRef: feature.branchRef,
+      head: feature.head,
+      state: "clean",
+    });
+  });
+
+  it("rejects unsafe worktree rename targets and states before moving anything", async () => {
+    const workspace = await workspaces.initialize(
+      repository.remote,
+      path.join(temporaryRoot, "rename-safety-workspace"),
+    );
+    const feature = await worktrees.add(workspace, {
+      branch: "feature/rename-safety",
+      fetch: false,
+    });
+
+    await expect(
+      worktrees.prepareMove(workspace, feature.name, "from-current", feature.path),
+    ).rejects.toThrow(/current worktree/u);
+    await expect(
+      worktrees.prepareMove(workspace, feature.name, "../outside", workspace.root),
+    ).rejects.toThrow(/Invalid worktree directory name/u);
+
+    const danglingTarget = path.join(workspace.worktreeDir, "dangling-target");
+    await fs.symlink(path.join(workspace.root, "missing-target"), danglingTarget);
+    await expect(
+      worktrees.prepareMove(workspace, feature.name, "dangling-target", workspace.root),
+    ).rejects.toThrow(/already exists/u);
+    const existingTarget = path.join(workspace.worktreeDir, "existing-target");
+    await fs.mkdir(existingTarget);
+    await expect(
+      worktrees.prepareMove(workspace, feature.name, "existing-target", workspace.root),
+    ).rejects.toThrow(/already exists/u);
+
+    const externalPath = path.join(temporaryRoot, "external-worktree");
+    const git = new GitClient();
+    await git.run(
+      ["worktree", "add", "-b", "feature/external", externalPath, "refs/remotes/origin/main"],
+      { gitDir: workspace.gitDir },
+    );
+    await expect(
+      worktrees.prepareMove(workspace, externalPath, "external-renamed", workspace.root),
+    ).rejects.toThrow(/outside the configured worktree root/u);
+
+    const missing = await worktrees.add(workspace, {
+      branch: "feature/missing-rename",
+      fetch: false,
+    });
+    await fs.rm(missing.path, { recursive: true });
+    await expect(
+      worktrees.prepareMove(workspace, missing.path, "missing-renamed", workspace.root),
+    ).rejects.toThrow(/missing worktree/u);
+
+    await git.run(["worktree", "lock", "--reason", "test", feature.path], {
+      gitDir: workspace.gitDir,
+    });
+    await expect(
+      worktrees.prepareMove(workspace, feature.name, "locked-feature", workspace.root),
+    ).rejects.toThrow(/locked worktree/u);
+    await git.run(["worktree", "unlock", feature.path], { gitDir: workspace.gitDir });
+
+    const head = (await git.run(["rev-parse", "HEAD"], { cwd: feature.path })).stdout;
+    await git.run(["update-index", "--add", "--cacheinfo", `160000,${head},vendor/module`], {
+      cwd: feature.path,
+    });
+    await expect(
+      worktrees.prepareMove(workspace, feature.name, "submodule-feature", workspace.root),
+    ).rejects.toThrow(/containing submodules/u);
+    expect((await worktrees.resolve(workspace, feature.name)).path).toBe(feature.path);
+  });
 });
 
 function looseObjectPath(gitDir: string, object: string): string {

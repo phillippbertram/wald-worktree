@@ -1,6 +1,6 @@
 ---
 name: ygg-worktrees
-description: Use the ygg CLI to create, inspect, enter, automate, open, safely remove, and prune Git worktrees. Apply when a repository is managed by ygg or the user asks for a ygg-based worktree or agent workflow.
+description: Use the ygg CLI to create, carry, hand off, rename, inspect, enter, automate, open, safely remove, and prune Git worktrees. Apply when a repository is managed by ygg or the user asks for a ygg-based worktree or agent workflow.
 ---
 
 # ygg worktrees
@@ -27,6 +27,11 @@ confirmation flags explicitly.
 - For starting an editor or coding agent, use `ygg open <worktree> --tool <profile>`. Inspect
   built-in profiles with `ygg open --help` and effective project profiles with `ygg config` when
   needed.
+
+Use `ygg create <new-branch> --carry` or `ygg handoff <new-branch>` only from the source worktree.
+Both copy its staged, unstaged, and non-ignored untracked code into a fresh worktree while preserving
+the source; they do not move a running process or agent session. Use `ygg rename <worktree>
+<new-name>` to rename an eligible linked worktree directory without renaming its branch.
 
 Do not use `--force` for removal without verifying that dirty or unmerged work can be discarded.
 Never infer permission to delete branches or the primary checkout; `ygg` does not perform those

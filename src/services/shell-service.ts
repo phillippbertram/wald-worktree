@@ -27,7 +27,7 @@ ygg() {
     builtin cd "$target" || return $?
     return
   fi
-  if [ "\${1-}" = "create" ] && [[ " $* " == *" --cd "* ]]; then
+  if { [ "\${1-}" = "create" ] || [ "\${1-}" = "handoff" ]; } && [[ " $* " == *" --cd "* ]]; then
     local target
     target="$(command ygg "$@" --print-path)" || return $?
     builtin cd "$target" || return $?
@@ -48,7 +48,7 @@ function ygg() {
     builtin cd "$target" || return $?
     return
   fi
-  if [[ "\${1-}" == "create" && " $* " == *" --cd "* ]]; then
+  if [[ ( "\${1-}" == "create" || "\${1-}" == "handoff" ) && " $* " == *" --cd "* ]]; then
     local target
     target="$(command ygg "$@" --print-path)" || return $?
     builtin cd "$target" || return $?
@@ -67,7 +67,7 @@ function ygg
     builtin cd $target; or return $status
     return
   end
-  if test (count $argv) -ge 1; and test $argv[1] = create; and contains -- --cd $argv
+  if test (count $argv) -ge 1; and contains -- $argv[1] create handoff; and contains -- --cd $argv
     set -l target (command ygg $argv --print-path); or return $status
     builtin cd $target; or return $status
     return

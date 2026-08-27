@@ -40,7 +40,7 @@ Failures use a non-zero exit status. Interrupted foreground tasks exit with stat
 Human-readable tables, previews, selections, and status messages highlight worktree names,
 branches, paths, commands, states, warnings, and destructive actions when color is supported. Set
 `NO_COLOR=1` to disable color. Machine-readable JSON, completion data, `ygg cd`, and
-`ygg create --print-path` never add presentation formatting.
+`ygg create --print-path` and `ygg handoff --print-path` never add presentation formatting.
 
 ## `ygg init`
 
@@ -114,12 +114,26 @@ ygg create [branch] [options]
 | `--from <commit-ish>` | Base for a new branch. Existing branches ignore it. |
 | `--name <directory>` | Override the directory derived from the branch. |
 | `--fetch` / `--no-fetch` | Override the project fetch default. |
+| `--carry` | Create a new branch at the current `HEAD` and copy its local code state. |
 | `--cd` | Enter through shell integration after setup. |
 | `--open` | Open with the configured or interactively selected tool. |
 | `--tool <profile>` | Open with a specific built-in or project profile; implies `--open`. |
 
 `--cd` cannot be combined with `--open` or `--tool`. Without a branch, a terminal offers local and
 remote candidates plus new-branch creation; non-interactive use requires a branch.
+
+`--carry` must run inside a concrete worktree and cannot be combined with `--from`. Its target must
+be a new local branch with no matching local or configured-remote ref. Ygg starts at the source's
+exact `HEAD` and reproduces its staged, unstaged, and non-ignored untracked files, including binary
+content, executable modes, and symlinks. Ignored files, empty directories, and submodules are not
+copied. A clean source is valid and behaves like normal creation with an explicit notice.
+
+Carry rejects unmerged entries, active merge/rebase/cherry-pick state, sparse checkouts, dirty
+submodules, and unsupported special files before creating the target. The source is fingerprinted
+before and after transfer and is never cleaned or modified by the transfer. Before `post_create`, a
+failed application or verification rolls back only the worktree and new branch created by that
+invocation. A failed `post_create` keeps the fully transferred worktree and reports
+`ygg setup <worktree>` as usual.
 
 Resolution order is local branch, matching configured remote branch, then a new branch from
 `--from` or the default branch. Creation runs trusted `pre_create`, Git checkout creation, then
@@ -131,6 +145,26 @@ Built-in tools are `claude`, `code`, `codex`, `codex-app`, `cursor`, and `zed`.
 ygg create feature/payment --cd
 ygg create hotfix/payment --from release/1.x --cd
 ygg create feature/review --tool codex
+ygg create feature/review --carry --cd
+```
+
+## `ygg handoff`
+
+```text
+ygg handoff [branch] [options]
+```
+
+`handoff` delegates to the exact `create --carry` lifecycle. It accepts `--name`,
+`--fetch`/`--no-fetch`, `--cd`, `--open`, and `--tool`; carry is implicit and `--from` is not
+available. Without a branch, a terminal asks only for a new branch name. Without a navigation
+option, the result includes the matching `ygg cd` command.
+
+This is a code handoff only. It copies local Git and file state while keeping the source unchanged;
+it does not transfer a running editor, process, or agent session.
+
+```sh
+ygg handoff feature/review --cd
+ygg handoff feature/review --tool codex
 ```
 
 ## `ygg status`
@@ -251,6 +285,26 @@ Compatibility shortcut for `ygg hook run post_create [worktree]`. This remains t
 after setup failed during creation. The effective project configuration must be trusted and contain
 at least one `post_create` step. It uses the same structured automation output and conflict policies
 as the general hook command.
+
+## `ygg rename`
+
+```text
+ygg rename [worktree] [new-name]
+```
+
+Renames only a linked worktree directory through Git; the branch, upstream, `HEAD`, index, and files
+stay unchanged. Both arguments are required without a terminal. Interactive use selects an eligible
+worktree and asks for the new directory name.
+
+Only direct children of the configured worktree directory are eligible. Ygg refuses the primary or
+current checkout, external, missing, or locked worktrees, and worktrees whose index contains a
+submodule. The destination uses the normal worktree-name and path validation and must not already
+exist, including as a dangling symlink. Dirty worktrees are allowed. There is no `--force` option
+and rename runs no project hooks or trusted executable configuration.
+
+```sh
+ygg rename feature-payment payment-review
+```
 
 ## `ygg remove`
 

@@ -193,8 +193,35 @@ ygg run verify feature-ui
 ygg remove feature-ui
 ```
 
-Ygg separates filesystem state; it does not coordinate agent decisions, handoffs, ports, databases,
-or other shared services.
+Ygg separates filesystem state; it does not coordinate agent decisions, running sessions, ports,
+databases, or other shared services.
+
+## Carry unfinished code into another worktree
+
+**Starting point:** the current branch has staged, unstaged, or untracked code that should continue
+on a fresh branch without cleaning or changing the source.
+
+```sh
+ygg create feature/review --carry
+# equivalent code-focused workflow
+ygg handoff feature/review
+```
+
+```text
+project/
+├── feature-payment/         original local state remains here
+└── feature-review/          same local state, new branch at the original HEAD
+```
+
+Carry preserves which tracked changes are staged and which remain unstaged. It also copies
+non-ignored untracked regular files and symlinks, including binary content and executable modes.
+Ignored files remain local and can instead be supplied through trusted copy or symlink
+configuration. Empty directories and submodules are not transferred.
+
+Both commands use the current effective project configuration and the normal trusted lifecycle. A
+transfer failure before `post_create` rolls back the fresh worktree and branch when safe; a
+`post_create` failure keeps the verified target for `ygg setup`. After success, the changes exist in
+both worktrees. `handoff` does not move an editor, process, or agent session.
 
 ## The worktree lifecycle
 
@@ -203,10 +230,12 @@ layout, not a branching model or this create-to-remove sequence.
 
 ```mermaid
 flowchart TB
-    Request["ygg create"] --> Resolve["Resolve branch and trusted configuration"]
+    Request["ygg create or handoff"] --> Resolve["Resolve branch and trusted configuration"]
     Resolve --> Pre["Run pre_create"]
     Pre --> Add["Create the Git worktree"]
-    Add --> Post["Run post_create setup"]
+    Add --> Carry["Optional carry<br/>apply and verify local code"]
+    Carry --> Post["Run post_create setup"]
+    Carry -- transfer fails --> Rollback["Roll back fresh checkout and branch"]
     Post --> Ready["Edit · commit · run · review"]
     Post -- setup fails --> Retry["Keep checkout<br/>retry with ygg setup"]
     Retry --> Ready
@@ -308,9 +337,11 @@ Ygg does not replace Git. It applies workspace policy around the native operatio
 | Intent | Ygg workflow | Native foundation |
 | --- | --- | --- |
 | Create a checkout | `ygg create <branch>` | `git worktree add` |
+| Carry current code to a fresh checkout | `ygg create <branch> --carry`, `ygg handoff <branch>` | Binary Git patches plus verified untracked-file copy |
 | Understand the current context | `ygg status` | Local Git status, tracking refs, and Ygg configuration |
 | Find all checkouts | `ygg list` | `git worktree list` plus Ygg state |
 | Enter a checkout | `ygg cd <worktree>` | Resolve and print its canonical path |
+| Rename a checkout directory | `ygg rename <worktree> <new-name>` | Validated `git worktree move` |
 | Run hooks, setup, or tasks | `ygg hook run`, `ygg setup`, `ygg run` | Trusted effective project behavior |
 | Finish with a checkout | `ygg remove <worktree>` | Safety inspection and `git worktree remove` |
 | Clean stale metadata | `ygg prune` | Preview-first `git worktree prune` |
@@ -341,10 +372,10 @@ conflicting environment at a time.
 
 ### Can I move or delete a worktree folder manually?
 
-Do not do that for normal cleanup. Git keeps administrative links between the shared repository and
-each worktree. Use `ygg remove` so state is inspected first. If a directory is already missing,
-preview its stale registration with `ygg prune`; that repairs the roots without touching surviving
-worlds or branches.
+Do not move or delete it manually. Git keeps administrative links between the shared repository and
+each worktree. Use `ygg rename` for an eligible linked worktree directory and `ygg remove` for normal
+cleanup. If a directory is already missing, preview its stale registration with `ygg prune`; that
+repairs the roots without touching surviving worlds or branches.
 
 ### Does removing a worktree delete its branch?
 

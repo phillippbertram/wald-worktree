@@ -1,8 +1,9 @@
 # Roadmap
 
 The configurable v1 lifecycle, YAML model, interactive CLI, shell integration, tool profiles,
-read-only context status, preview-first metadata pruning, and portable Agent Skill are implemented.
-The next work should strengthen diagnostics before broadening the workflow model.
+read-only context status, preview-first metadata pruning, worktree rename, verified code carry and
+handoff, and portable Agent Skill are implemented. The next work should strengthen diagnostics
+before broadening the workflow model.
 
 ## Next
 
@@ -37,8 +38,9 @@ The next work should strengthen diagnostics before broadening the workflow model
 - Explicit multi-worktree execution with per-worktree results.
 - Optional GitHub/GitLab pull-request metadata.
 - Windows support after path, process, and symlink behavior has dedicated integration coverage.
-- Agent handoff, patch transfer, or sandbox orchestration after their permissions and recovery model
-  are designed explicitly.
+- Running agent-session transfer, reusable patch apply/unapply, and sandbox orchestration only after
+  their permissions and recovery models are designed explicitly. The implemented `handoff` command
+  transfers code state only.
 
 ## Principles
 

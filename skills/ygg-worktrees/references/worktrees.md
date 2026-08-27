@@ -15,6 +15,8 @@ changes the parent shell when shell integration is installed.
 ```sh
 ygg create <branch>
 ygg create <new-branch> --from <commit-ish>
+ygg create <new-branch> --carry
+ygg handoff <new-branch>
 ```
 
 Use `--cd` to enter the new worktree through shell integration, or `--tool <profile>` to open an
@@ -26,10 +28,26 @@ Fetching follows the effective project-configuration default. Override it only w
 requires it with `--fetch` or `--no-fetch`. Use `--tool <profile>` to open an editor or agent after
 setup.
 
+`--carry` and `handoff` use the current worktree's exact `HEAD` and require a new branch. They copy
+staged, unstaged, and non-ignored untracked code, verify that the source stayed unchanged, and leave
+the changes in both worktrees. Ignored files remain in the source. `handoff` is code-only and does
+not move an editor, process, or agent session. If transfer fails before `post_create`, Ygg rolls back
+the fresh target and branch when it can do so safely; a `post_create` failure keeps the transferred
+target for `ygg setup` recovery.
+
 Creation runs trusted `pre_create` before Git creates the checkout, followed by `post_create`. If
 the latter phase fails, keep the created checkout, inspect the error, fix the
 cause, and retry the printed `ygg setup <worktree>` command. To test hooks independently after a
 configuration change, use `ygg hook run <event> <worktree>`; this runs no Git creation or removal.
+
+Rename an eligible linked worktree directory without changing its branch, `HEAD`, index, or files:
+
+```sh
+ygg rename <worktree> <new-name>
+```
+
+Rename refuses the primary or current checkout, external, missing, locked, and submodule-containing
+worktrees. It accepts dirty worktrees and runs no lifecycle hooks.
 
 ## Execute and remove
 

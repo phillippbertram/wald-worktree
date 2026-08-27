@@ -8,7 +8,7 @@ import { findWorkspaceOrNull } from "../helpers.js";
 const supportedShells = ["zsh", "bash", "fish"] as const;
 const completionDescription = "Generate shell completion and navigation integration";
 
-type CompletionKind = "worktrees" | "branches" | "tasks" | "tools";
+type CompletionKind = "worktrees" | "renamableWorktrees" | "branches" | "tasks" | "tools";
 type CompletionCandidate = { value: string; description: string };
 type CompletionCandidates = Record<CompletionKind, CompletionCandidate[]>;
 
@@ -72,12 +72,16 @@ function requiredTabCommand(completion: RootCommand, path: string) {
 function requestedCompletionKinds(args: string[]): Set<CompletionKind> {
   switch (args[0]) {
     case "create":
-      return new Set(["branches", "tools"]);
+      return args.includes("--carry") ? new Set(["tools"]) : new Set(["branches", "tools"]);
+    case "handoff":
+      return new Set(["tools"]);
     case "cd":
     case "setup":
     case "remove":
     case "exec":
       return new Set(["worktrees"]);
+    case "rename":
+      return new Set(["renamableWorktrees"]);
     case "open":
       return new Set(["worktrees", "tools"]);
     case "run":
@@ -102,8 +106,11 @@ async function loadCompletionCandidates(
   if (!workspace) return candidates;
 
   const needsWorktrees = kinds.has("worktrees") || kinds.has("tasks") || kinds.has("tools");
-  const [worktrees, branchCandidates] = await Promise.all([
+  const [worktrees, renamableWorktrees, branchCandidates] = await Promise.all([
     needsWorktrees ? context.worktrees.list(workspace) : Promise.resolve([]),
+    kinds.has("renamableWorktrees")
+      ? context.worktrees.listMoveCandidates(workspace)
+      : Promise.resolve([]),
     kinds.has("branches") ? context.worktrees.listBranchCandidates(workspace) : Promise.resolve([]),
   ]);
 
@@ -112,6 +119,10 @@ async function loadCompletionCandidates(
       value: worktree.name,
       description: `${worktree.branch ?? "detached HEAD"} (${worktree.state})`,
     }));
+  }
+
+  if (kinds.has("renamableWorktrees")) {
+    candidates.renamableWorktrees = worktreeCandidates(renamableWorktrees);
   }
 
   if (kinds.has("branches")) {
@@ -159,7 +170,7 @@ async function loadCompletionCandidates(
 }
 
 function emptyCompletionCandidates(): CompletionCandidates {
-  return { worktrees: [], branches: [], tasks: [], tools: [] };
+  return { worktrees: [], renamableWorktrees: [], branches: [], tasks: [], tools: [] };
 }
 
 function applyDynamicHandlers(completion: RootCommand, candidates: CompletionCandidates): void {
@@ -172,12 +183,21 @@ function applyDynamicHandlers(completion: RootCommand, candidates: CompletionCan
       candidates.worktrees,
     );
   }
+  setArgumentHandler(completion, "rename", "worktree", candidates.renamableWorktrees);
   setArgumentHandler(completion, "run", "task", candidates.tasks);
   setArgumentHandler(completion, "run", "worktree", candidates.worktrees);
   setArgumentHandler(completion, "hook run", "worktree", candidates.worktrees);
   setArgumentHandler(completion, "config init", "worktree", candidates.worktrees);
   setOptionHandler(completion, "create", "tool", candidates.tools);
+  setOptionHandler(completion, "handoff", "tool", candidates.tools);
   setOptionHandler(completion, "open", "tool", candidates.tools);
+}
+
+function worktreeCandidates(worktrees: Awaited<ReturnType<CliContext["worktrees"]["list"]>>) {
+  return worktrees.map((worktree) => ({
+    value: worktree.name,
+    description: `${worktree.branch ?? "detached HEAD"} (${worktree.state})`,
+  }));
 }
 
 function setArgumentHandler(

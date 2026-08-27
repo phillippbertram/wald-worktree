@@ -6,12 +6,14 @@ import { renderWelcome } from "../ui/welcome.js";
 import { initializeProjectConfigurationForWorktree, showConfiguration } from "./commands/config.js";
 import { createWorktree } from "./commands/create.js";
 import { executeCommand } from "./commands/exec.js";
+import { handoffWorktree } from "./commands/handoff.js";
 import { runProjectHook } from "./commands/hook.js";
 import { initializeWorkspace } from "./commands/init.js";
 import { listWorktrees } from "./commands/list.js";
 import { openWorktree } from "./commands/open.js";
 import { pruneWorktrees } from "./commands/prune.js";
 import { removeWorktrees } from "./commands/remove.js";
+import { renameWorktree } from "./commands/rename.js";
 import { runProjectTask } from "./commands/run.js";
 import { uninitializeWorkspace } from "./commands/uninit.js";
 import type { CliContext } from "./context.js";
@@ -47,6 +49,7 @@ export async function runMainMenu(program: Command, context: CliContext): Promis
       }),
     );
     const hasWorktrees = worktrees.length > 0;
+    const canRename = (await context.worktrees.listMoveCandidates(workspace)).length > 0;
     const actions = [
       {
         label: "🌱 Create worktree",
@@ -54,6 +57,16 @@ export async function runMainMenu(program: Command, context: CliContext): Promis
         description: "Create an isolated checkout for a branch.",
         group: "Common",
       },
+      ...(current
+        ? [
+            {
+              label: "Hand off current work",
+              value: "handoff",
+              description: "Copy local changes into a new worktree and keep this source unchanged.",
+              group: "Common",
+            },
+          ]
+        : []),
       ...(hasWorktrees
         ? [
             {
@@ -97,12 +110,18 @@ export async function runMainMenu(program: Command, context: CliContext): Promis
               group: "Project automation",
             },
             {
+              label: "Rename worktree",
+              value: "rename",
+              description: "Rename a checkout directory while keeping its branch.",
+              group: "Maintenance",
+            },
+            {
               label: "🍂 Remove worktree",
               value: "remove",
               description: "Safely remove checkouts while keeping branches.",
               group: "Maintenance",
             },
-          ]
+          ].filter((action) => action.value !== "rename" || canRename)
         : []),
       {
         label: "🍂 Prune stale worktree metadata",
@@ -144,7 +163,10 @@ export async function runMainMenu(program: Command, context: CliContext): Promis
     try {
       switch (action) {
         case "create":
-          await createWorktree({ cd: false, open: false, printPath: false }, context);
+          await createWorktree({ carry: false, cd: false, open: false, printPath: false }, context);
+          break;
+        case "handoff":
+          await handoffWorktree({ cd: false, open: false, printPath: false }, context);
           break;
         case "list":
           await listWorktrees({ json: false }, context);
@@ -162,6 +184,9 @@ export async function runMainMenu(program: Command, context: CliContext): Promis
         }
         case "remove":
           await removeWorktrees({ worktrees: [], force: false, yes: false }, context);
+          break;
+        case "rename":
+          await renameWorktree({}, context);
           break;
         case "open": {
           await openWorktree(undefined, undefined, context);

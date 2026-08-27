@@ -146,6 +146,7 @@ instead prints what remains and how to continue later.
 cd ~/dev/project
 ygg create main --cd
 ygg create feature/payment --tool code
+ygg create feature/review --carry
 ```
 
 The recommended layout is called **[Ygg Flow](docs/worktrees.md#ygg-flow)**. Unlike git-flow or
@@ -200,14 +201,27 @@ be preserved or replaced.
 | Review a remote branch locally        | `ygg create contributor/payment-fix --tool code`           | Run the configured checks, then remove it                               |
 | Run a long test beside development    | `ygg create experiment/migration --cd`                     | Remove it after the experiment                                          |
 | Give two agents separate files        | `ygg create feature/api` and `ygg create feature/ui`       | Open each agent in a separate terminal; verify and remove independently |
+| Move unfinished code to a fresh branch | `ygg handoff feature/review --tool codex`                  | Continue in the new worktree; the source remains unchanged              |
 
 Ygg reuses a local branch, tracks a matching branch from the configured remote, or creates a new
 branch from the default branch. Use `--from HEAD` only when new work should start from the current
-worktree's exact commit.
+worktree's exact commit. Use `--carry` instead when the new branch should also receive the current
+staged, unstaged, and non-ignored untracked files. `ygg handoff` is the guided code-only form of the
+same operation; it does not transfer a running editor, process, or agent session.
+
+Rename a linked worktree directory without changing its branch:
+
+```sh
+ygg rename feature-payment payment-review
+```
+
+The worktree may be dirty. Ygg keeps its branch, `HEAD`, index, and files and refuses primary,
+current, external, locked, missing, or submodule-containing worktrees.
 
 ## Move between worktrees without friction
 
-Shell integration lets `ygg cd` and `ygg create --cd` take you straight to the selected worktree:
+Shell integration lets `ygg cd`, `ygg create --cd`, and `ygg handoff --cd` take you straight to the
+selected worktree:
 
 ```sh
 # zsh
@@ -222,7 +236,7 @@ ygg completion fish | source
 
 Add the matching line to your shell configuration once and navigation feels just like a built-in
 shell command: a small Bifröst between worktree worlds. Without it, `ygg cd` still prints the
-canonical path and `ygg create --cd` prints a normal `cd` fallback.
+canonical path; create and handoff print a normal `cd` fallback.
 
 ## Make every worktree feel ready
 
