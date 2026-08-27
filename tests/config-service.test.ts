@@ -14,6 +14,19 @@ import {
 describe("project YAML configuration", () => {
   const configs = new ConfigService();
 
+  it("rejects repository project configuration symlinks", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "ygg-config-link-test-"));
+    try {
+      const target = path.join(root, "outside.yml");
+      await fs.writeFile(target, "version: 1\n", "utf8");
+      await fs.symlink(target, path.join(root, projectConfigFileName));
+
+      await expect(configs.readProjectConfig(root)).rejects.toThrow(/must be a regular file/u);
+    } finally {
+      await fs.rm(root, { force: true, recursive: true });
+    }
+  });
+
   it("uses the clean-break .yml filenames", () => {
     expect(projectConfigFileName).toBe(".ygg.yml");
     expect(workspaceConfigFileName).toBe("workspace.yml");

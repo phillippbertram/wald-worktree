@@ -227,6 +227,23 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     expect(preview.stdout).toContain("Stale worktree metadata:");
     expect(preview.stdout).toContain("feature-stale");
     expect(preview.stdout).toContain("Preview only");
+    const jsonPreview = await execa(process.execPath, cliArguments("prune", "--json"), {
+      cwd: workspace,
+      reject: false,
+    });
+    expect(JSON.parse(jsonPreview.stdout)).toMatchObject({
+      action: "preview",
+      worktrees: [
+        { name: "feature-stale", path: path.join(await fs.realpath(workspace), "feature-stale") },
+      ],
+    });
+    const jsonConfig = await execa(process.execPath, cliArguments("config", "--json"), {
+      cwd: workspace,
+      reject: false,
+    });
+    expect(JSON.parse(jsonConfig.stdout)).toMatchObject({
+      paths: { workspaceRoot: await fs.realpath(workspace) },
+    });
     const metadataBefore = await execa(
       "git",
       [`--git-dir=${path.join(workspace, "repo.git")}`, "worktree", "list", "--porcelain"],
@@ -330,6 +347,15 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     expect(preview.exitCode, preview.stderr).toBe(0);
     expect(preview.stdout).toContain("Ygg workspace metadata:");
     expect(preview.stdout).toContain("Preview only");
+    const jsonPreview = await execa(process.execPath, cliArguments("uninit", "--json"), {
+      cwd: repository.source,
+      reject: false,
+    });
+    expect(JSON.parse(jsonPreview.stdout)).toMatchObject({
+      action: "preview",
+      blockingWorktrees: [],
+      dataEntries: [],
+    });
     await expect(fs.stat(path.join(repository.source, ".git", "ygg"))).resolves.toSatisfy((stat) =>
       stat.isDirectory(),
     );

@@ -69,12 +69,12 @@ export async function runTask<T>(label: string, task: () => Promise<T>): Promise
 export async function confirm(
   question: string,
   defaultValue = false,
-  _options: PromptOptions = {},
+  options: PromptOptions = {},
 ): Promise<boolean> {
   return await promptWithNavigation((signal) =>
     inquirerConfirm(
       {
-        message: question,
+        message: promptMessage(question, options.navigation),
         default: defaultValue,
       },
       { signal },
@@ -185,13 +185,13 @@ export async function selectManyWorktrees(
 export async function promptText(
   question: string,
   defaultValue?: string,
-  _options: PromptOptions = {},
+  options: PromptOptions = {},
 ): Promise<string> {
   return (
     await promptWithNavigation((signal) =>
       input(
         {
-          message: question,
+          message: promptMessage(question, options.navigation),
           default: defaultValue,
         },
         { signal },
@@ -201,6 +201,17 @@ export async function promptText(
 }
 
 export async function printWorktreeTable(worktrees: Worktree[]): Promise<void> {
+  if ((process.stdout.columns ?? Number.POSITIVE_INFINITY) < 100) {
+    for (const [index, worktree] of worktrees.entries()) {
+      if (index > 0) process.stdout.write("\n");
+      process.stdout.write(`${style.worktree(worktree.name)}\n`);
+      process.stdout.write(`  Branch  ${style.branch(worktree.branch ?? "detached")}\n`);
+      process.stdout.write(`  Role    ${worktree.role}\n`);
+      process.stdout.write(`  Status  ${style.state(worktree.state, worktree.state)}\n`);
+      process.stdout.write(`  Path    ${style.path(worktree.path)}\n`);
+    }
+    return;
+  }
   printTable(
     ["NAME", "BRANCH", "ROLE", "STATUS", "PATH"],
     worktrees.map((worktree) => [
@@ -301,6 +312,10 @@ function navigationTheme(navigation: PromptNavigation | undefined): {
           .join(pc.dim(" • ")),
     },
   };
+}
+
+function promptMessage(question: string, navigation: PromptNavigation | undefined): string {
+  return `${question} ${pc.dim(`[Esc ${navigation ?? "cancel"} · Ctrl+C exit]`)}`;
 }
 
 async function promptWithNavigation<T>(prompt: (signal: AbortSignal) => Promise<T>): Promise<T> {

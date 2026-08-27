@@ -558,6 +558,10 @@ Run these with `ygg run verify [worktree]` and `ygg open [worktree] --tool app-a
 may contain `{path}`; the selected worktree is also the process working directory. `mode` is
 `foreground` or `detached`.
 
+Effective custom tools override built-in profiles with the same name. This lets a trusted project
+redefine `code`, `codex`, or another built-in deliberately. `{path}` is expanded before executable
+availability is checked, and relative executable paths resolve from the selected worktree.
+
 | Field | Default | Purpose |
 | --- | --- | --- |
 | `tasks.<name>.description` | none | Human-readable text shown during interactive task selection. |
@@ -572,6 +576,9 @@ failure.
 
 Built-in profiles are `code`, `cursor`, `zed`, `codex`, `codex-app`, and `claude`; unavailable
 commands are omitted from interactive selection.
+
+Repository-owned `.ygg.yml` must be a regular file. Ygg rejects a symbolic link or directory at
+that path so executable configuration cannot silently resolve outside the worktree.
 
 ## Trust
 

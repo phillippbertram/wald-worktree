@@ -13,6 +13,7 @@ const uninitInputSchema = z
     apply: z.boolean().default(false),
     force: z.boolean().default(false),
     yes: z.boolean().default(false),
+    json: z.boolean().default(false),
   })
   .strict()
   .superRefine((value, context) => {
@@ -41,6 +42,7 @@ export function registerUninitCommand(program: Command, context: CliContext): vo
     .option("--apply", "Remove Ygg workspace metadata after previewing it")
     .option("--force", "Discard local data stored below the Ygg metadata directory")
     .option("--yes", "Confirm uninitialization without prompting; requires --apply")
+    .option("--json", "Print machine-readable preview or result")
     .action(async (options: unknown) => {
       await uninitializeWorkspace(parseCliInput(uninitInputSchema, options), context);
     });
@@ -56,12 +58,18 @@ export async function uninitializeWorkspace(
     (worktree) => worktree.role !== "primary",
   );
 
-  printUninitializationPreview(workspace, inspection, blockingWorktrees, context.output.stdout);
+  if (!input.json) {
+    printUninitializationPreview(workspace, inspection, blockingWorktrees, context.output.stdout);
+  }
   if (!input.apply) {
-    writeLine(
-      context.output.stdout,
-      `${style.warning("Preview only.")} Run ${style.command("ygg uninit --apply")} to remove the Ygg workspace metadata.`,
-    );
+    if (input.json) {
+      writeUninitJson(context.output.stdout, "preview", workspace, inspection, blockingWorktrees);
+    } else {
+      writeLine(
+        context.output.stdout,
+        `${style.warning("Preview only.")} Run ${style.command("ygg uninit --apply")} to remove the Ygg workspace metadata.`,
+      );
+    }
     return false;
   }
 
@@ -97,11 +105,38 @@ export async function uninitializeWorkspace(
     );
   }
   await context.workspaces.uninitialize(workspace, { force: input.force });
-  await success(
-    "Removed Ygg workspace metadata. The Git repository, branches, and worktree directory were kept.",
-    context.output,
-  );
+  if (input.json) {
+    writeUninitJson(context.output.stdout, "applied", workspace, inspection, []);
+  } else {
+    await success(
+      "Removed Ygg workspace metadata. The Git repository, branches, and worktree directory were kept.",
+      context.output,
+    );
+  }
   return true;
+}
+
+function writeUninitJson(
+  stream: NodeJS.WritableStream,
+  action: "preview" | "applied",
+  workspace: Awaited<ReturnType<CliContext["workspaces"]["find"]>>,
+  inspection: Awaited<ReturnType<CliContext["workspaces"]["inspectUninitialization"]>>,
+  blockingWorktrees: Worktree[],
+): void {
+  writeLine(
+    stream,
+    JSON.stringify({
+      action,
+      remove: [inspection.metadataDir, inspection.markerPath].filter(Boolean),
+      keep: [workspace.gitDir, workspace.worktreeDir, workspace.primaryWorktree].filter(Boolean),
+      blockingWorktrees: blockingWorktrees.map(({ name, path: worktreePath, state }) => ({
+        name,
+        path: worktreePath,
+        state,
+      })),
+      dataEntries: inspection.dataEntries,
+    }),
+  );
 }
 
 function printUninitializationPreview(

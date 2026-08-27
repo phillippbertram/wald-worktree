@@ -1,39 +1,23 @@
+import type {
+  AutomationObserver,
+  AutomationPresentationContext,
+  AutomationRow,
+  AutomationStatus,
+} from "../services/automation-observer.js";
 import { style } from "./style.js";
-
-export type AutomationStatus =
-  | "RUNNING"
-  | "DONE"
-  | "CREATED"
-  | "UNCHANGED"
-  | "SKIPPED"
-  | "REPLACED"
-  | "FAILED";
-
-export type AutomationRow = {
-  step: number;
-  status: AutomationStatus;
-  type: "command" | "copy" | "symlink";
-  source: string;
-  target: string;
-  note?: string;
-};
-
-export type AutomationPresentationContext = {
-  kind: "Hook" | "Task";
-  name: string;
-  worktree: string;
-  branch: string | null;
-  path: string;
-};
 
 const columnWidths = [4, 9, 8, 38, 34] as const;
 const startedOutputs = new WeakSet<NodeJS.WritableStream>();
 
-export class AutomationReporter {
+export class AutomationReporter implements AutomationObserver {
+  private readonly narrow: boolean;
+
   constructor(
     private readonly output: NodeJS.WritableStream | undefined,
     private readonly context: AutomationPresentationContext,
-  ) {}
+  ) {
+    this.narrow = readOutputColumns(output) < 100;
+  }
 
   start(): void {
     if (!this.output) return;
@@ -46,6 +30,7 @@ export class AutomationReporter {
       this.context.branch ? style.branch(this.context.branch) : style.value("detached"),
     );
     this.writeContext("Path", style.path(this.context.path));
+    if (this.narrow) return;
     this.write("");
     this.write(
       formatColumns(
@@ -57,6 +42,16 @@ export class AutomationReporter {
 
   row(row: AutomationRow): void {
     if (!this.output) return;
+    if (this.narrow) {
+      this.write(
+        `${style.value(row.step)}  ${styleAutomationStatus(row.status, row.status)}  ${style.label(row.type)}`,
+      );
+      this.write(`  ${style.label("Source")}  ${style.command(row.source)}`);
+      this.write(`  ${style.label("Target")}  ${style.path(row.target)}`);
+      if (row.note)
+        this.write(`  ${style.label("Note")}    ${styleAutomationNote(row.note, row.status)}`);
+      return;
+    }
     const cells = [String(row.step), row.status, row.type, row.source, row.target, row.note ?? ""];
     this.write(
       formatColumns(cells, (cell, column) => {
@@ -91,6 +86,12 @@ export class AutomationReporter {
   private write(value: string): void {
     this.output?.write(`${value}\n`);
   }
+}
+
+function readOutputColumns(output: NodeJS.WritableStream | undefined): number {
+  if (!output || !("columns" in output)) return Number.POSITIVE_INFINITY;
+  const columns = output.columns;
+  return typeof columns === "number" ? columns : Number.POSITIVE_INFINITY;
 }
 
 function formatColumns(

@@ -50,13 +50,17 @@ export class ToolService {
 
   async availableProfiles(
     project: ProjectConfigDocument | null,
+    worktree?: Worktree,
   ): Promise<Array<{ name: string; profile: ToolProfile }>> {
     const profiles = this.profiles(project);
     const checks = await Promise.all(
       Object.entries(profiles).map(async ([name, profile]) => ({
         name,
         profile,
-        available: await commandExists(profile.command[0] as string),
+        available: await commandExists(
+          expandToolArgument(profile.command[0] as string, worktree?.path),
+          worktree?.path,
+        ),
       })),
     );
     return checks
@@ -74,10 +78,10 @@ export class ToolService {
     if (!profile) {
       throw new YggError(`Unknown tool profile: ${toolName}`);
     }
-    if (!(await commandExists(profile.command[0] as string))) {
+    const command = profile.command.map((argument) => expandToolArgument(argument, worktree.path));
+    if (!(await commandExists(command[0] as string, worktree.path))) {
       throw new YggError(`Tool is not available in PATH: ${profile.command[0]}`);
     }
-    const command = profile.command.map((argument) => argument.replaceAll("{path}", worktree.path));
     if (profile.mode === "detached") {
       await this.processes.launchDetached(command, worktree.path);
     } else {
@@ -86,10 +90,17 @@ export class ToolService {
   }
 }
 
-async function commandExists(command: string): Promise<boolean> {
+function expandToolArgument(argument: string, worktreePath?: string): string {
+  return worktreePath ? argument.replaceAll("{path}", worktreePath) : argument;
+}
+
+async function commandExists(command: string, cwd?: string): Promise<boolean> {
   if (command.includes(path.sep)) {
+    const executable = path.isAbsolute(command)
+      ? command
+      : path.resolve(cwd ?? process.cwd(), command);
     try {
-      await fs.access(command, fs.constants.X_OK);
+      await fs.access(executable, fs.constants.X_OK);
       return true;
     } catch {
       return false;

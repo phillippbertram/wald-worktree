@@ -1,9 +1,15 @@
-import { describe, expect, it } from "vitest";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { describe, expect, it, vi } from "vitest";
 import { YggError } from "../src/domain/errors.js";
+import type { Workspace } from "../src/domain/types.js";
+import type { GitClient } from "../src/infrastructure/git-client.js";
 import {
   parseWorktreePorcelain,
   slugifyBranch,
   validateWorktreeName,
+  WorktreeService,
 } from "../src/services/worktree-service.js";
 
 describe("worktree domain", () => {
@@ -36,5 +42,57 @@ describe("worktree domain", () => {
         lockReason: "maintenance",
       }),
     ]);
+  });
+
+  it("reports an existing worktree as unavailable when git status fails", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "ygg-unavailable-test-"));
+    try {
+      const git = {
+        run: vi.fn().mockImplementation(async (args: string[]) =>
+          args[0] === "worktree"
+            ? {
+                stdout: `worktree ${root}\0HEAD abc123\0branch refs/heads/main\0\0`,
+                stderr: "",
+                exitCode: 0,
+              }
+            : { stdout: "", stderr: "broken metadata", exitCode: 128 },
+        ),
+      } as unknown as GitClient;
+      const workspace = {
+        gitDir: path.join(root, ".git"),
+        worktreeDir: path.dirname(root),
+        primaryWorktree: null,
+      } as Workspace;
+
+      await expect(new WorktreeService(git).list(workspace)).resolves.toEqual([
+        expect.objectContaining({ path: root, state: "unavailable" }),
+      ]);
+    } finally {
+      await fs.rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it("treats an unavailable state as a non-bypassable removal blocker", async () => {
+    const git = { succeeds: vi.fn().mockResolvedValue(false) } as unknown as GitClient;
+    const service = new WorktreeService(git);
+    vi.spyOn(service, "resolve").mockResolvedValue({
+      name: "broken",
+      role: "linked",
+      path: "/workspace/broken",
+      head: "abc123",
+      branch: "broken",
+      branchRef: "refs/heads/broken",
+      locked: false,
+      lockReason: null,
+      prunable: false,
+      state: "unavailable",
+    });
+    const workspace = {
+      config: { defaultBranch: "main", remote: null },
+    } as Workspace;
+
+    await expect(service.inspectRemoval(workspace, "broken")).resolves.toMatchObject({
+      hardBlockers: ["the worktree state could not be read safely"],
+    });
   });
 });

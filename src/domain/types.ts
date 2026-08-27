@@ -28,7 +28,7 @@ export type Workspace = {
   config: WorkspaceConfig;
 };
 
-export type WorktreeState = "clean" | "modified" | "locked" | "missing";
+export type WorktreeState = "clean" | "modified" | "locked" | "missing" | "unavailable";
 
 export type Worktree = {
   name: string;

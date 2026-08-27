@@ -12,6 +12,7 @@ const pruneInputSchema = z
   .object({
     apply: z.boolean().default(false),
     yes: z.boolean().default(false),
+    json: z.boolean().default(false),
   })
   .strict()
   .superRefine((value, context) => {
@@ -32,6 +33,7 @@ export function registerPruneCommand(program: Command, context: CliContext): voi
     .description("Preview or remove stale Git worktree metadata")
     .option("--apply", "Remove the stale metadata after previewing it")
     .option("--yes", "Confirm pruning without prompting; requires --apply")
+    .option("--json", "Print machine-readable preview or result")
     .action(async (options: unknown) => {
       await pruneWorktrees(parseCliInput(pruneInputSchema, options), context);
     });
@@ -41,16 +43,23 @@ export async function pruneWorktrees(input: PruneInput, context: CliContext): Pr
   const workspace = await context.workspaces.find();
   const candidates = await context.worktrees.listPrunable(workspace);
   if (candidates.length === 0) {
-    writeLine(context.output.stdout, "No stale worktree metadata found.");
+    if (input.json) {
+      writePruneJson(context.output.stdout, "none", candidates);
+    } else {
+      writeLine(context.output.stdout, "No stale worktree metadata found.");
+    }
     return;
   }
 
-  printPrunePreview(candidates, context.output.stdout);
+  if (!input.json) printPrunePreview(candidates, context.output.stdout);
   if (!input.apply) {
-    writeLine(
-      context.output.stdout,
-      `${style.warning("Preview only.")} Run ${style.command("ygg prune --apply")} to remove this metadata.`,
-    );
+    if (input.json) writePruneJson(context.output.stdout, "preview", candidates);
+    else {
+      writeLine(
+        context.output.stdout,
+        `${style.warning("Preview only.")} Run ${style.command("ygg prune --apply")} to remove this metadata.`,
+      );
+    }
     return;
   }
 
@@ -72,9 +81,30 @@ export async function pruneWorktrees(input: PruneInput, context: CliContext): Pr
     (await context.worktrees.listPrunable(workspace)).map((worktree) => worktree.path),
   );
   const removed = candidates.filter((worktree) => !remaining.has(worktree.path));
-  await success(
-    `Pruned ${style.value(removed.length)} stale worktree ${removed.length === 1 ? "registration" : "registrations"}. Branches and directories were not removed.`,
-    context.output,
+  if (input.json) writePruneJson(context.output.stdout, "applied", removed);
+  else {
+    await success(
+      `Pruned ${style.value(removed.length)} stale worktree ${removed.length === 1 ? "registration" : "registrations"}. Branches and directories were not removed.`,
+      context.output,
+    );
+  }
+}
+
+function writePruneJson(
+  stream: NodeJS.WritableStream,
+  action: "none" | "preview" | "applied",
+  worktrees: Worktree[],
+): void {
+  writeLine(
+    stream,
+    JSON.stringify({
+      action,
+      worktrees: worktrees.map(({ name, branch, path: worktreePath }) => ({
+        name,
+        branch,
+        path: worktreePath,
+      })),
+    }),
   );
 }
 

@@ -93,4 +93,37 @@ describe("project configuration initialization", () => {
       ),
     ).resolves.toMatchObject({ config: { defaults: { fetch: false } } });
   });
+
+  it("prefers packageManager metadata and only freezes installs with a matching lockfile", async () => {
+    await fs.writeFile(
+      path.join(root, "package.json"),
+      JSON.stringify({ packageManager: "yarn@4.9.1", scripts: {} }),
+      "utf8",
+    );
+
+    await expect(initializer.inspect(root)).resolves.toMatchObject({
+      packageManager: "yarn",
+      installCommand: ["yarn", "install"],
+    });
+
+    await fs.rm(path.join(root, "pnpm-lock.yaml"));
+    await expect(initializer.inspect(root)).resolves.toMatchObject({
+      packageManager: "yarn",
+      installCommand: ["yarn", "install"],
+    });
+  });
+
+  it("uses a non-frozen install when packageManager has no lockfile", async () => {
+    await fs.rm(path.join(root, "pnpm-lock.yaml"));
+    await fs.writeFile(
+      path.join(root, "package.json"),
+      JSON.stringify({ packageManager: "pnpm@11.15.1", scripts: {} }),
+      "utf8",
+    );
+
+    await expect(initializer.inspect(root)).resolves.toMatchObject({
+      packageManager: "pnpm",
+      installCommand: ["pnpm", "install"],
+    });
+  });
 });

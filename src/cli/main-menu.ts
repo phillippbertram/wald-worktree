@@ -1,5 +1,6 @@
 import type { Command } from "commander";
 import { YggError } from "../domain/errors.js";
+import { redactSensitiveText, sanitizeTerminalText } from "../infrastructure/safe-text.js";
 import { style } from "../ui/style.js";
 import { isInteractiveTerminal, isPromptBackError, selectValue } from "../ui/terminal.js";
 import { renderWelcome } from "../ui/welcome.js";
@@ -15,6 +16,8 @@ import { pruneWorktrees } from "./commands/prune.js";
 import { removeWorktrees } from "./commands/remove.js";
 import { renameWorktree } from "./commands/rename.js";
 import { runProjectTask } from "./commands/run.js";
+import { setupWorktree } from "./commands/setup.js";
+import { showWorkspaceStatus } from "./commands/status.js";
 import { uninitializeWorkspace } from "./commands/uninit.js";
 import type { CliContext } from "./context.js";
 import { findWorkspaceOrNull, writeLine } from "./helpers.js";
@@ -83,8 +86,20 @@ export async function runMainMenu(program: Command, context: CliContext): Promis
         description: "Show all checkouts and their current state.",
         group: "Common",
       },
+      {
+        label: "Workspace status",
+        value: "status",
+        description: "Show workspace, tracking, trust, and worktree health.",
+        group: "Common",
+      },
       ...(hasWorktrees
         ? [
+            {
+              label: "Set up worktree",
+              value: "setup",
+              description: "Re-run post-create setup for a checkout.",
+              group: "Project automation",
+            },
             {
               label: "Run project task",
               value: "run",
@@ -171,12 +186,15 @@ export async function runMainMenu(program: Command, context: CliContext): Promis
         case "list":
           await listWorktrees({ json: false }, context);
           break;
+        case "status":
+          await showWorkspaceStatus({ json: false }, context);
+          break;
         case "prune":
-          await pruneWorktrees({ apply: true, yes: false }, context);
+          await pruneWorktrees({ apply: true, yes: false, json: false }, context);
           break;
         case "uninit": {
           const removed = await uninitializeWorkspace(
-            { apply: true, force: false, yes: false },
+            { apply: true, force: false, yes: false, json: false },
             context,
           );
           if (removed) return;
@@ -198,6 +216,9 @@ export async function runMainMenu(program: Command, context: CliContext): Promis
         }
         case "run":
           await runProjectTask({}, context);
+          break;
+        case "setup":
+          await setupWorktree({}, context);
           break;
         case "hook":
           await runProjectHook({}, context);
@@ -222,7 +243,10 @@ export async function runMainMenu(program: Command, context: CliContext): Promis
     } catch (error) {
       if (isPromptBackError(error)) continue;
       if (error instanceof YggError && error.exitCode !== 130) {
-        writeLine(context.output.stderr, `${style.danger("Error:")} ${error.message}`);
+        writeLine(
+          context.output.stderr,
+          `${style.danger("Error:")} ${sanitizeTerminalText(redactSensitiveText(error.message), { multiline: true })}`,
+        );
         continue;
       }
       throw error;

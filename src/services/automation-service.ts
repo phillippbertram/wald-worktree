@@ -11,11 +11,13 @@ import type {
 } from "../domain/types.js";
 import { isPathInsideOrEqual } from "../infrastructure/path-utils.js";
 import { ProcessRunner } from "../infrastructure/process-runner.js";
+import { formatCommandForDisplay, formatShellForDisplay } from "../infrastructure/safe-text.js";
 import {
-  type AutomationReporter,
+  type AutomationObserver,
+  type AutomationObserverFactory,
   type AutomationStatus,
-  AutomationReporter as TerminalAutomationReporter,
-} from "../ui/automation-reporter.js";
+  silentAutomationObserverFactory,
+} from "./automation-observer.js";
 
 export type AutomationContext = {
   workspace: Workspace;
@@ -29,7 +31,10 @@ export type AutomationContext = {
 };
 
 export class AutomationService {
-  constructor(private readonly processes = new ProcessRunner()) {}
+  constructor(
+    private readonly processes = new ProcessRunner(),
+    private readonly createObserver: AutomationObserverFactory = silentAutomationObserverFactory,
+  ) {}
 
   async runHook(
     document: ProjectConfigDocument | null,
@@ -55,7 +60,7 @@ export class AutomationService {
   async runSteps(steps: AutomationStep[], context: AutomationContext): Promise<void> {
     if (steps.length === 0) return;
     const taskName = context.event.startsWith("task:") ? context.event.slice("task:".length) : null;
-    const reporter = new TerminalAutomationReporter(context.output, {
+    const reporter = this.createObserver(context.output, {
       kind: taskName === null ? "Hook" : "Task",
       name: taskName ?? context.event,
       worktree: path.basename(context.targetPath),
@@ -103,7 +108,7 @@ export class AutomationService {
     step: AutomationStep,
     context: AutomationContext,
     stepNumber: number,
-    reporter: AutomationReporter,
+    reporter: AutomationObserver,
   ): Promise<void> {
     if (step.type === "command") {
       await this.runCommand(step, context, stepNumber, reporter);
@@ -116,7 +121,7 @@ export class AutomationService {
     step: Extract<AutomationStep, { type: "command" }>,
     context: AutomationContext,
     stepNumber: number,
-    reporter: AutomationReporter,
+    reporter: AutomationObserver,
   ): Promise<void> {
     const cwd = resolveWorkingDirectory(step.cwd, context);
     await assertDirectory(cwd, "Command working directory");
@@ -155,7 +160,7 @@ export class AutomationService {
     step: Extract<AutomationStep, { type: "copy" | "symlink" }>,
     context: AutomationContext,
     stepNumber: number,
-    reporter: AutomationReporter,
+    reporter: AutomationObserver,
   ): Promise<void> {
     if (context.event !== "post_create" && !context.event.startsWith("task:")) {
       throw new YggError(`${step.type} steps are only supported in post_create hooks and tasks.`);
@@ -312,7 +317,7 @@ async function runGlobFileStep(
   sourceStat: Awaited<ReturnType<typeof fs.lstat>>,
   targetRoot: string,
   stepNumber: number,
-  reporter: AutomationReporter,
+  reporter: AutomationObserver,
 ): Promise<void> {
   if (!sourceStat.isDirectory() || sourceStat.isSymbolicLink()) {
     throw new YggError(`Glob source must be a directory: ${sourceDirectory}`);
@@ -458,7 +463,7 @@ async function runGlobFileStep(
 }
 
 function writeFileStepResult(
-  reporter: AutomationReporter,
+  reporter: AutomationObserver,
   stepNumber: number,
   step: FileStep,
   source: string,
@@ -536,14 +541,9 @@ async function symlinkPointsTo(
 }
 
 function formatConfiguredCommand(step: Extract<AutomationStep, { type: "command" }>): string {
-  if (step.argv) return step.argv.map(quoteCommandArgument).join(" ");
-  if (step.shell) return `/bin/sh -c ${JSON.stringify(step.shell)}`;
+  if (step.argv) return formatCommandForDisplay(step.argv);
+  if (step.shell) return `/bin/sh -c ${JSON.stringify(formatShellForDisplay(step.shell))}`;
   return "command";
-}
-
-function quoteCommandArgument(argument: string): string {
-  if (/^[A-Za-z0-9_@%+=:,./-]+$/u.test(argument)) return argument;
-  return `'${argument.replaceAll("'", `'\\''`)}'`;
 }
 
 function singleLine(value: string): string {

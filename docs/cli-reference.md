@@ -131,8 +131,10 @@ copied. A clean source is valid and behaves like normal creation with an explici
 Carry rejects unmerged entries, active merge/rebase/cherry-pick state, sparse checkouts, dirty
 submodules, and unsupported special files before creating the target. The source is fingerprinted
 before and after transfer and is never cleaned or modified by the transfer. Before `post_create`, a
-failed application or verification rolls back only the worktree and new branch created by that
-invocation. A failed `post_create` keeps the fully transferred worktree and reports
+failed application rolls back the new worktree and branch only while Ygg has verified that the
+target is still clean and no write was attempted. Once a transfer may have written data, Ygg keeps
+the target and branch and prints a recovery path for manual inspection. A failed `post_create`
+keeps the fully transferred worktree and reports
 `ygg setup <worktree>` as usual.
 
 Resolution order is local branch, matching configured remote branch, then a new branch from
@@ -183,8 +185,12 @@ not available locally, and `not-applicable` for detached HEAD or the workspace r
 
 `--json` emits one object with `workspace`, nullable `current`, nullable `project`, and `worktrees`
 fields. The current record includes its tracking state; project trust is `not-required`, `trusted`,
-or `untrusted`. Modified, locked, missing, untrusted, and gone states are informational and still
+or `untrusted`. Modified, locked, missing, unavailable, untrusted, and gone states are informational and still
 exit successfully. Use `ygg list --json` for complete individual worktree records.
+
+```json
+{"workspace":{"root":"/dev/project","defaultBranch":"main"},"current":null,"project":null,"worktrees":{"total":1,"clean":1,"modified":0,"locked":0,"missing":0,"unavailable":0}}
+```
 
 ## `ygg list`
 
@@ -193,8 +199,13 @@ ygg list [--json]
 ```
 
 Lists each worktree's name, branch, role, state, and path. `--json` emits the complete
-machine-readable worktree records. States are `clean`, `modified`, `locked`, or `missing`; roles are
-`primary` or `linked`.
+machine-readable worktree records. States are `clean`, `modified`, `locked`, `missing`, or
+`unavailable`; roles are `primary` or `linked`. `unavailable` means the directory exists but Ygg
+could not safely read its Git status; removal and rename remain blocked.
+
+```json
+[{"name":"main","role":"primary","path":"/dev/project/main","head":"abc123","branch":"main","branchRef":"refs/heads/main","locked":false,"lockReason":null,"prunable":false,"state":"clean"}]
+```
 
 ## `ygg cd`
 
@@ -213,7 +224,8 @@ ygg open [worktree] [--tool <profile>]
 
 Opens the selected worktree using a built-in or effective project-configuration tool profile. The
 project default is used when available. Otherwise a terminal prompts; non-interactive use requires
-`--tool`. Executable project profiles require trusted configuration.
+`--tool`. Executable project profiles require trusted configuration. `{path}` is expanded before
+availability checks; relative executable paths resolve from the selected worktree.
 
 ## `ygg exec`
 
@@ -320,14 +332,19 @@ explicit identifiers and `--yes`.
 | `--force` | Bypass dirty, unmerged, and lock safeguards. |
 | `--yes` | Confirm removal without prompting. |
 
-The retained primary checkout is always protected. Branches are never deleted. Trusted
-`pre_remove` and `post_remove` hooks run around Git removal.
+The three bypassable safeguards are staged, unstaged, or untracked changes; a branch not merged
+into the configured default branch; and a Git worktree lock. With `--force`, Ygg prints the branch,
+path, and every bypassed safeguard before confirmation, including with `--yes`.
+
+The retained primary checkout and a worktree whose state is unavailable are hard blockers and
+cannot be bypassed. Duplicate identifiers resolving to the same worktree are removed once.
+Branches are never deleted. Trusted `pre_remove` and `post_remove` hooks run around Git removal.
 
 ## `ygg prune`
 
 ```text
 ygg prune
-ygg prune --apply [--yes]
+ygg prune --apply [--yes] [--json]
 ```
 
 `ygg prune` previews registrations whose worktree directory is missing and which Git considers
@@ -338,12 +355,13 @@ non-interactive application requires `--apply --yes`. `--yes` without `--apply` 
 
 Pruning removes only stale Git administrative metadata. It never removes a directory or branch,
 does not run project hooks, and preserves locked worktrees.
+`--json` emits one object with `action` (`none`, `preview`, or `applied`) and `worktrees`.
 
 ## `ygg uninit`
 
 ```text
 ygg uninit
-ygg uninit --apply [--force] [--yes]
+ygg uninit --apply [--force] [--yes] [--json]
 ```
 
 `ygg uninit` previews the Ygg workspace metadata and adopted-workspace `.ygg` link that would be
@@ -358,11 +376,12 @@ with `ygg remove` and clean missing registrations with `ygg prune --apply` first
 Files or additional directories below the Ygg metadata directory are local data. This includes
 `.ygg/project.yml` and content below `shared`. Uninitialization preserves them by default and
 requires `--force` to discard them. Project hooks are not run.
+`--json` emits the action, remove/keep paths, blocking worktrees, and local data entries.
 
 ## `ygg config`
 
 ```text
-ygg config
+ygg config [--json]
 ygg config init [worktree] [--scope workspace|project] [--from-project] [--yes] [--force]
 ygg config trust [--yes]
 ygg config untrust [--yes]
@@ -371,6 +390,8 @@ ygg config untrust [--yes]
 `ygg config` prints normalized workspace YAML followed by absolute workspace, worktree, shared-file,
 repository-project, workspace-project, and effective configuration data, including the semantic
 behavior hash and trust state.
+`--json` emits normalized workspace configuration, derived paths, and the nullable effective
+project record as one object.
 
 | Command | Meaning |
 | --- | --- |

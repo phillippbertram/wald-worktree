@@ -14,6 +14,7 @@ import type {
   Worktree,
 } from "../domain/types.js";
 import type { GitClient } from "../infrastructure/git-client.js";
+import { formatCommandForDisplay, formatShellForDisplay } from "../infrastructure/safe-text.js";
 
 export const workspaceConfigFileName = "workspace.yml";
 export const projectConfigFileName = ".ygg.yml";
@@ -227,14 +228,21 @@ export class ConfigService {
 
   async readProjectConfig(root: string): Promise<ProjectConfigDocument | null> {
     const configPath = path.join(root, projectConfigFileName);
+    let stat: Awaited<ReturnType<typeof fs.lstat>>;
     try {
-      return this.parseProjectConfig(await fs.readFile(configPath, "utf8"), configPath);
+      stat = await fs.lstat(configPath);
     } catch (error) {
       if (isNotFound(error)) {
         return null;
       }
       throw error;
     }
+    if (stat.isSymbolicLink() || !stat.isFile()) {
+      throw new YggError(
+        `Repository project configuration must be a regular file, not a link or directory: ${configPath}`,
+      );
+    }
+    return this.parseProjectConfig(await fs.readFile(configPath, "utf8"), configPath);
   }
 
   async writeProjectConfig(
@@ -818,6 +826,8 @@ function semanticHash(value: ProjectConfig): string {
 }
 
 function toTrustCompatibleProjectConfig(config: ProjectConfig): unknown {
+  // Preserve hashes created before on_existing replaced overwrite so equivalent behavior does not
+  // unexpectedly revoke an existing local trust decision.
   const convertStep = (step: AutomationStep): unknown => {
     if (step.type === "command") return step;
     const { onExisting, ...legacyStep } = step;
@@ -866,7 +876,11 @@ function projectConfigRequiresTrust(config: ProjectConfig): boolean {
 
 function describeStep(step: AutomationStep): string {
   if (step.type === "command") {
-    return step.argv?.join(" ") ?? step.shell ?? "command";
+    return step.argv
+      ? formatCommandForDisplay(step.argv)
+      : step.shell
+        ? `/bin/sh -c ${JSON.stringify(formatShellForDisplay(step.shell))}`
+        : "command";
   }
   const source = step.glob ? path.posix.join(step.from, step.glob) : step.from;
   const policy = step.onExisting === "error" ? "" : ` [on_existing=${step.onExisting}]`;

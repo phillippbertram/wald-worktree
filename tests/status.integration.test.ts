@@ -72,7 +72,14 @@ describe("ygg status", { timeout: 30_000 }, () => {
         tracking: { state: "tracked", upstream: "origin/main", ahead: 0, behind: 0 },
       }),
       project: null,
-      worktrees: { total: 1, clean: 1, modified: 0, locked: 0, missing: 0 },
+      worktrees: {
+        total: 1,
+        clean: 1,
+        modified: 0,
+        locked: 0,
+        missing: 0,
+        unavailable: 0,
+      },
     });
   });
 
@@ -189,6 +196,7 @@ describe("ygg status", { timeout: 30_000 }, () => {
       modified: 1,
       locked: 1,
       missing: 1,
+      unavailable: 0,
     });
   });
 });

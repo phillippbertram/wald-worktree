@@ -12,7 +12,7 @@ Start with read-only discovery:
 ```sh
 ygg status --json
 ygg list --json
-ygg config
+ygg config --json
 ygg prune
 ```
 
@@ -33,7 +33,8 @@ Both copy its staged, unstaged, and non-ignored untracked code into a fresh work
 the source; they do not move a running process or agent session. Use `ygg rename <worktree>
 <new-name>` to rename an eligible linked worktree directory without renaming its branch.
 
-Do not use `--force` for removal without verifying that dirty or unmerged work can be discarded.
+Do not use `--force` for removal without verifying that local changes, an unmerged branch, or a
+worktree lock can be discarded or bypassed. Ygg prints these bypassed safeguards before removal.
 Never infer permission to delete branches or the primary checkout; `ygg` does not perform those
 actions as part of normal removal.
 

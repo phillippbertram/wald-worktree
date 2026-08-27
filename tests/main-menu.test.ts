@@ -230,7 +230,7 @@ describe("interactive main menu", () => {
     await runMainMenu(new Command().name("ygg"), createContext(null, []));
 
     expect(interactions.uninitializeWorkspace).toHaveBeenCalledWith(
-      { apply: true, force: false, yes: false },
+      { apply: true, force: false, yes: false, json: false },
       expect.anything(),
     );
     expect(interactions.findWorkspaceOrNull).toHaveBeenCalledOnce();

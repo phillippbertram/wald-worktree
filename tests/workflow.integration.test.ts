@@ -4,10 +4,13 @@ import path from "node:path";
 import { PassThrough } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GitClient } from "../src/infrastructure/git-client.js";
+import { ProcessRunner } from "../src/infrastructure/process-runner.js";
+import { AutomationService } from "../src/services/automation-service.js";
 import { ConfigService } from "../src/services/config-service.js";
 import { WorkspaceService } from "../src/services/workspace-service.js";
 import { WorktreeService } from "../src/services/worktree-service.js";
 import { WorktreeWorkflowService } from "../src/services/worktree-workflow-service.js";
+import { AutomationReporter } from "../src/ui/automation-reporter.js";
 import { createTestRepository, type TestRepository } from "./helpers/git-repository.js";
 
 describe("configured worktree workflows", () => {
@@ -85,7 +88,7 @@ tasks:
       repository.remote,
       path.join(temporaryRoot, "workspace"),
     );
-    const workflow = new WorktreeWorkflowService(git, worktrees, configs);
+    const workflow = createWorkflow(git, worktrees, configs);
     const plan = await workflow.planCreate(workspace, { branch: "main" });
 
     expect(plan.trusted).toBe(false);
@@ -190,7 +193,7 @@ tasks:
       path.join(workspace.root, ".ygg", "project.yml"),
     ).config;
     await configs.writeWorkspaceProjectConfig(workspace, overlay);
-    const workflow = new WorktreeWorkflowService(git, worktrees, configs);
+    const workflow = createWorkflow(git, worktrees, configs);
     const plan = await workflow.planCreate(workspace, { branch: "main", fetch: false });
 
     expect(plan.project?.sources.repository).toBe("refs/heads/main:.ygg.yml");
@@ -223,7 +226,7 @@ hooks:
       repository.remote,
       path.join(temporaryRoot, "failed-workspace"),
     );
-    const workflow = new WorktreeWorkflowService(git, worktrees, configs);
+    const workflow = createWorkflow(git, worktrees, configs);
     const plan = await workflow.planCreate(workspace, { branch: "main", fetch: false });
     if (!plan.project) throw new Error("Expected project configuration.");
     await configs.trust(workspace, plan.project);
@@ -234,7 +237,7 @@ hooks:
     );
     const rendered = readOutput(output);
     expect(rendered).toContain("Hook        post_create");
-    expect(rendered).toMatch(/1\s+RUNNING\s+command\s+\/bin\/sh -c "exit 23\\n"/u);
+    expect(rendered).toMatch(/1\s+RUNNING\s+command\s+\/bin\/sh -c "exit 23\\\\x0a"/u);
     expect(rendered).toMatch(/1\s+FAILED\s+command/u);
     expect(rendered).toContain("exit code 23");
     await expect(worktrees.resolve(workspace, "main")).resolves.toMatchObject({ branch: "main" });
@@ -347,7 +350,7 @@ tasks:
       "utf8",
     );
 
-    const workflow = new WorktreeWorkflowService(git, worktrees, configs);
+    const workflow = createWorkflow(git, worktrees, configs);
     const plan = await workflow.planCreate(workspace, { branch: "main", fetch: false });
     if (!plan.project) throw new Error("Expected project configuration.");
     await configs.trust(workspace, plan.project);
@@ -595,7 +598,7 @@ tasks:
     await fs.writeFile(path.join(workspace.sharedDir, "fixtures", "a.json"), '{"a":1}\n');
     await fs.writeFile(path.join(workspace.sharedDir, "fixtures", "b.json"), '{"b":1}\n');
 
-    const workflow = new WorktreeWorkflowService(git, worktrees, configs);
+    const workflow = createWorkflow(git, worktrees, configs);
     const plan = await workflow.planCreate(workspace, { branch: "main", fetch: false });
     if (!plan.project) throw new Error("Expected project configuration.");
     await configs.trust(workspace, plan.project);
@@ -712,4 +715,16 @@ async function gitRun(cwd: string, args: string[]): Promise<void> {
 
 function readOutput(output: PassThrough): string {
   return output.read()?.toString() ?? "";
+}
+
+function createWorkflow(
+  git: GitClient,
+  worktrees: WorktreeService,
+  configs: ConfigService,
+): WorktreeWorkflowService {
+  const automation = new AutomationService(
+    new ProcessRunner(),
+    (output, presentation) => new AutomationReporter(output, presentation),
+  );
+  return new WorktreeWorkflowService(git, worktrees, configs, automation);
 }

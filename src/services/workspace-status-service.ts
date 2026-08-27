@@ -108,7 +108,14 @@ function noTracking(state: "none" | "not-applicable"): WorktreeTracking {
 function countWorktreeStates(
   worktrees: Worktree[],
 ): Record<WorktreeState, number> & { total: number } {
-  const counts = { total: worktrees.length, clean: 0, modified: 0, locked: 0, missing: 0 };
+  const counts = {
+    total: worktrees.length,
+    clean: 0,
+    modified: 0,
+    locked: 0,
+    missing: 0,
+    unavailable: 0,
+  };
   for (const worktree of worktrees) counts[worktree.state] += 1;
   return counts;
 }

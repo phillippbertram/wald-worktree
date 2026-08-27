@@ -7,7 +7,10 @@ import { AutomationService } from "../src/services/automation-service.js";
 import { ConfigService } from "../src/services/config-service.js";
 import { WorkspaceService } from "../src/services/workspace-service.js";
 import { WorktreeService } from "../src/services/worktree-service.js";
-import { WorktreeTransferService } from "../src/services/worktree-transfer-service.js";
+import {
+  WorktreeTransferError,
+  WorktreeTransferService,
+} from "../src/services/worktree-transfer-service.js";
 import { WorktreeWorkflowService } from "../src/services/worktree-workflow-service.js";
 import {
   createRemoteBranch,
@@ -151,7 +154,9 @@ hooks:
     process.chdir(source.path);
     await fs.writeFile(path.join(source.path, "local.txt"), "keep source\n", "utf8");
     const transfers = new WorktreeTransferService(git);
-    vi.spyOn(transfers, "apply").mockRejectedValueOnce(new Error("injected apply failure"));
+    vi.spyOn(transfers, "apply").mockRejectedValueOnce(
+      new WorktreeTransferError("injected apply failure", { rollbackSafe: true }),
+    );
     const workflow = new WorktreeWorkflowService(git, worktrees, configs, undefined, transfers);
     const plan = await workflow.planCreate(workspace, {
       branch: "feature/rollback",
@@ -255,6 +260,34 @@ hooks:
     expect(await fs.readFile(path.join(source.path, "local.txt"), "utf8")).toBe("carried\n");
   });
 
+  it("preserves the carry target when a transfer may already have written changes", async () => {
+    const workspace = await workspaces.initialize(
+      repository.remote,
+      path.join(temporaryRoot, "unsafe-transfer-workspace"),
+    );
+    const source = await worktrees.add(workspace, { branch: "main", fetch: false });
+    process.chdir(source.path);
+    await fs.writeFile(path.join(source.path, "local.txt"), "keep source\n", "utf8");
+    const transfers = new WorktreeTransferService(git);
+    vi.spyOn(transfers, "apply").mockRejectedValueOnce(
+      new WorktreeTransferError("injected partial transfer", { rollbackSafe: false }),
+    );
+    const rollback = vi.spyOn(worktrees, "rollbackCreated");
+    const workflow = new WorktreeWorkflowService(git, worktrees, configs, undefined, transfers);
+    const plan = await workflow.planCreate(workspace, {
+      branch: "feature/preserved-transfer",
+      carry: true,
+      fetch: false,
+    });
+
+    await expect(workflow.executeCreate(plan)).rejects.toThrow(
+      /preserved because the target may contain changes[\s\S]*feature\/preserved-transfer/u,
+    );
+    expect(rollback).not.toHaveBeenCalled();
+    const recovery = await worktrees.resolve(workspace, "feature/preserved-transfer");
+    await expect(fs.stat(recovery.path)).resolves.toSatisfy((stat) => stat.isDirectory());
+  });
+
   it("preserves the recovery target when automatic rollback cannot complete", async () => {
     const workspace = await workspaces.initialize(
       repository.remote,
@@ -264,7 +297,9 @@ hooks:
     process.chdir(source.path);
     await fs.writeFile(path.join(source.path, "local.txt"), "keep source\n", "utf8");
     const transfers = new WorktreeTransferService(git);
-    vi.spyOn(transfers, "apply").mockRejectedValueOnce(new Error("injected apply failure"));
+    vi.spyOn(transfers, "apply").mockRejectedValueOnce(
+      new WorktreeTransferError("injected apply failure", { rollbackSafe: true }),
+    );
     vi.spyOn(worktrees, "rollbackCreated").mockRejectedValueOnce(
       new Error("injected rollback failure"),
     );

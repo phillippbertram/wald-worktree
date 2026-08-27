@@ -158,7 +158,7 @@ async function loadCompletionCandidates(
   }
 
   if (kinds.has("tools")) {
-    candidates.tools = (await context.tools.availableProfiles(project)).map(
+    candidates.tools = (await context.tools.availableProfiles(project, worktree)).map(
       ({ name, profile }) => ({
         value: name,
         description: profile.description ?? "tool profile",
@@ -191,6 +191,12 @@ function applyDynamicHandlers(completion: RootCommand, candidates: CompletionCan
   setOptionHandler(completion, "create", "tool", candidates.tools);
   setOptionHandler(completion, "handoff", "tool", candidates.tools);
   setOptionHandler(completion, "open", "tool", candidates.tools);
+  const scopes = [
+    { value: "workspace", description: "workspace-local configuration" },
+    { value: "project", description: "repository project configuration" },
+  ];
+  setOptionHandler(completion, "init", "config-scope", scopes);
+  setOptionHandler(completion, "config init", "scope", scopes);
 }
 
 function worktreeCandidates(worktrees: Awaited<ReturnType<CliContext["worktrees"]["list"]>>) {

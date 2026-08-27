@@ -54,6 +54,10 @@ export async function removeWorktrees(input: RemoveInput, context: CliContext): 
       const candidates = (await context.worktrees.list(workspace)).filter(
         (worktree) => worktree.role !== "primary" && worktree.path !== current?.path,
       );
+      if (candidates.length === 0) {
+        writeLine(context.output.stdout, "No removable worktrees found.");
+        return;
+      }
       const selected = await selectManyWorktrees(
         "Remove › Worktrees · Select worktrees to remove:",
         candidates,
@@ -67,7 +71,7 @@ export async function removeWorktrees(input: RemoveInput, context: CliContext): 
       return;
     }
 
-    const plans: RemovePlan[] = [];
+    const plansByPath = new Map<string, RemovePlan>();
     for (const identifier of identifiers) {
       const plan = await context.workflow.planRemove(workspace, identifier);
       if (plan.inspection.hardBlockers.length > 0) {
@@ -79,7 +83,25 @@ export async function removeWorktrees(input: RemoveInput, context: CliContext): 
           "use --force only if this data can be discarded",
         ]);
       }
-      plans.push(plan);
+      plansByPath.set(plan.inspection.worktree.path, plan);
+    }
+    const plans = [...plansByPath.values()];
+
+    if (input.force) {
+      const forcedPlans = plans.filter((plan) => plan.inspection.blockers.length > 0);
+      if (forcedPlans.length > 0) {
+        writeLine(context.output.stderr, "Warning: --force bypasses these removal safeguards:");
+        for (const plan of forcedPlans) {
+          const worktree = plan.inspection.worktree;
+          writeLine(
+            context.output.stderr,
+            `  ${worktree.name} (${worktree.branch ?? "detached"}, ${worktree.path})`,
+          );
+          for (const blocker of plan.inspection.blockers) {
+            writeLine(context.output.stderr, `    - ${blocker}`);
+          }
+        }
+      }
     }
 
     if (!input.yes) {

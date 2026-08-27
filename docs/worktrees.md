@@ -11,15 +11,13 @@ technical names used by Git, the CLI, or configuration:
 | Yggdrasil image | Technical meaning |
 | --- | --- |
 | World tree | The complete Ygg workspace. |
-| Roots | `repo.git`, where Git keeps the shared objects, refs, remotes, and worktree metadata. |
+| Roots | Git's common directory (`repo.git` in a standalone workspace), which keeps shared objects, refs, remotes, and worktree metadata. |
 | Trunk | The configured default branch: the normal creation base and merge-check target. |
 | Worlds | Independent worktree folders with their own files, `HEAD`, index, and processes. |
 | Bifröst | `ygg cd` or `ygg open`, which takes you to a selected worktree without changing another. |
 
-The default branch is the closest thing Ygg has to a **Sacred Timeline**: it is the preferred base
-for new work and the comparison target for safe removal. That phrase is a playful nod to Marvel's
-_Loki_, not Old Norse mythology, and Ygg does not enforce one history. An explicit `--from` may start
-new work from another commit.
+The default branch is the preferred base for new work and the comparison target for safe removal;
+Ygg does not enforce one history. An explicit `--from` may start new work from another commit.
 
 ## The four building blocks
 
@@ -399,7 +397,6 @@ job, or parallel agent. For a quick isolated change, normal branch switching may
 
 - [Official Git worktree documentation](https://git-scm.com/docs/git-worktree)
 - [Yggdrasil and the worlds of Norse cosmology](https://www.worldhistory.org/article/1305/nine-realms-of-norse-cosmology/)
-- [Marvel's Sacred Timeline](https://www.marvel.com/teams-and-groups/time-keepers/)
 - [DataCamp: Git Worktree Tutorial](https://www.datacamp.com/tutorial/git-worktree-tutorial)
 - [Ygg CLI reference](cli-reference.md)
 - [Ygg configuration](configuration.md)

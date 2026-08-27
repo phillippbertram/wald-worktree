@@ -62,5 +62,6 @@ function renderWorktreeCounts(status: WorkspaceStatus): string {
     style.state(`${counts.modified} modified`, "modified"),
     style.state(`${counts.locked} locked`, "locked"),
     style.state(`${counts.missing} missing`, "missing"),
+    style.state(`${counts.unavailable} unavailable`, "unavailable"),
   ].join(` ${separator} `);
 }

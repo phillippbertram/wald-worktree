@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import type { Writable } from "node:stream";
 import { execa } from "execa";
 import { YggError } from "../domain/errors.js";
+import { formatCommandForDisplay } from "./safe-text.js";
 
 export type ProcessOptions = {
   cwd: string;
@@ -39,9 +40,12 @@ export class ProcessRunner {
       throw new YggError("Command interrupted.", { exitCode: 130 });
     }
     if (result.exitCode !== 0) {
-      throw new YggError(`Command failed with exit code ${result.exitCode}: ${argv.join(" ")}`, {
-        exitCode: result.exitCode ?? 1,
-      });
+      throw new YggError(
+        `Command failed with exit code ${result.exitCode}: ${formatCommandForDisplay(argv)}`,
+        {
+          exitCode: result.exitCode ?? 1,
+        },
+      );
     }
   }
 
@@ -89,7 +93,7 @@ export class ProcessRunner {
     });
     if (result.timedOut) {
       throw new YggError(
-        `Command timed out after ${options.timeoutMs ?? 0}ms: ${[command, ...args].join(" ")}`,
+        `Command timed out after ${options.timeoutMs ?? 0}ms: ${formatCommandForDisplay([command, ...args])}`,
       );
     }
     if (result.signal === "SIGINT" || result.exitCode === 130) {
@@ -100,9 +104,12 @@ export class ProcessRunner {
         result.exitCode === undefined
           ? `signal ${result.signal ?? "unknown"}`
           : `exit code ${result.exitCode}`;
-      throw new YggError(`Command failed with ${outcome}: ${[command, ...args].join(" ")}`, {
-        exitCode: result.exitCode ?? 1,
-      });
+      throw new YggError(
+        `Command failed with ${outcome}: ${formatCommandForDisplay([command, ...args])}`,
+        {
+          exitCode: result.exitCode ?? 1,
+        },
+      );
     }
   }
 }

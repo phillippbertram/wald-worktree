@@ -16,9 +16,9 @@ That is the idea behind Ygg: one Git repository forms the shared root, while eve
 review, or coding agent grows in its own worktree. Each world gets its own files and processes, but
 they all stay connected through the same Git history.
 
-In that mental model, the complete workspace is Yggdrasil, `repo.git` holds the shared roots, the
-default branch forms the trunk, and every worktree is its own world. Ygg keeps the metaphor playful
-while Git remains the source of truth.
+In that mental model, the complete workspace is Yggdrasil, Git's common directory holds the shared
+roots (`repo.git` in a standalone workspace), the default branch forms the trunk, and every
+worktree is its own world. Ygg keeps the metaphor playful while Git remains the source of truth.
 
 ## Why worktrees?
 
@@ -124,21 +124,9 @@ grouped, and retained-checkout variants.
 ### Prefer a guided menu?
 
 Run `ygg` without a command. The menu stays open, refreshes the workspace after every action, and
-always brings you back to an up-to-date overview.
-
-| Key or choice | Result                                                                               |
-| ------------- | ------------------------------------------------------------------------------------ |
-| `Enter`       | Accept the highlighted or entered value.                                             |
-| `Esc`         | Go back one step; at the first prompt cancel the command, and in the main menu exit. |
-| `Ctrl-C`      | Exit Ygg immediately with status 130.                                                |
-
-Selection prompts show these shortcuts in their footer beside `navigate` and `select`, not in the
-prompt title or as additional choices.
-
-Previous answers remain selected when moving back. Choosing `No`, submitting empty text, or making
-an empty checkbox selection keeps its normal meaning and is not treated as `Esc`. Once a workspace
-or worktree has been created, navigation never rolls that change back; cancelling optional setup
-instead prints what remains and how to continue later.
+always brings you back to an up-to-date overview. Prompts show how `Esc` goes back or cancels and
+how `Ctrl-C` exits; the complete navigation contract lives in the
+[CLI reference](docs/cli-reference.md#general-behavior).
 
 ### 2. Add your first worktrees
 
@@ -180,8 +168,9 @@ ygg remove feature-payment
 `ygg status` summarizes the current checkout, local upstream comparison, project trust, and workspace
 states without fetching or changing anything. Think of it as reading the local runes: it never
 consults the remote or changes the repository. `ygg run verify` is available when the effective
-project configuration defines that task. Removal checks for modified files, unmerged work, and
-locks before deleting the linked checkout. It never deletes the branch. If project setup failed
+project configuration defines that task. Removal checks for local changes, a branch not merged
+into the configured default branch, and locks before deleting the linked checkout. It never
+deletes the branch. If project setup failed
 during creation, fix the cause and retry it with `ygg setup feature-payment`. To test any lifecycle
 hook after editing `.ygg/project.yml`, run it explicitly without creating or removing a worktree:
 
@@ -272,7 +261,10 @@ Let Ygg do the tidying instead of moving or deleting linked worktree folders man
 checks their state first; `ygg prune` is the recovery path for administrative metadata after a
 folder is already missing. Re-running `ygg init` repairs a missing worktree container, `.ygg` link,
 or shared directory. Removing one world keeps its branch and shared history intact: no repository
-Ragnarök. Use `ygg uninit` only when the repository should stop being managed by Ygg.
+Ragnarök. With `--force`, Ygg prints every bypassed safeguard before confirmation; the primary
+checkout and worktrees whose state cannot be read remain protected. Use `ygg uninit` only when the
+repository should stop being managed by Ygg. See the
+[removal safety matrix](docs/cli-reference.md#ygg-remove) for the complete contract.
 
 ## Keep exploring
 
@@ -302,9 +294,6 @@ pnpm build
 
 Remove the global source link with `pnpm run unlink:global`. To explore the CLI without installing
 it globally, use `pnpm dev -- --help`.
-
-Ygg is a clean rename of the earlier private `worktree-cli` prototype. Legacy `.wt` workspaces and
-`.wt.yml` files are not migrated automatically.
 
 ## License
 

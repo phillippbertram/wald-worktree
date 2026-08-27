@@ -39,6 +39,16 @@ export type WorktreeTransferSnapshot = {
   fingerprint: string;
 };
 
+export class WorktreeTransferError extends YggError {
+  readonly rollbackSafe: boolean;
+
+  constructor(message: string, options: { cause?: unknown; rollbackSafe: boolean }) {
+    super(message, { cause: options.cause });
+    this.name = "WorktreeTransferError";
+    this.rollbackSafe = options.rollbackSafe;
+  }
+}
+
 export class WorktreeTransferService {
   constructor(private readonly git: GitClient) {}
 
@@ -77,45 +87,58 @@ export class WorktreeTransferService {
   }
 
   async apply(snapshot: WorktreeTransferSnapshot, targetPath: string): Promise<void> {
-    const targetHead = (
-      await this.git.run(["rev-parse", "--verify", "HEAD^{commit}"], { cwd: targetPath })
-    ).stdout;
-    if (targetHead !== snapshot.head) {
-      throw new YggError(
-        `Carry target must start at ${snapshot.head}, but ${targetPath} is at ${targetHead}.`,
+    let rollbackSafe = false;
+    try {
+      const targetHead = (
+        await this.git.run(["rev-parse", "--verify", "HEAD^{commit}"], { cwd: targetPath })
+      ).stdout;
+      if (targetHead !== snapshot.head) {
+        throw new YggError(
+          `Carry target must start at ${snapshot.head}, but ${targetPath} is at ${targetHead}.`,
+        );
+      }
+      const targetStatus = await this.git.run(
+        ["status", "--porcelain=v2", "-z", "--untracked-files=all"],
+        { cwd: targetPath },
       );
-    }
-    const targetStatus = await this.git.run(
-      ["status", "--porcelain=v2", "-z", "--untracked-files=all"],
-      { cwd: targetPath },
-    );
-    if (targetStatus.stdout.length > 0) {
-      throw new YggError(`Carry target is not clean: ${targetPath}`);
-    }
+      if (targetStatus.stdout.length > 0) {
+        throw new YggError(`Carry target is not clean: ${targetPath}`);
+      }
+      rollbackSafe = true;
 
-    if (snapshot.stagedPatch) {
-      await this.applyPatch(targetPath, snapshot.stagedPatch, true, true);
-      await this.applyPatch(targetPath, snapshot.stagedPatch, true, false);
-    }
-    if (snapshot.unstagedPatch) {
-      await this.applyPatch(targetPath, snapshot.unstagedPatch, false, true);
-      await this.applyPatch(targetPath, snapshot.unstagedPatch, false, false);
-    }
-    for (const entry of snapshot.untracked) {
-      await this.restoreUntracked(targetPath, entry);
-    }
+      if (snapshot.stagedPatch) {
+        await this.applyPatch(targetPath, snapshot.stagedPatch, true, true);
+        rollbackSafe = false;
+        await this.applyPatch(targetPath, snapshot.stagedPatch, true, false);
+      }
+      if (snapshot.unstagedPatch) {
+        await this.applyPatch(targetPath, snapshot.unstagedPatch, false, true);
+        rollbackSafe = false;
+        await this.applyPatch(targetPath, snapshot.unstagedPatch, false, false);
+      }
+      for (const entry of snapshot.untracked) {
+        rollbackSafe = false;
+        await this.restoreUntracked(targetPath, entry);
+      }
 
-    const [sourceAfter, targetAfter] = await Promise.all([
-      this.capture(snapshot.sourcePath),
-      this.capture(targetPath),
-    ]);
-    if (sourceAfter.fingerprint !== snapshot.fingerprint) {
-      throw new YggError(
-        `The source worktree changed while its local changes were being carried: ${snapshot.sourcePath}`,
-      );
-    }
-    if (targetAfter.fingerprint !== snapshot.fingerprint) {
-      throw new YggError(`Carried worktree state could not be verified at ${targetPath}`);
+      const [sourceAfter, targetAfter] = await Promise.all([
+        this.capture(snapshot.sourcePath),
+        this.capture(targetPath),
+      ]);
+      if (sourceAfter.fingerprint !== snapshot.fingerprint) {
+        throw new YggError(
+          `The source worktree changed while its local changes were being carried: ${snapshot.sourcePath}`,
+        );
+      }
+      if (targetAfter.fingerprint !== snapshot.fingerprint) {
+        throw new YggError(`Carried worktree state could not be verified at ${targetPath}`);
+      }
+    } catch (error) {
+      if (error instanceof WorktreeTransferError) throw error;
+      throw new WorktreeTransferError(toTransferErrorMessage(error), {
+        cause: error,
+        rollbackSafe,
+      });
     }
   }
 
@@ -305,4 +328,8 @@ async function pathEntryExists(target: string): Promise<boolean> {
     if (error instanceof Error && "code" in error && error.code === "ENOENT") return false;
     throw error;
   }
+}
+
+function toTransferErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

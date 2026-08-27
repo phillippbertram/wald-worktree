@@ -7,6 +7,7 @@ import type { AutomationStep, ProjectConfig, ProjectConfigOverlay } from "../dom
 const packageJsonSchema = z
   .object({
     scripts: z.record(z.string(), z.string()).default({}),
+    packageManager: z.string().optional(),
   })
   .passthrough();
 
@@ -144,6 +145,8 @@ export class ProjectConfigInitializer {
 }
 
 async function detectPackageManager(root: string): Promise<PackageManager | null> {
+  const declared = await readDeclaredPackageManager(root);
+  if (declared) return declared;
   for (const candidate of [
     { files: ["pnpm-lock.yaml"], manager: "pnpm" },
     { files: ["yarn.lock"], manager: "yarn" },
@@ -190,16 +193,48 @@ async function detectEnvironmentExample(root: string): Promise<string | null> {
 async function installCommandFor(packageManager: PackageManager, root: string): Promise<string[]> {
   switch (packageManager) {
     case "pnpm":
-      return ["pnpm", "install", "--frozen-lockfile"];
+      return (await fileExists(path.join(root, "pnpm-lock.yaml")))
+        ? ["pnpm", "install", "--frozen-lockfile"]
+        : ["pnpm", "install"];
     case "npm":
-      return ["npm", "ci"];
+      return (await anyFileExists(root, ["package-lock.json", "npm-shrinkwrap.json"]))
+        ? ["npm", "ci"]
+        : ["npm", "install"];
     case "yarn":
+      if (!(await fileExists(path.join(root, "yarn.lock")))) return ["yarn", "install"];
       return (await fileExists(path.join(root, ".yarnrc.yml")))
         ? ["yarn", "install", "--immutable"]
         : ["yarn", "install", "--frozen-lockfile"];
     case "bun":
-      return ["bun", "install", "--frozen-lockfile"];
+      return (await anyFileExists(root, ["bun.lock", "bun.lockb"]))
+        ? ["bun", "install", "--frozen-lockfile"]
+        : ["bun", "install"];
   }
+}
+
+async function readDeclaredPackageManager(root: string): Promise<PackageManager | null> {
+  const packagePath = path.join(root, "package.json");
+  let raw: string;
+  try {
+    raw = await fs.readFile(packagePath, "utf8");
+  } catch (error) {
+    if (isNotFound(error)) return null;
+    throw new YggError(`Cannot read package metadata: ${packagePath}`, { cause: error });
+  }
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch (error) {
+    throw new YggError(`Package metadata is not valid JSON: ${packagePath}`, { cause: error });
+  }
+  const parsed = packageJsonSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new YggError(`Package metadata is invalid: ${packagePath}\n${parsed.error.message}`);
+  }
+  const declared = parsed.data.packageManager?.split("@", 1)[0];
+  return declared === "pnpm" || declared === "npm" || declared === "yarn" || declared === "bun"
+    ? declared
+    : null;
 }
 
 function recommendedScripts(scripts: string[]): string[] {

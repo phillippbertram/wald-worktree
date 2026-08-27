@@ -16,6 +16,7 @@ import { nonEmptyCliString, parseCliInput } from "../input.js";
 import { initializeProjectConfiguration } from "../project-config-wizard.js";
 
 const confirmationInputSchema = z.object({ yes: z.boolean().default(false) }).strict();
+const showInputSchema = z.object({ json: z.boolean().default(false) }).strict();
 const initializationInputSchema = z
   .object({
     worktree: nonEmptyCliString.optional(),
@@ -41,7 +42,10 @@ export function registerConfigCommand(program: Command, context: CliContext): vo
   const config = program
     .command("config")
     .description("Show or manage workspace-local and repository project configuration")
-    .action(async () => showConfiguration(context));
+    .option("--json", "Print machine-readable configuration details")
+    .action(async (options: unknown) =>
+      showConfiguration(context, parseCliInput(showInputSchema, options).json),
+    );
 
   config
     .command("init")
@@ -121,14 +125,34 @@ export async function initializeProjectConfigurationForWorktree(
   }
 }
 
-export async function showConfiguration(context: CliContext): Promise<void> {
+export async function showConfiguration(context: CliContext, json = false): Promise<void> {
   const workspace = await context.workspaces.find();
+  const project = await resolveProjectConfiguration(workspace, context);
+  const trusted = context.configs.isTrusted(workspace, project);
+  if (json) {
+    writeLine(
+      context.output.stdout,
+      JSON.stringify({
+        workspaceConfig: workspace.config,
+        paths: {
+          workspaceConfig: workspace.configPath,
+          workspaceRoot: workspace.root,
+          worktrees: workspace.worktreeDir,
+          shared: workspace.sharedDir,
+          workspaceProjectConfig: workspaceProjectConfigPath(workspace),
+        },
+        project: project
+          ? { path: project.path, sources: project.sources, hash: project.hash, trusted }
+          : null,
+      }),
+    );
+    return;
+  }
   context.output.stdout.write(context.configs.formatWorkspaceConfig(workspace.config));
   writeConfigurationField(context.output.stdout, "workspace_config", workspace.configPath, "path");
   writeConfigurationField(context.output.stdout, "workspace_root", workspace.root, "path");
   writeConfigurationField(context.output.stdout, "worktrees_path", workspace.worktreeDir, "path");
   writeConfigurationField(context.output.stdout, "shared_path", workspace.sharedDir, "path");
-  const project = await resolveProjectConfiguration(workspace, context);
   writeConfigurationField(
     context.output.stdout,
     "repository_project_config",
@@ -155,7 +179,6 @@ export async function showConfiguration(context: CliContext): Promise<void> {
     project?.hash ?? "none",
     "hash",
   );
-  const trusted = context.configs.isTrusted(workspace, project);
   writeLine(
     context.output.stdout,
     `${style.label("trusted:")} ${(trusted ? style.success : style.danger)(String(trusted))}`,

@@ -67,7 +67,14 @@ describe("workspace status service", () => {
         sources: project.sources,
         trust: "untrusted",
       },
-      worktrees: { total: 4, clean: 1, modified: 1, locked: 1, missing: 1 },
+      worktrees: {
+        total: 4,
+        clean: 1,
+        modified: 1,
+        locked: 1,
+        missing: 1,
+        unavailable: 0,
+      },
     });
     expect(worktreeService.list).toHaveBeenCalledOnce();
     expect(worktreeService.currentFromList).toHaveBeenCalledWith(worktrees, "/workspace/main/src");

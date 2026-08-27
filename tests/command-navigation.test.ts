@@ -189,6 +189,46 @@ describe("interactive command navigation", () => {
       expect.any(Object),
     );
   });
+
+  it("deduplicates forced removals and prints every bypassed safeguard", async () => {
+    let stderr = "";
+    const executeRemove = vi.fn();
+    const plan = {
+      workspace,
+      inspection: {
+        worktree: feature,
+        hardBlockers: [],
+        blockers: [
+          "the worktree contains staged, unstaged, or untracked changes",
+          "the branch is not merged into main",
+        ],
+      },
+      project: null,
+    };
+    const context = commandContext(workspace, primary, [primary, feature], {
+      output: {
+        stdout: { write: () => true },
+        stderr: {
+          write: (value: string) => {
+            stderr += value;
+            return true;
+          },
+        },
+      },
+      workflow: { planRemove: vi.fn().mockResolvedValue(plan), executeRemove },
+    });
+
+    await removeWorktrees(
+      { worktrees: [feature.name, feature.path], force: true, yes: true },
+      context,
+    );
+
+    expect(executeRemove).toHaveBeenCalledOnce();
+    expect(stderr).toContain("--force bypasses these removal safeguards");
+    expect(stderr).toContain(feature.path);
+    expect(stderr).toContain("staged, unstaged, or untracked changes");
+    expect(stderr).toContain("not merged into main");
+  });
 });
 
 function worktree(name: string, path: string, role = "linked"): Worktree {

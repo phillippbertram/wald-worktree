@@ -43,6 +43,18 @@ describe("process execution", () => {
     ).rejects.toThrow(/timed out after 20ms/u);
   });
 
+  it("redacts credentials from failed command diagnostics", async () => {
+    const failure = runner.runArgv(
+      [process.execPath, "-e", "process.exit(7)", "--", "--token", "do-not-print-me"],
+      { cwd: temporaryRoot },
+    );
+
+    await expect(failure).rejects.toMatchObject({
+      message: expect.stringContaining("--token <redacted>"),
+    });
+    await expect(failure).rejects.not.toThrow(/do-not-print-me/u);
+  });
+
   it("reports SIGINT as a conventional interruption", async () => {
     const interruption = runner.runArgv(
       [process.execPath, "-e", "process.kill(process.pid, 'SIGINT')"],

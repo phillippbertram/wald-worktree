@@ -81,7 +81,7 @@ export async function openSelectedWorktree(
     options.project === undefined
       ? await context.workflow.projectForWorktree(workspace, worktree)
       : options.project;
-  const available = await context.tools.availableProfiles(project);
+  const available = await context.tools.availableProfiles(project, worktree);
   if (available.length === 0) throw new YggError("No supported editor or agent tool is available.");
   let tool = requestedTool ?? project?.config.defaults.tool;
   const promptForTool = !tool;

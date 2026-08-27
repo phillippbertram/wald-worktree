@@ -10,6 +10,7 @@ import type {
   WorktreeService,
 } from "./worktree-service.js";
 import {
+  WorktreeTransferError,
   WorktreeTransferService,
   type WorktreeTransferSnapshot,
   type WorktreeTransferSummary,
@@ -150,8 +151,14 @@ export class WorktreeWorkflowService {
         );
       }
     } catch (error) {
-      if (snapshot) {
+      if (snapshot && error instanceof WorktreeTransferError && error.rollbackSafe) {
         await this.rollbackFailedCarry(plan.workspace, created, snapshot, error);
+      }
+      if (snapshot) {
+        throw new YggError(
+          `Carrying local changes failed: ${toErrorMessage(error)}\nThe created worktree and branch were preserved because the target may contain changes. Inspect ${created.path} and branch ${created.branch}; preserve anything useful before manual cleanup.`,
+          { cause: error },
+        );
       }
       throw error;
     }

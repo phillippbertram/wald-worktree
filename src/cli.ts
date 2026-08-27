@@ -4,6 +4,7 @@ import { CommanderError } from "commander";
 import pc from "picocolors";
 import { createProgram } from "./cli/create-program.js";
 import { toErrorMessage, YggError } from "./domain/errors.js";
+import { redactSensitiveText, sanitizeTerminalText } from "./infrastructure/safe-text.js";
 import { isPromptBackError } from "./ui/terminal.js";
 
 async function main(): Promise<void> {
@@ -22,7 +23,10 @@ async function main(): Promise<void> {
       return;
     }
 
-    process.stderr.write(`${pc.red(pc.bold("Error:"))} ${toErrorMessage(error)}\n`);
+    const message = sanitizeTerminalText(redactSensitiveText(toErrorMessage(error)), {
+      multiline: true,
+    });
+    process.stderr.write(`${pc.red(pc.bold("Error:"))} ${message}\n`);
     process.exitCode = error instanceof YggError ? error.exitCode : 1;
   }
 }

@@ -287,6 +287,9 @@ export class WorktreeService {
     if (worktree.role === "primary") {
       hardBlockers.push("the primary checkout cannot be removed by ygg");
     }
+    if (worktree.state === "unavailable") {
+      hardBlockers.push("the worktree state could not be read safely");
+    }
 
     if (dirty) {
       blockers.push("the worktree contains staged, unstaged, or untracked changes");
@@ -323,6 +326,7 @@ export class WorktreeService {
         worktree.role === "primary" ||
         worktree.path === current?.path ||
         worktree.state === "missing" ||
+        worktree.state === "unavailable" ||
         worktree.locked ||
         (await canonicalPath(path.dirname(worktree.path))) !== worktreeRoot ||
         (await this.hasSubmodules(worktree))
@@ -355,6 +359,11 @@ export class WorktreeService {
     }
     if (worktree.state === "missing") {
       throw new YggError(`Refusing to rename a missing worktree: ${worktree.path}`);
+    }
+    if (worktree.state === "unavailable") {
+      throw new YggError(
+        `Refusing to rename a worktree whose state is unavailable: ${worktree.path}`,
+      );
     }
     if (worktree.locked) {
       throw new YggError(`Refusing to rename a locked worktree: ${worktree.path}`);
@@ -413,7 +422,8 @@ export class WorktreeService {
       current.head !== expectedHead ||
       current.branchRef !== worktree.branchRef ||
       !current.branchRef ||
-      current.locked
+      current.locked ||
+      current.state !== "clean"
     ) {
       throw new YggError(
         `Refusing to roll back a created worktree whose Git identity changed: ${worktree.path}`,
@@ -495,7 +505,7 @@ export class WorktreeService {
       { cwd: worktree.path, reject: false },
     );
     if (status.exitCode !== 0) {
-      return "missing";
+      return "unavailable";
     }
     return status.stdout.length > 0 ? "modified" : "clean";
   }

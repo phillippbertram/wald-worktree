@@ -1,5 +1,6 @@
 import { GitClient } from "../infrastructure/git-client.js";
 import { ProcessRunner } from "../infrastructure/process-runner.js";
+import { AutomationService } from "../services/automation-service.js";
 import { ConfigService } from "../services/config-service.js";
 import { ProjectConfigInitializer } from "../services/project-config-initializer.js";
 import { ShellService } from "../services/shell-service.js";
@@ -8,6 +9,7 @@ import { WorkspaceService } from "../services/workspace-service.js";
 import { WorkspaceStatusService } from "../services/workspace-status-service.js";
 import { WorktreeService } from "../services/worktree-service.js";
 import { WorktreeWorkflowService } from "../services/worktree-workflow-service.js";
+import { AutomationReporter } from "../ui/automation-reporter.js";
 
 export type CliOutput = {
   stdout: NodeJS.WritableStream;
@@ -24,6 +26,10 @@ export function createCliContext(
   const workspaces = new WorkspaceService(git, configs);
   const worktrees = new WorktreeService(git);
   const processes = new ProcessRunner();
+  const automation = new AutomationService(
+    processes,
+    (automationOutput, presentation) => new AutomationReporter(automationOutput, presentation),
+  );
   return {
     output,
     git,
@@ -33,7 +39,7 @@ export function createCliContext(
     worktrees,
     status: new WorkspaceStatusService(git, worktrees, configs),
     processes,
-    workflow: new WorktreeWorkflowService(git, worktrees, configs),
+    workflow: new WorktreeWorkflowService(git, worktrees, configs, automation),
     tools: new ToolService(processes),
     shells: new ShellService(),
   };

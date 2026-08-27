@@ -1,5 +1,6 @@
 import { execa } from "execa";
 import { YggError } from "../domain/errors.js";
+import { redactSensitiveText, sanitizeTerminalText } from "./safe-text.js";
 
 export type GitRunOptions = {
   cwd?: string;
@@ -38,7 +39,8 @@ export class GitClient {
     };
 
     if (options.reject !== false && output.exitCode !== 0) {
-      const detail = output.stderr.trim() || output.stdout.trim() || "Git command failed.";
+      const rawDetail = output.stderr.trim() || output.stdout.trim() || "Git command failed.";
+      const detail = sanitizeTerminalText(redactSensitiveText(rawDetail), { multiline: true });
       throw new YggError(detail, { exitCode: output.exitCode });
     }
 

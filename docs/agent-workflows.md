@@ -37,8 +37,8 @@ project/
 ```
 
 Built-in profiles cover Code, Cursor, Zed, Codex, Codex App, and Claude. Effective project
-configuration can define additional profiles under `tools`; workspace-local definitions override
-same-named repository profiles.
+configuration can define or replace profiles under `tools`; custom definitions override same-named
+built-ins, and workspace-local definitions override same-named repository profiles.
 
 Open foreground agents from separate terminals:
 

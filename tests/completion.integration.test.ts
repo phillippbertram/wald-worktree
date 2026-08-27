@@ -120,6 +120,15 @@ tools:
     const commands = await runCli(temporaryRoot, "complete", "--", "");
     const options = await runCli(temporaryRoot, "complete", "--", "create", "--");
     const shells = await runCli(temporaryRoot, "complete", "--", "completion", "");
+    const configScopes = await runCli(
+      temporaryRoot,
+      "complete",
+      "--",
+      "config",
+      "init",
+      "--scope",
+      "",
+    );
 
     expect(commands.exitCode, commands.stderr).toBe(0);
     expect(suggestionValues(commands.stdout)).toEqual(
@@ -139,6 +148,7 @@ tools:
       expect.arrayContaining(["--from", "--name", "--carry", "--tool", "--help"]),
     );
     expect(suggestionValues(shells.stdout)).toEqual(["zsh", "bash", "fish"]);
+    expect(suggestionValues(configScopes.stdout)).toEqual(["workspace", "project"]);
   });
 
   it("completes branches and worktrees with descriptions", async () => {
