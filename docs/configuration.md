@@ -127,9 +127,9 @@ add an install hook, an environment copy step, a `verify` task, a separate `dev`
 one-shot `verify` task. Interactive setup asks whether to create the `verify` task before offering
 individual scripts; declining or selecting no scripts omits the task.
 
-`Esc` returns to the preceding wizard step and restores the previous answer as its default. Nested
-single-choice prompts also show `← Back`; `Ctrl-C` exits Ygg. From the final preview, going back
-returns to the tool choice without discarding the other detected setup decisions.
+`Esc` returns to the preceding wizard step and restores the previous answer as its default;
+`Ctrl-C` exits Ygg. Selection prompts list both shortcuts in their footer. From the final preview,
+going back returns to the tool choice without discarding the other detected setup decisions.
 
 For scripts, use `ygg config init --yes`; use `--force` separately when an existing file may be
 replaced. `--yes` keeps the detected recommended verify scripts. Interactive `ygg init` offers the

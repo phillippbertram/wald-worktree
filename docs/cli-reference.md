@@ -21,8 +21,10 @@ Interactive prompts use the same navigation throughout:
 | Input | Behavior |
 | --- | --- |
 | `Esc` | Return one prompt step; cancel at a command's first prompt; exit from the main menu. |
-| `← Back` | Visible back action in nested single-choice menus. |
 | `Ctrl-C` | Exit the complete Ygg process with status 130. |
+
+Selection prompts list these shortcuts in the existing footer beside `navigate` and `select`, not in
+the prompt title or as additional choices.
 
 Entered values and selections are retained when moving back. `No`, empty text, and empty checkbox
 selections remain regular answers rather than cancellation signals. Navigation does not cross an

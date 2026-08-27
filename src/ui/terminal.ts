@@ -27,8 +27,6 @@ type PromptOptions = {
   initialValues?: string[];
 };
 
-const backChoiceValue = "\u0000ygg-prompt-back";
-
 export class PromptBackError extends Error {
   constructor() {
     super("Interactive prompt went back.");
@@ -70,18 +68,16 @@ export async function runTask<T>(label: string, task: () => Promise<T>): Promise
 export async function confirm(
   question: string,
   defaultValue = false,
-  options: PromptOptions = {},
+  _options: PromptOptions = {},
 ): Promise<boolean> {
-  return await promptWithNavigation(
-    (signal) =>
-      inquirerConfirm(
-        {
-          message: promptMessage(question, options.navigation),
-          default: defaultValue,
-        },
-        { signal },
-      ),
-    options.navigation,
+  return await promptWithNavigation((signal) =>
+    inquirerConfirm(
+      {
+        message: question,
+        default: defaultValue,
+      },
+      { signal },
+    ),
   );
 }
 
@@ -106,20 +102,19 @@ export async function selectValue(
   choices: Choice[],
   options: PromptOptions = {},
 ): Promise<string> {
-  const selected = await promptWithNavigation(
-    (signal) =>
-      select(
-        {
-          message: promptMessage(question, options.navigation),
-          choices: toInquirerChoices(withBackChoice(choices, options.navigation)),
-          default: options.initialValue,
-          pageSize: 10,
-        },
-        { signal },
-      ),
-    options.navigation,
+  const selected = await promptWithNavigation((signal) =>
+    select(
+      {
+        message: question,
+        choices: toInquirerChoices(choices),
+        default: options.initialValue,
+        pageSize: 10,
+        theme: navigationTheme(options.navigation),
+      },
+      { signal },
+    ),
   );
-  return unwrapBackChoice(selected);
+  return selected;
 }
 
 export async function searchSelect(
@@ -127,28 +122,25 @@ export async function searchSelect(
   choices: Choice[],
   options: PromptOptions = {},
 ): Promise<string> {
-  const selected = await promptWithNavigation(
-    (signal) =>
-      search(
-        {
-          message: promptMessage(question, options.navigation),
-          pageSize: 10,
-          default: options.initialValue,
-          source: (term) => {
-            const normalized = term?.trim().toLocaleLowerCase() ?? "";
-            const matches = choices.filter((option) =>
-              `${option.label} ${option.description ?? ""}`
-                .toLocaleLowerCase()
-                .includes(normalized),
-            );
-            return withBackChoice(matches, options.navigation).map(toInquirerChoice);
-          },
+  const selected = await promptWithNavigation((signal) =>
+    search(
+      {
+        message: question,
+        pageSize: 10,
+        default: options.initialValue,
+        source: (term) => {
+          const normalized = term?.trim().toLocaleLowerCase() ?? "";
+          const matches = choices.filter((option) =>
+            `${option.label} ${option.description ?? ""}`.toLocaleLowerCase().includes(normalized),
+          );
+          return matches.map(toInquirerChoice);
         },
-        { signal },
-      ),
-    options.navigation,
+        theme: navigationTheme(options.navigation),
+      },
+      { signal },
+    ),
   );
-  return unwrapBackChoice(selected);
+  return selected;
 }
 
 export async function selectManyValues(
@@ -156,20 +148,19 @@ export async function selectManyValues(
   choices: Choice[],
   options: PromptOptions = {},
 ): Promise<string[]> {
-  return await promptWithNavigation(
-    (signal) =>
-      checkbox(
-        {
-          message: promptMessage(question, options.navigation),
-          choices: choices.map((option) => ({
-            ...toInquirerChoice(option),
-            checked: options.initialValues?.includes(option.value) ?? option.checked,
-          })),
-          pageSize: 10,
-        },
-        { signal },
-      ),
-    options.navigation,
+  return await promptWithNavigation((signal) =>
+    checkbox(
+      {
+        message: question,
+        choices: choices.map((option) => ({
+          ...toInquirerChoice(option),
+          checked: options.initialValues?.includes(option.value) ?? option.checked,
+        })),
+        pageSize: 10,
+        theme: navigationTheme(options.navigation),
+      },
+      { signal },
+    ),
   );
 }
 
@@ -193,19 +184,17 @@ export async function selectManyWorktrees(
 export async function promptText(
   question: string,
   defaultValue?: string,
-  options: PromptOptions = {},
+  _options: PromptOptions = {},
 ): Promise<string> {
   return (
-    await promptWithNavigation(
-      (signal) =>
-        input(
-          {
-            message: promptMessage(question, options.navigation),
-            default: defaultValue,
-          },
-          { signal },
-        ),
-      options.navigation,
+    await promptWithNavigation((signal) =>
+      input(
+        {
+          message: question,
+          default: defaultValue,
+        },
+        { signal },
+      ),
     )
   ).trim();
 }
@@ -312,32 +301,20 @@ function toInquirerChoices(
   return rendered;
 }
 
-function withBackChoice(choices: Choice[], navigation: PromptNavigation | undefined): Choice[] {
-  if (navigation !== "back") return choices;
-  return [
-    ...choices,
-    {
-      label: "← Back",
-      value: backChoiceValue,
-      description: "Return to the previous step.",
+function navigationTheme(navigation: PromptNavigation | undefined): {
+  style: { keysHelpTip: (keys: [key: string, action: string][]) => string };
+} {
+  return {
+    style: {
+      keysHelpTip: (keys) =>
+        [...keys, ["Esc", navigation ?? "cancel"], ["Ctrl+C", "exit"]]
+          .map(([key, action]) => `${pc.bold(key)} ${pc.dim(action)}`)
+          .join(pc.dim(" • ")),
     },
-  ];
+  };
 }
 
-function unwrapBackChoice(value: string): string {
-  if (value === backChoiceValue) throw new PromptBackError();
-  return value;
-}
-
-function promptMessage(question: string, navigation: PromptNavigation | undefined): string {
-  const action = navigation ?? "cancel";
-  return `${question} ${pc.dim(`[Esc ${action} · Ctrl+C exit]`)}`;
-}
-
-async function promptWithNavigation<T>(
-  prompt: (signal: AbortSignal) => Promise<T>,
-  _navigation: PromptNavigation | undefined,
-): Promise<T> {
+async function promptWithNavigation<T>(prompt: (signal: AbortSignal) => Promise<T>): Promise<T> {
   const controller = new AbortController();
   const onKeypress = (_input: string, key: { name?: string; ctrl?: boolean } | undefined): void => {
     if (key?.name === "escape" && !key.ctrl) controller.abort();

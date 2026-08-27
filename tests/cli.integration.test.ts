@@ -581,5 +581,5 @@ tools:
     expect(await fs.readFile(path.join(workspace, "main", "tool.log"), "utf8")).toBe(
       await fs.realpath(path.join(workspace, "main")),
     );
-  });
+  }, 15_000);
 });

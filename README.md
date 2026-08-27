@@ -1,4 +1,4 @@
-# 🌳 Ygg
+# 🌳 Ygg - Git Worktrees CLI
 
 **Ygg — Git workspaces, rooted together.**
 
@@ -7,7 +7,7 @@ your day away. Ygg turns Git worktrees into tidy, ready-to-use development envir
 
 ![Yggdrasil connecting one Git repository to several independent worktrees](docs/assets/yggdrasil-worktrees.png)
 
-## 🌿 Why Ygg?
+## Why Ygg?
 
 Ygg is short for **Yggdrasil**, the world tree from Norse mythology. Its roots and trunk hold
 different worlds together without turning them into the same place.
@@ -16,7 +16,7 @@ That is the idea behind Ygg: one Git repository forms the shared root, while eve
 review, or coding agent grows in its own worktree. Each world gets its own files and processes, but
 they all stay connected through the same Git history.
 
-## 🌱 Why worktrees?
+## Why worktrees?
 
 Branches are excellent at organizing history, but a normal checkout still gives you only one set of
 files at a time. A worktree turns another branch into another real project folder.
@@ -45,11 +45,11 @@ flowchart TB
 
 The useful boundary is simple:
 
-| Shared through Git | Independent in each worktree |
-| --- | --- |
-| Commits and Git objects | Checked-out files |
-| Branches and tags | `HEAD` and index |
-| Remotes and fetched refs | Dependencies and build output |
+| Shared through Git                   | Independent in each worktree  |
+| ------------------------------------ | ----------------------------- |
+| Commits and Git objects              | Checked-out files             |
+| Branches and tags                    | `HEAD` and index              |
+| Remotes and fetched refs             | Dependencies and build output |
 | Stashes and normal repository config | Editors and running processes |
 
 Separate folders isolate files, not external resources. Two development servers may still compete
@@ -57,17 +57,17 @@ for the same port or database.
 
 ### A quick rule of thumb
 
-| Situation | Best fit |
-| --- | --- |
-| An urgent task would interrupt unfinished work | Create another worktree. |
-| A review or test must run beside current development | Create another worktree. |
-| Two editors or agents must not share staged or generated files | Give each one a worktree. |
-| One small task is active and switching has no setup cost | A normal branch switch is enough. |
+| Situation                                                      | Best fit                          |
+| -------------------------------------------------------------- | --------------------------------- |
+| An urgent task would interrupt unfinished work                 | Create another worktree.          |
+| A review or test must run beside current development           | Create another worktree.          |
+| Two editors or agents must not share staged or generated files | Give each one a worktree.         |
+| One small task is active and switching has no setup cost       | A normal branch switch is enough. |
 
 Want a gentler tour through the idea? [Worktrees explained](docs/worktrees.md) walks through the
 mental model, real examples, layouts, and common pitfalls.
 
-## 🌲 What Ygg adds
+## What Ygg adds
 
 Git already provides the powerful `git worktree` foundation. Ygg takes care of the ceremony around
 it: predictable paths, branch resolution, trusted setup, navigation, tools, and safe cleanup.
@@ -84,7 +84,7 @@ flowchart TB
     Safe --> Git["Git worktree and repository state"]
 ```
 
-## 🚀 Get started
+## Get started
 
 Requirements: Node.js 22.13 or newer, pnpm 11, and Git.
 
@@ -122,12 +122,14 @@ grouped, and retained-checkout variants.
 Run `ygg` without a command. The menu stays open, refreshes the workspace after every action, and
 always brings you back to an up-to-date overview.
 
-| Key or choice | Result |
-| --- | --- |
-| `Enter` | Accept the highlighted or entered value. |
-| `Esc` | Go back one step; at the first prompt cancel the command, and in the main menu exit. |
-| `← Back` | Visible equivalent to `Esc` in nested single-choice menus. |
-| `Ctrl-C` | Exit Ygg immediately with status 130. |
+| Key or choice | Result                                                                               |
+| ------------- | ------------------------------------------------------------------------------------ |
+| `Enter`       | Accept the highlighted or entered value.                                             |
+| `Esc`         | Go back one step; at the first prompt cancel the command, and in the main menu exit. |
+| `Ctrl-C`      | Exit Ygg immediately with status 130.                                                |
+
+Selection prompts show these shortcuts in their footer beside `navigate` and `select`, not in the
+prompt title or as additional choices.
 
 Previous answers remain selected when moving back. Choosing `No`, submitting empty text, or making
 an empty checkbox selection keeps its normal meaning and is not treated as `Esc`. Once a workspace
@@ -168,14 +170,14 @@ for modified files, unmerged work, and locks before deleting the linked checkout
 the branch. If project setup failed during creation, fix the cause and retry it with `ygg setup
 feature-payment`.
 
-## 🌿 Pick the workflow that fits your day
+## Pick the workflow that fits your day
 
-| Goal | Create | Finish |
-| --- | --- | --- |
-| Fix production beside unfinished work | `ygg create hotfix/payment --from release/1.x --tool code` | `ygg remove hotfix-payment` |
-| Review a remote branch locally | `ygg create contributor/payment-fix --tool code` | Run the configured checks, then remove it |
-| Run a long test beside development | `ygg create experiment/migration --cd` | Remove it after the experiment |
-| Give two agents separate files | `ygg create feature/api` and `ygg create feature/ui` | Open each agent in a separate terminal; verify and remove independently |
+| Goal                                  | Create                                                     | Finish                                                                  |
+| ------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Fix production beside unfinished work | `ygg create hotfix/payment --from release/1.x --tool code` | `ygg remove hotfix-payment`                                             |
+| Review a remote branch locally        | `ygg create contributor/payment-fix --tool code`           | Run the configured checks, then remove it                               |
+| Run a long test beside development    | `ygg create experiment/migration --cd`                     | Remove it after the experiment                                          |
+| Give two agents separate files        | `ygg create feature/api` and `ygg create feature/ui`       | Open each agent in a separate terminal; verify and remove independently |
 
 Ygg reuses a local branch, tracks a matching branch from the configured remote, or creates a new
 branch from the default branch. Use `--from HEAD` only when new work should start from the current
@@ -218,14 +220,14 @@ locally before running it.
 
 ## Clean up with confidence
 
-| Goal | Command | Result |
-| --- | --- | --- |
-| Finish with an existing worktree | `ygg remove feature-payment` | Removes the checkout directory, never the branch. |
-| Inspect metadata for a directory deleted outside Git | `ygg prune` | Preview only; changes nothing. |
-| Apply that metadata cleanup | `ygg prune --apply` | Removes only stale Git worktree registrations. |
-| Restore a deleted worktree container or metadata link | `ygg init` | Repairs the existing workspace without replacing its configuration. |
-| Inspect removal of Ygg from the repository | `ygg uninit` | Previews Ygg-owned metadata; keeps Git, branches, and worktree directories. |
-| Remove Ygg from the repository | `ygg uninit --apply` | Removes only Ygg workspace metadata after safety checks. |
+| Goal                                                  | Command                      | Result                                                                      |
+| ----------------------------------------------------- | ---------------------------- | --------------------------------------------------------------------------- |
+| Finish with an existing worktree                      | `ygg remove feature-payment` | Removes the checkout directory, never the branch.                           |
+| Inspect metadata for a directory deleted outside Git  | `ygg prune`                  | Preview only; changes nothing.                                              |
+| Apply that metadata cleanup                           | `ygg prune --apply`          | Removes only stale Git worktree registrations.                              |
+| Restore a deleted worktree container or metadata link | `ygg init`                   | Repairs the existing workspace without replacing its configuration.         |
+| Inspect removal of Ygg from the repository            | `ygg uninit`                 | Previews Ygg-owned metadata; keeps Git, branches, and worktree directories. |
+| Remove Ygg from the repository                        | `ygg uninit --apply`         | Removes only Ygg workspace metadata after safety checks.                    |
 
 Let Ygg do the tidying instead of moving or deleting linked worktree folders manually. `ygg remove`
 checks their state first; `ygg prune` is the recovery path for administrative metadata after a

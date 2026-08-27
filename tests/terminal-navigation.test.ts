@@ -71,18 +71,30 @@ describe("terminal prompt navigation", () => {
     expect(process.stdin.listenerCount("keypress")).toBe(listenersBefore);
   });
 
-  it("adds a visible Back choice and the navigation hint to single selections", async () => {
+  it("shows navigation in the footer without adding a Back choice", async () => {
     prompts.select.mockImplementation(
-      async (config: { message: string; choices: Array<{ name?: string; value?: string }> }) => {
-        expect(config.message).toContain("Esc back · Ctrl+C exit");
-        const back = config.choices.find((choice) => choice.name === "← Back");
-        expect(back).toBeDefined();
-        return back?.value;
+      async (config: {
+        message: string;
+        choices: Array<{ name?: string; value?: string }>;
+        theme?: {
+          style?: { keysHelpTip?: (keys: [string, string][]) => string };
+        };
+      }) => {
+        expect(config.message).toBe("Choose:");
+        expect(config.choices).not.toEqual(
+          expect.arrayContaining([expect.objectContaining({ name: "← Back" })]),
+        );
+        const help = config.theme?.style?.keysHelpTip?.([
+          ["↑↓", "navigate"],
+          ["⏎", "select"],
+        ]);
+        expect(help).toContain("↑↓ navigate • ⏎ select • Esc back • Ctrl+C exit");
+        return "one";
       },
     );
 
     await expect(
       selectValue("Choose:", [{ label: "One", value: "one" }], { navigation: "back" }),
-    ).rejects.toBeInstanceOf(PromptBackError);
+    ).resolves.toBe("one");
   });
 });
