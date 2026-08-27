@@ -12,6 +12,7 @@ import { pruneWorktrees } from "./commands/prune.js";
 import { removeWorktrees } from "./commands/remove.js";
 import { runProjectTask } from "./commands/run.js";
 import { setupWorktree } from "./commands/setup.js";
+import { uninitializeWorkspace } from "./commands/uninit.js";
 import type { CliContext } from "./context.js";
 import { findWorkspaceOrNull, writeLine } from "./helpers.js";
 
@@ -115,6 +116,12 @@ export async function runMainMenu(program: Command, context: CliContext): Promis
         group: "Maintenance",
       },
       {
+        label: "Disconnect Ygg workspace",
+        value: "uninit",
+        description: "Remove Ygg metadata while keeping the Git repository.",
+        group: "Maintenance",
+      },
+      {
         label: "Exit",
         value: "exit",
         description: "Close the interactive Ygg session.",
@@ -144,6 +151,14 @@ export async function runMainMenu(program: Command, context: CliContext): Promis
         case "prune":
           await pruneWorktrees({ apply: true, yes: false }, context);
           break;
+        case "uninit": {
+          const removed = await uninitializeWorkspace(
+            { apply: true, force: false, yes: false },
+            context,
+          );
+          if (removed) return;
+          break;
+        }
         case "remove":
           await removeWorktrees({ worktrees: [], force: false, yes: false }, context);
           break;

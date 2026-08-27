@@ -90,6 +90,54 @@ describe("adopting existing Git repositories", () => {
     );
   });
 
+  it("repairs a deleted worktree container, metadata link, and shared directory", async () => {
+    const workspace = await workspaces.adopt(
+      await workspaces.inspectAdoption(repository.source, { defaultBranch: "main" }),
+    );
+    await Promise.all([
+      fs.rm(workspace.worktreeDir, { recursive: true }),
+      fs.rm(workspace.sharedDir, { recursive: true }),
+    ]);
+
+    await expect(workspaces.repair(workspace)).resolves.toEqual({
+      worktreeDirCreated: true,
+      markerCreated: true,
+      sharedDirCreated: true,
+    });
+    await expect(fs.stat(workspace.worktreeDir)).resolves.toSatisfy((stat) => stat.isDirectory());
+    await expect(fs.realpath(path.join(workspace.worktreeDir, ".ygg"))).resolves.toBe(
+      path.dirname(workspace.configPath),
+    );
+    await expect(fs.stat(workspace.sharedDir)).resolves.toSatisfy((stat) => stat.isDirectory());
+    await expect(workspaces.repair(workspace)).resolves.toEqual({
+      worktreeDirCreated: false,
+      markerCreated: false,
+      sharedDirCreated: false,
+    });
+  });
+
+  it("repairs a broken Ygg marker but preserves a marker that points elsewhere", async () => {
+    const workspace = await workspaces.adopt(
+      await workspaces.inspectAdoption(repository.source, { defaultBranch: "main" }),
+    );
+    const markerPath = path.join(workspace.worktreeDir, ".ygg");
+    await fs.rm(markerPath);
+    await fs.symlink("missing-metadata", markerPath);
+
+    await expect(workspaces.repair(workspace)).resolves.toMatchObject({ markerCreated: true });
+    await expect(fs.realpath(markerPath)).resolves.toBe(path.dirname(workspace.configPath));
+
+    const unrelated = path.join(temporaryRoot, "unrelated-metadata");
+    await fs.mkdir(unrelated);
+    await fs.rm(markerPath);
+    await fs.symlink(path.relative(workspace.worktreeDir, unrelated), markerPath);
+
+    await expect(workspaces.repair(workspace)).rejects.toThrow(
+      /Workspace marker points to different metadata/u,
+    );
+    await expect(fs.realpath(markerPath)).resolves.toBe(unrelated);
+  });
+
   it("uses its own fetch refspec without changing the adopted remote configuration", async () => {
     const gitConfigPath = path.join(repository.source, ".git", "config");
     const configBefore = await fs.readFile(gitConfigPath, "utf8");

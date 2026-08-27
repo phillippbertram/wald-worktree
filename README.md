@@ -223,10 +223,14 @@ locally before running it.
 | Finish with an existing worktree | `ygg remove feature-payment` | Removes the checkout directory, never the branch. |
 | Inspect metadata for a directory deleted outside Git | `ygg prune` | Preview only; changes nothing. |
 | Apply that metadata cleanup | `ygg prune --apply` | Removes only stale Git worktree registrations. |
+| Restore a deleted worktree container or metadata link | `ygg init` | Repairs the existing workspace without replacing its configuration. |
+| Inspect removal of Ygg from the repository | `ygg uninit` | Previews Ygg-owned metadata; keeps Git, branches, and worktree directories. |
+| Remove Ygg from the repository | `ygg uninit --apply` | Removes only Ygg workspace metadata after safety checks. |
 
 Let Ygg do the tidying instead of moving or deleting linked worktree folders manually. `ygg remove`
 checks their state first; `ygg prune` is the recovery path for administrative metadata after a
-folder is already missing.
+folder is already missing. Re-running `ygg init` repairs a missing worktree container, `.ygg` link,
+or shared directory. Use `ygg uninit` only when the repository should stop being managed by Ygg.
 
 ## Keep exploring
 

@@ -196,11 +196,15 @@ flowchart TB
 
     Missing["Folder was already deleted outside Git"] --> Preview["ygg prune<br/>preview stale metadata"]
     Preview --> Apply["ygg prune --apply<br/>remove metadata only"]
+
+    Apply --> Repair["ygg init<br/>repair missing workspace container or link"]
+    Apply --> Uninit["ygg uninit<br/>preview removal of Ygg metadata"]
 ```
 
 `remove` is the normal finish path. `prune` is not a faster removal command; it repairs stale Git
 administrative state after a registered directory is already missing. Locked registrations are
-preserved.
+preserved. `init` repairs the workspace infrastructure after stale registrations are gone;
+`uninit` is the explicit path for disconnecting the repository from Ygg.
 
 ## Workspace layouts
 
@@ -282,6 +286,8 @@ Ygg does not replace Git. It applies workspace policy around the native operatio
 | Run project setup or tasks | `ygg setup`, `ygg run` | Trusted `.ygg.yml` behavior |
 | Finish with a checkout | `ygg remove <worktree>` | Safety inspection and `git worktree remove` |
 | Clean stale metadata | `ygg prune` | Preview-first `git worktree prune` |
+| Repair workspace infrastructure | `ygg init` | Restore the configured container, metadata link, or shared directory |
+| Stop managing the repository with Ygg | `ygg uninit` | Preview-first removal of Ygg-owned metadata |
 
 Use Ygg for normal workspace operations so paths, setup, trust, and safety checks stay consistent.
 Regular Git commands inside a selected worktree continue to work normally.
@@ -315,6 +321,13 @@ preview its stale registration with `ygg prune`.
 
 No. `ygg remove` removes the linked checkout after safety checks and preserves the branch. `ygg
 prune` removes only stale administrative metadata and never deletes an existing directory or branch.
+
+### How do I remove Ygg from an existing repository?
+
+Remove linked worktrees normally, prune registrations for folders that are already missing, then run
+`ygg uninit`. The command previews its changes. `ygg uninit --apply` removes the workspace
+configuration and metadata link but keeps the Git repository, branches, primary checkout, worktree
+container, and `.ygg.yml`. Local files below the Ygg metadata directory require `--force`.
 
 ### Do I need a worktree for every branch?
 

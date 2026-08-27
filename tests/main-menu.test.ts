@@ -17,6 +17,7 @@ const interactions = vi.hoisted(() => ({
   findWorkspaceOrNull: vi.fn(),
   initializeWorkspace: vi.fn(),
   createWorktree: vi.fn(),
+  uninitializeWorkspace: vi.fn(),
 }));
 
 vi.mock("../src/ui/terminal.js", async (importOriginal) => {
@@ -62,6 +63,14 @@ vi.mock("../src/cli/commands/create.js", async (importOriginal) => {
   };
 });
 
+vi.mock("../src/cli/commands/uninit.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/cli/commands/uninit.js")>();
+  return {
+    ...actual,
+    uninitializeWorkspace: interactions.uninitializeWorkspace,
+  };
+});
+
 describe("interactive main menu", () => {
   beforeEach(() => {
     interactions.interactive = true;
@@ -74,6 +83,7 @@ describe("interactive main menu", () => {
       interactions.events.push("init");
     });
     interactions.createWorktree.mockReset();
+    interactions.uninitializeWorkspace.mockReset();
   });
 
   it("shows workspace context before prompting", async () => {
@@ -128,6 +138,21 @@ describe("interactive main menu", () => {
 
     expect(interactions.createWorktree).toHaveBeenCalledOnce();
     expect(interactions.events.filter((event) => event === "prompt")).toHaveLength(2);
+  });
+
+  it("closes the menu after the workspace is uninitialized", async () => {
+    const workspace = { root: "/tmp/ygg-project" } as Workspace;
+    interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
+    interactions.selections = ["uninit"];
+    interactions.uninitializeWorkspace.mockResolvedValue(true);
+
+    await runMainMenu(new Command().name("ygg"), createContext(null, []));
+
+    expect(interactions.uninitializeWorkspace).toHaveBeenCalledWith(
+      { apply: true, force: false, yes: false },
+      expect.anything(),
+    );
+    expect(interactions.findWorkspaceOrNull).toHaveBeenCalledOnce();
   });
 
   it("shows the welcome page before starting guided initialization", async () => {

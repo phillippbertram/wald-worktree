@@ -182,6 +182,143 @@ describe("CLI smoke flow", () => {
     expect(repeated.stdout).toContain("No stale worktree metadata found");
   });
 
+  it("repairs an adopted workspace after its worktree directory was deleted and pruned", async () => {
+    const worktreeDir = path.join(temporaryRoot, "repair-worktrees");
+    const initialized = await execa(
+      process.execPath,
+      cliArguments("init", "--adopt", repository.source, "--yes", "--worktrees-dir", worktreeDir),
+      { cwd: temporaryRoot, reject: false },
+    );
+    expect(initialized.exitCode, initialized.stderr).toBe(0);
+    const created = await execa(
+      process.execPath,
+      cliArguments("create", "feature/stale", "--no-fetch"),
+      { cwd: repository.source, reject: false },
+    );
+    expect(created.exitCode, created.stderr).toBe(0);
+    await fs.rm(worktreeDir, { recursive: true });
+
+    const pruned = await execa(process.execPath, cliArguments("prune", "--apply", "--yes"), {
+      cwd: repository.source,
+      reject: false,
+    });
+    expect(pruned.exitCode, pruned.stderr).toBe(0);
+    expect(pruned.stdout).toContain("Pruned 1 stale worktree registration");
+
+    const repaired = await execa(
+      process.execPath,
+      cliArguments("init", "--adopt", repository.source, "--yes", "--worktrees-dir", worktreeDir),
+      { cwd: temporaryRoot, reject: false },
+    );
+    expect(repaired.exitCode, repaired.stderr).toBe(0);
+    expect(repaired.stdout).toContain("Repaired workspace");
+    expect(repaired.stdout).toContain(`Restored worktree directory ${worktreeDir}`);
+    expect(repaired.stdout).toContain(`Restored metadata link ${path.join(worktreeDir, ".ygg")}`);
+    await expect(fs.realpath(path.join(worktreeDir, ".ygg"))).resolves.toBe(
+      await fs.realpath(path.join(repository.source, ".git", "ygg")),
+    );
+  });
+
+  it("previews and explicitly uninitializes while preserving Git and worktree directories", async () => {
+    const worktreeDir = path.join(temporaryRoot, "uninit-worktrees");
+    const initialized = await execa(
+      process.execPath,
+      cliArguments("init", "--adopt", repository.source, "--yes", "--worktrees-dir", worktreeDir),
+      { cwd: temporaryRoot, reject: false },
+    );
+    expect(initialized.exitCode, initialized.stderr).toBe(0);
+    await fs.writeFile(path.join(repository.source, ".ygg.yml"), "version: 1\n", "utf8");
+
+    const preview = await execa(process.execPath, cliArguments("uninit"), {
+      cwd: repository.source,
+      reject: false,
+    });
+    expect(preview.exitCode, preview.stderr).toBe(0);
+    expect(preview.stdout).toContain("Ygg workspace metadata:");
+    expect(preview.stdout).toContain("Preview only");
+    await expect(fs.stat(path.join(repository.source, ".git", "ygg"))).resolves.toSatisfy((stat) =>
+      stat.isDirectory(),
+    );
+
+    const confirmationRequired = await execa(process.execPath, cliArguments("uninit", "--apply"), {
+      cwd: repository.source,
+      reject: false,
+    });
+    expect(confirmationRequired.exitCode).toBe(1);
+    expect(confirmationRequired.stderr).toContain(
+      "Non-interactive uninitialization requires --apply --yes",
+    );
+
+    const created = await execa(
+      process.execPath,
+      cliArguments("create", "feature/keep", "--no-fetch"),
+      { cwd: repository.source, reject: false },
+    );
+    expect(created.exitCode, created.stderr).toBe(0);
+    const blocked = await execa(process.execPath, cliArguments("uninit", "--apply", "--yes"), {
+      cwd: repository.source,
+      reject: false,
+    });
+    expect(blocked.exitCode).toBe(1);
+    expect(blocked.stderr).toContain("Registered worktrees remain: feature-keep");
+    const removed = await execa(process.execPath, cliArguments("remove", "feature-keep", "--yes"), {
+      cwd: repository.source,
+      reject: false,
+    });
+    expect(removed.exitCode, removed.stderr).toBe(0);
+
+    const sharedFile = path.join(repository.source, ".git", "ygg", "shared", "local.env");
+    await fs.writeFile(sharedFile, "SECRET=kept-until-forced\n", "utf8");
+    const protectedData = await execa(
+      process.execPath,
+      cliArguments("uninit", "--apply", "--yes"),
+      { cwd: repository.source, reject: false },
+    );
+    expect(protectedData.exitCode).toBe(1);
+    expect(protectedData.stdout).toContain("shared/local.env");
+    expect(protectedData.stderr).toContain("Use --force only if this data can be discarded");
+
+    const applied = await execa(
+      process.execPath,
+      cliArguments("uninit", "--apply", "--force", "--yes"),
+      { cwd: repository.source, reject: false },
+    );
+    expect(applied.exitCode, applied.stderr).toBe(0);
+    expect(applied.stdout).toContain("Removed Ygg workspace metadata");
+    await expect(fs.stat(path.join(repository.source, ".git", "ygg"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    await expect(fs.stat(path.join(worktreeDir, ".ygg"))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(fs.stat(worktreeDir)).resolves.toSatisfy((stat) => stat.isDirectory());
+    await expect(fs.stat(path.join(repository.source, ".git"))).resolves.toSatisfy((stat) =>
+      stat.isDirectory(),
+    );
+    await expect(fs.readFile(path.join(repository.source, ".ygg.yml"), "utf8")).resolves.toBe(
+      "version: 1\n",
+    );
+  });
+
+  it("uninitializes a standalone workspace without removing its Git database", async () => {
+    const workspace = path.join(temporaryRoot, "standalone-uninit");
+    const initialized = await execa(
+      process.execPath,
+      cliArguments("init", repository.remote, workspace),
+      { cwd: temporaryRoot, reject: false },
+    );
+    expect(initialized.exitCode, initialized.stderr).toBe(0);
+
+    const applied = await execa(process.execPath, cliArguments("uninit", "--apply", "--yes"), {
+      cwd: workspace,
+      reject: false,
+    });
+    expect(applied.exitCode, applied.stderr).toBe(0);
+    await expect(fs.stat(path.join(workspace, ".ygg"))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(fs.stat(path.join(workspace, "repo.git"))).resolves.toSatisfy((stat) =>
+      stat.isDirectory(),
+    );
+    await expect(fs.stat(workspace)).resolves.toSatisfy((stat) => stat.isDirectory());
+  });
+
   it("adopts an existing checkout through explicit non-TTY options", async () => {
     const worktreeDir = path.join(temporaryRoot, "adopted-worktrees");
     const configPath = path.join(repository.source, ".git", "config");
@@ -245,7 +382,10 @@ describe("CLI smoke flow", () => {
       { cwd: temporaryRoot, reject: false },
     );
     expect(repeated.exitCode, repeated.stderr).toBe(0);
-    expect(repeated.stdout).toContain("already initialized");
+    expect(repeated.stdout).toContain("Repaired workspace");
+    expect(repeated.stdout).toContain(
+      `Restored shared directory ${path.join(await fs.realpath(path.dirname(sharedDir)), "shared")}`,
+    );
     expect(repeated.stdout).toContain("review and commit .ygg.yml");
     await expect(fs.stat(sharedDir)).resolves.toSatisfy((stat) => stat.isDirectory());
     await expect(fs.readFile(path.join(repository.source, ".ygg.yml"), "utf8")).resolves.toContain(

@@ -32,6 +32,18 @@ export type AdoptionValidation = {
   worktreeDirExisted: boolean;
 };
 
+export type WorkspaceRepair = {
+  worktreeDirCreated: boolean;
+  markerCreated: boolean;
+  sharedDirCreated: boolean;
+};
+
+export type WorkspaceUninitializationInspection = {
+  metadataDir: string;
+  markerPath: string | null;
+  dataEntries: string[];
+};
+
 export type AdoptionWorktree = Pick<
   Worktree,
   "path" | "branch" | "branchRef" | "locked" | "lockReason" | "prunable"
@@ -406,7 +418,10 @@ export class WorkspaceService {
       };
 
       await this.configs.writeWorkspaceConfig(configPath, config);
-      await fs.symlink(path.relative(inspection.worktreeDir, metadataDir), markerPath);
+      await fs.symlink(
+        path.relative(await fs.realpath(inspection.worktreeDir), await fs.realpath(metadataDir)),
+        markerPath,
+      );
       createdMarker = true;
       return await this.toWorkspace(configPath, config);
     } catch (error) {
@@ -514,6 +529,121 @@ export class WorkspaceService {
     await fs.mkdir(workspace.sharedDir, { recursive: true, mode: 0o700 });
   }
 
+  async repair(workspace: Workspace): Promise<WorkspaceRepair> {
+    const worktreeDirState = await lstatOrNull(workspace.worktreeDir);
+    if (worktreeDirState && !worktreeDirState.isDirectory()) {
+      throw new YggError(`Worktree directory is not a directory: ${workspace.worktreeDir}`);
+    }
+
+    const sharedState = await lstatOrNull(workspace.sharedDir);
+    if (sharedState?.isSymbolicLink() || (sharedState && !sharedState.isDirectory())) {
+      throw new YggError(
+        `Shared path must be a directory, not a link or file: ${workspace.sharedDir}`,
+      );
+    }
+
+    const markerPath =
+      workspace.config.mode === "adopted" ? path.join(workspace.worktreeDir, ".ygg") : null;
+    const markerState = markerPath && worktreeDirState ? await lstatOrNull(markerPath) : null;
+    const markerNeedsRepair = Boolean(
+      markerPath &&
+        (!markerState ||
+          (await this.inspectWorkspaceMarker(markerPath, path.dirname(workspace.configPath))) ===
+            "broken"),
+    );
+
+    const repair: WorkspaceRepair = {
+      worktreeDirCreated: !worktreeDirState,
+      markerCreated: markerNeedsRepair,
+      sharedDirCreated: !sharedState,
+    };
+
+    let markerWritten = false;
+    try {
+      if (repair.worktreeDirCreated) {
+        await fs.mkdir(workspace.worktreeDir, { recursive: true });
+      }
+      if (repair.markerCreated && markerPath) {
+        if (markerState) await fs.rm(markerPath);
+        await fs.symlink(
+          path.relative(
+            await fs.realpath(workspace.worktreeDir),
+            await fs.realpath(path.dirname(workspace.configPath)),
+          ),
+          markerPath,
+        );
+        markerWritten = true;
+      }
+      if (repair.sharedDirCreated) {
+        await fs.mkdir(workspace.sharedDir, { recursive: true, mode: 0o700 });
+      }
+      return repair;
+    } catch (error) {
+      if (markerWritten && markerPath) {
+        await fs.rm(markerPath, { force: true }).catch(() => undefined);
+      }
+      throw error;
+    }
+  }
+
+  async inspectUninitialization(
+    workspace: Workspace,
+  ): Promise<WorkspaceUninitializationInspection> {
+    const metadataDir = path.dirname(workspace.configPath);
+    let markerPath: string | null = null;
+    if (workspace.config.mode === "adopted") {
+      const candidate = path.join(workspace.worktreeDir, ".ygg");
+      if (await lstatOrNull(candidate)) {
+        await this.inspectWorkspaceMarker(candidate, metadataDir);
+        markerPath = candidate;
+      }
+    }
+
+    const dataEntries: string[] = [];
+    for (const entry of await fs.readdir(metadataDir, { withFileTypes: true })) {
+      if (entry.name === workspaceConfigFileName) continue;
+      if (entry.name === "shared" && entry.isDirectory() && !entry.isSymbolicLink()) {
+        dataEntries.push(
+          ...(await listRelativeEntries(path.join(metadataDir, entry.name), "shared")),
+        );
+        continue;
+      }
+      dataEntries.push(entry.name);
+    }
+
+    return {
+      metadataDir,
+      markerPath,
+      dataEntries: dataEntries.sort((left, right) => left.localeCompare(right)),
+    };
+  }
+
+  async uninitialize(workspace: Workspace, options: { force?: boolean } = {}): Promise<void> {
+    const inspection = await this.inspectUninitialization(workspace);
+    if (inspection.dataEntries.length > 0 && !options.force) {
+      throw new YggError(
+        "Ygg metadata contains local data. Use --force only if this data can be discarded.",
+      );
+    }
+
+    if (inspection.markerPath) {
+      await fs.rm(inspection.markerPath);
+    }
+    try {
+      await fs.rm(inspection.metadataDir, { recursive: true });
+    } catch (error) {
+      if (inspection.markerPath) {
+        await fs
+          .symlink(
+            path.relative(workspace.worktreeDir, inspection.metadataDir),
+            inspection.markerPath,
+          )
+          .catch(() => undefined);
+      }
+      throw error;
+    }
+  }
+
   private async read(configPath: string): Promise<Workspace> {
     let realConfigPath: string;
     try {
@@ -525,6 +655,27 @@ export class WorkspaceService {
       realConfigPath,
       await this.configs.readWorkspaceConfig(realConfigPath),
     );
+  }
+
+  private async inspectWorkspaceMarker(
+    markerPath: string,
+    metadataDir: string,
+  ): Promise<"valid" | "broken"> {
+    const marker = await fs.lstat(markerPath);
+    if (!marker.isSymbolicLink()) {
+      throw new YggError(`Workspace marker is not a symbolic link: ${markerPath}`);
+    }
+    let target: string;
+    try {
+      target = await fs.realpath(markerPath);
+    } catch (error) {
+      if (this.isNotFound(error)) return "broken";
+      throw new YggError(`Cannot inspect workspace marker: ${markerPath}`, { cause: error });
+    }
+    if (target !== (await fs.realpath(metadataDir))) {
+      throw new YggError(`Workspace marker points to different metadata: ${markerPath}`);
+    }
+    return "valid";
   }
 
   private async toWorkspace(configPath: string, config: WorkspaceConfig): Promise<Workspace> {
@@ -984,6 +1135,19 @@ async function lstatOrNull(target: string): Promise<Awaited<ReturnType<typeof fs
     }
     throw error;
   }
+}
+
+async function listRelativeEntries(root: string, prefix: string): Promise<string[]> {
+  const found: string[] = [];
+  const entries = await fs.readdir(root, { withFileTypes: true });
+  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+    const relative = path.join(prefix, entry.name);
+    found.push(relative);
+    if (entry.isDirectory() && !entry.isSymbolicLink()) {
+      found.push(...(await listRelativeEntries(path.join(root, entry.name), relative)));
+    }
+  }
+  return found;
 }
 
 async function canonicalPath(target: string): Promise<string> {

@@ -88,6 +88,7 @@ When an existing checkout is retained, the worktree directory may be any safe di
 the Git directory and primary checkout. The physical configuration and shared files live below
 `<git-common-dir>/ygg`; the worktree container contains a `.ygg` link to them. `ygg config` prints the
 canonical `workspace_config`, `workspace_root`, `worktrees_path`, and `shared_path` for both layouts.
+Re-running `ygg init` restores this link and its configured worktree container if either was deleted.
 
 ```text
 parent/
@@ -109,6 +110,8 @@ hardlinks.
 Every initialized workspace owns a `.ygg/shared` directory. It is local, created with directory mode
 `700`, and never committed. Project automation accesses it only through explicit trusted
 `source: shared` steps. Files placed there retain their own permissions; use mode `600` for secrets.
+Because these files can contain secrets or other local state, `ygg uninit --apply` refuses to remove
+them unless `--force` is also supplied.
 
 ## Project configuration
 

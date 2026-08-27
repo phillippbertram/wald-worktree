@@ -80,6 +80,11 @@ Non-interactive adoption requires `--adopt` and `--yes`. Clone mode cannot be co
 options. Initialization never moves or deletes an existing checkout and never commits `.ygg.yml`.
 Direct and non-interactive invocations do not show the guided preview.
 
+When the repository already has a valid Ygg configuration, `init` verifies its local infrastructure.
+It recreates a missing worktree container, adopted-workspace `.ygg` link, or `shared` directory and
+reports `Repaired workspace`. It does not recreate individual worktrees or change workspace settings;
+use `ygg prune` first if manually deleted worktrees still have stale Git registrations.
+
 ```sh
 ygg init git@github.com:example/project.git ~/dev/project
 ygg init git@github.com:example/project.git ~/dev/project --worktrees-dir worktrees
@@ -218,6 +223,26 @@ non-interactive application requires `--apply --yes`. `--yes` without `--apply` 
 
 Pruning removes only stale Git administrative metadata. It never removes a directory or branch,
 does not run project hooks, and preserves locked worktrees.
+
+## `ygg uninit`
+
+```text
+ygg uninit
+ygg uninit --apply [--force] [--yes]
+```
+
+`ygg uninit` previews the Ygg workspace metadata and adopted-workspace `.ygg` link that would be
+removed. The Git database, branches, retained primary checkout, worktree container, project-owned
+`.ygg.yml`, and every other directory are kept.
+
+`--apply` performs the removal after confirmation. Non-interactive application requires
+`--apply --yes`; `--yes` and `--force` are invalid without `--apply`. Registered linked worktrees,
+including missing or locked registrations, always block uninitialization. Remove existing worktrees
+with `ygg remove` and clean missing registrations with `ygg prune --apply` first.
+
+Files or additional directories below the Ygg metadata directory are local data. This includes
+content below `shared`. Uninitialization preserves them by default and requires `--force` to discard
+them. Project hooks are not run.
 
 ## `ygg config`
 

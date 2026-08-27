@@ -19,6 +19,7 @@ describe("CLI contract", () => {
       "setup",
       "remove",
       "prune",
+      "uninit",
       "config",
       "completion",
       "complete",
@@ -40,6 +41,18 @@ describe("CLI contract", () => {
 
     await expect(program.parseAsync(["node", "ygg", "prune", "--yes"])).rejects.toThrow(
       /--yes: Requires --apply/u,
+    );
+  });
+
+  it("requires --apply for uninitialization confirmation and force", async () => {
+    const output = new PassThrough();
+    const program = createProgram({ stdout: output, stderr: output });
+
+    await expect(program.parseAsync(["node", "ygg", "uninit", "--yes"])).rejects.toThrow(
+      /--yes: Requires --apply/u,
+    );
+    await expect(program.parseAsync(["node", "ygg", "uninit", "--force"])).rejects.toThrow(
+      /--force: Requires --apply/u,
     );
   });
 

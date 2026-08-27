@@ -48,3 +48,13 @@ ygg prune --apply --yes
 ```
 
 Pruning never deletes a branch or directory and leaves locked registrations untouched.
+
+After pruning manually deleted worktrees, re-run `ygg init` to restore a missing configured worktree
+container or `.ygg` metadata link. To disconnect the repository from Ygg instead, preview:
+
+```sh
+ygg uninit
+```
+
+Apply non-interactively with `ygg uninit --apply --yes`. Registered linked worktrees always block the
+operation. Local metadata and shared files require explicit permission to discard with `--force`.

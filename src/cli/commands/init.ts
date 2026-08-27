@@ -113,11 +113,7 @@ async function initializeGuidedExistingRepository(
   context: CliContext,
 ): Promise<Workspace | null> {
   if (inspection.existingWorkspace) {
-    await context.workspaces.ensureSharedDirectory(inspection.existingWorkspace);
-    await success(
-      `Workspace already initialized at ${inspection.existingWorkspace.root}`,
-      context.output,
-    );
+    await repairOrReportExistingWorkspace(inspection.existingWorkspace, context);
     const worktrees = await context.worktrees.list(inspection.existingWorkspace);
     const preferred =
       (await context.worktrees.current(inspection.existingWorkspace)) ??
@@ -529,11 +525,7 @@ async function initializeAdoptedWorkspace(
   };
   let inspection = await inspectAdoption(source, requested, explicit, context);
   if (inspection.existingWorkspace) {
-    await context.workspaces.ensureSharedDirectory(inspection.existingWorkspace);
-    await success(
-      `Workspace already initialized at ${inspection.existingWorkspace.root}`,
-      context.output,
-    );
+    await repairOrReportExistingWorkspace(inspection.existingWorkspace, context);
     if (input.config) {
       await maybeInitializeProjectConfig(
         inspection.existingWorkspace.primaryWorktree,
@@ -584,6 +576,26 @@ async function initializeAdoptedWorkspace(
   await maybeInitializeProjectConfig(workspace.primaryWorktree, input, context);
   writeLine(context.output.stdout, "Create another worktree: ygg create <branch> --cd");
   return workspace;
+}
+
+async function repairOrReportExistingWorkspace(
+  workspace: Workspace,
+  context: CliContext,
+): Promise<void> {
+  const repair = await runTask("Checking workspace", () => context.workspaces.repair(workspace));
+  const restored = [
+    repair.worktreeDirCreated ? `worktree directory ${workspace.worktreeDir}` : null,
+    repair.markerCreated ? `metadata link ${path.join(workspace.worktreeDir, ".ygg")}` : null,
+    repair.sharedDirCreated ? `shared directory ${workspace.sharedDir}` : null,
+  ].filter((entry): entry is string => Boolean(entry));
+
+  if (restored.length === 0) {
+    await success(`Workspace already initialized at ${workspace.root}`, context.output);
+    return;
+  }
+
+  await success(`Repaired workspace at ${workspace.root}`, context.output);
+  for (const entry of restored) writeLine(context.output.stdout, `Restored ${entry}`);
 }
 
 async function maybeInitializeProjectConfig(

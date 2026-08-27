@@ -30,6 +30,10 @@ actions as part of normal removal.
 
 Use `ygg prune` as a read-only preview of stale Git metadata. Apply it non-interactively only with
 `ygg prune --apply --yes`; this does not remove directories or branches and preserves locked entries.
+If the configured worktree container or `.ygg` link is missing, re-run `ygg init` after pruning to
+repair it. To stop managing a repository with Ygg, preview `ygg uninit`; apply non-interactively only
+with `ygg uninit --apply --yes`. Never add `--force` without permission to discard local metadata and
+shared files.
 
 If `.ygg.yml` is untrusted, inspect the reported hooks, tasks, and tools before running
 `ygg config trust --yes`. A formatting-only edit preserves its semantic trust, but changed behavior
