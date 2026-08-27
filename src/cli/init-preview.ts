@@ -47,6 +47,7 @@ export function initializationPreviewSummary(
     return [
       ["Source repository", inspection.primaryWorktree ?? inspection.gitDir],
       ["Repository type", inspection.bare ? "bare repository" : "working checkout"],
+      ["Layout", "Retained existing checkout"],
       ["Primary checkout", inspection.primaryWorktree ?? "none"],
       ["Ygg metadata", inspection.metadataDir],
       ["New worktrees", inspection.worktreeDir],
@@ -61,6 +62,12 @@ export function initializationPreviewSummary(
   const rows: Array<[string, string]> = [
     ["Source repository", preview.source],
     ["Workspace root", preview.target.root],
+    [
+      "Layout",
+      preview.target.worktreeDir === preview.target.root
+        ? "Ygg Flow — flat standalone workspace"
+        : "Grouped standalone workspace",
+    ],
     ["Git database", preview.target.gitDir],
     ["Ygg metadata", preview.target.metadataDir],
     ["New worktrees", preview.target.worktreeDir],

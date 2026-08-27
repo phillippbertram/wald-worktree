@@ -5,6 +5,7 @@ import { ProjectConfigInitializer } from "../services/project-config-initializer
 import { ShellService } from "../services/shell-service.js";
 import { ToolService } from "../services/tool-service.js";
 import { WorkspaceService } from "../services/workspace-service.js";
+import { WorkspaceStatusService } from "../services/workspace-status-service.js";
 import { WorktreeService } from "../services/worktree-service.js";
 import { WorktreeWorkflowService } from "../services/worktree-workflow-service.js";
 
@@ -30,6 +31,7 @@ export function createCliContext(
     projectConfigs: new ProjectConfigInitializer(),
     workspaces,
     worktrees,
+    status: new WorkspaceStatusService(git, worktrees, configs),
     processes,
     workflow: new WorktreeWorkflowService(git, worktrees, configs),
     tools: new ToolService(processes),

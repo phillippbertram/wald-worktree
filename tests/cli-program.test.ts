@@ -11,6 +11,7 @@ describe("CLI contract", () => {
     expect(program.commands.map((command) => command.name())).toEqual([
       "init",
       "create",
+      "status",
       "list",
       "cd",
       "open",
@@ -123,8 +124,10 @@ describe("CLI contract", () => {
     expect(rootHelp).toContain("🌳 Create and work in isolated Git checkouts safely.");
     expect(rootHelp).toContain("🌱 Start here:");
     expect(rootHelp).toContain("cd ~/dev/project && ygg init");
-    expect(initHelp).toContain("Keep an existing checkout or create a standalone workspace root");
-    expect(initHelp).toContain("inside the workspace root for");
+    expect(initHelp).toContain(
+      "Keep an existing checkout or create a standalone workspace (Ygg Flow by default)",
+    );
+    expect(initHelp).toContain("defaults to the Ygg Flow root");
     expect(initHelp).toContain("cloned repositories");
     expect(initHelp).toContain("--config-scope <scope>");
     expect(createHelp).toContain("ygg create feature/payment --cd");

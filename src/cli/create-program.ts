@@ -12,6 +12,7 @@ import { registerPruneCommand } from "./commands/prune.js";
 import { registerRemoveCommand } from "./commands/remove.js";
 import { registerRunCommand } from "./commands/run.js";
 import { registerSetupCommand } from "./commands/setup.js";
+import { registerStatusCommand } from "./commands/status.js";
 import { registerUninitCommand } from "./commands/uninit.js";
 import { type CliOutput, createCliContext } from "./context.js";
 import { runMainMenu } from "./main-menu.js";
@@ -40,6 +41,7 @@ export function createProgram(
 
   registerInitCommand(program, context);
   registerCreateCommand(program, context);
+  registerStatusCommand(program, context);
   registerListCommand(program, context);
   registerCdCommand(program, context);
   registerOpenCommand(program, context);

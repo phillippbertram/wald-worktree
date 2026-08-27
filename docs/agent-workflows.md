@@ -1,7 +1,8 @@
 # Agent workflows
 
-Ygg gives every coding agent a concrete Git worktree. Agents no longer share staged, unstaged,
-untracked, or generated files just because their tasks belong to the same repository.
+Ygg gives every coding agent its own world: a concrete Git worktree rooted in the same repository.
+Agents no longer share staged, unstaged, untracked, or generated files just because their tasks
+belong to the same repository.
 
 ```mermaid
 flowchart TB
@@ -15,6 +16,9 @@ flowchart TB
 Commits remain visible through the shared repository. Files, `HEAD`, the index, dependencies, and
 agent processes stay with their worktree. Ports, databases, containers, and external services are
 not automatically isolated; coordinate them separately.
+
+The examples use the recommended flat [Ygg Flow layout](worktrees.md#ygg-flow), but the same agent
+isolation works in grouped and retained-checkout workspaces.
 
 ## Run two tasks in parallel
 
@@ -62,7 +66,8 @@ without an explicit handoff.
 
 ## Operating rules for agents
 
-- Discover state with `ygg list --json`; do not guess paths from branch names.
+- Start with `ygg status --json` to understand the current context and local tracking state.
+- Use `ygg list --json` for complete worktree records; do not guess paths from branch names.
 - Resolve a path with `ygg cd <worktree>`.
 - Prefer direct commands in non-interactive sessions.
 - Run shared project actions through `ygg run` so configured order, environment, timeouts, and trust
@@ -74,7 +79,8 @@ without an explicit handoff.
 Ygg deliberately does not orchestrate multiple agents, transfer patches, or infer handoffs. Those
 operations require ownership and permission models outside the v1 workspace lifecycle.
 
-See [Worktrees explained](worktrees.md#four-everyday-workflows) for the general worktree model and
+See [Ygg Flow](worktrees.md#ygg-flow) for the recommended workspace layout,
+[four everyday workflows](worktrees.md#four-everyday-workflows) for the general worktree model, and
 [Configuration](configuration.md#named-tasks-and-tool-profiles) for custom tools and tasks.
 
 ## Portable Agent Skill

@@ -11,6 +11,7 @@ import type {
   ProjectConfigOverlay,
   Workspace,
   WorkspaceConfig,
+  Worktree,
 } from "../domain/types.js";
 import type { GitClient } from "../infrastructure/git-client.js";
 
@@ -327,6 +328,26 @@ export class ConfigService {
       this.readWorkspaceProjectConfig(workspace),
     ]);
     return mergeProjectConfigDocuments(repository, local);
+  }
+
+  async resolveEffectiveProjectConfig(
+    git: GitClient,
+    workspace: Workspace,
+    current: Worktree | null,
+    worktrees: Worktree[],
+  ): Promise<ProjectConfigDocument | null> {
+    if (current) return await this.resolveProjectConfig(workspace, current.path);
+
+    const preferred =
+      worktrees.find((worktree) => worktree.branch === workspace.config.defaultBranch) ??
+      worktrees.find((worktree) => worktree.role === "primary") ??
+      worktrees[0];
+    if (preferred) return await this.resolveProjectConfig(workspace, preferred.path);
+
+    const revision = workspace.config.remote
+      ? `${workspace.config.remote.name}/${workspace.config.defaultBranch}`
+      : workspace.config.defaultBranch;
+    return await this.resolveProjectConfigAtRevision(git, workspace, revision);
   }
 
   parseProjectConfig(raw: string, configPath: string): ProjectConfigDocument {

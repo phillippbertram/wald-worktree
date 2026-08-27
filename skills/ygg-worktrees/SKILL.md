@@ -10,13 +10,16 @@ Use `ygg` as the workspace interface and Git as the underlying source of truth.
 Start with read-only discovery:
 
 ```sh
+ygg status --json
 ygg list --json
 ygg config
 ygg prune
 ```
 
-Resolve locations with `ygg cd`; do not derive directory names from branches. Prefer direct
-commands in non-interactive agent sessions and include required confirmation flags explicitly.
+Use `status` for the current context and local tracking comparison, then `list` for complete
+worktree records and paths. Resolve locations with `ygg cd`; do not derive directory names from
+branches. Prefer direct commands in non-interactive agent sessions and include required
+confirmation flags explicitly.
 
 - For creating or selecting a worktree, read [references/worktrees.md](references/worktrees.md).
 - For hooks, tasks, trust, or failures during setup, read

@@ -43,6 +43,56 @@ export type Worktree = {
   state: WorktreeState;
 };
 
+export type WorktreeTracking =
+  | {
+      state: "tracked";
+      upstream: string;
+      ahead: number;
+      behind: number;
+    }
+  | {
+      state: "gone";
+      upstream: string;
+      ahead: null;
+      behind: null;
+    }
+  | {
+      state: "none";
+      upstream: null;
+      ahead: null;
+      behind: null;
+    }
+  | {
+      state: "not-applicable";
+      upstream: null;
+      ahead: null;
+      behind: null;
+    };
+
+export type WorkspaceStatus = {
+  workspace: {
+    root: string;
+    defaultBranch: string;
+  };
+  current: {
+    name: string;
+    path: string;
+    branch: string | null;
+    role: Worktree["role"];
+    state: WorktreeState;
+    head: string | null;
+    tracking: WorktreeTracking;
+  } | null;
+  project: {
+    path: string;
+    sources: ProjectConfigDocument["sources"];
+    trust: "not-required" | "trusted" | "untrusted";
+  } | null;
+  worktrees: Record<WorktreeState, number> & {
+    total: number;
+  };
+};
+
 export type StepSource = "current" | "default" | "primary" | "shared";
 export type StepWorkingDirectory = "source" | "target" | "workspace";
 export type ExistingTargetPolicy = "error" | "skip" | "replace";

@@ -53,7 +53,8 @@ Without explicit arguments in a terminal, `ygg init` inspects the current direct
 user through keeping an existing checkout or creating a standalone workspace. Outside a Git
 repository, it offers separate paths for cloning a remote URL or selecting a local checkout or bare
 repository. A selected local repository gets the same keep-or-copy choice. With `repository`, the
-direct command clones a remote or local repository into a standalone workspace.
+direct command clones a remote or local repository into a standalone workspace. Its default flat
+layout is [Ygg Flow](worktrees.md#ygg-flow); `--worktrees-dir` selects a grouped alternative.
 
 The guided flow validates the target, previews absolute paths and the resulting directory tree, then
 asks `Initialize this workspace?`. Workspace creation, the optional default-branch worktree, and
@@ -77,7 +78,7 @@ the visual comparison.
 | `repository` | Remote URL or local repository to clone. |
 | `directory` | Destination workspace; otherwise derived from the repository name. |
 | `--adopt [path]` | Keep an existing checkout; omitted path means the current directory. |
-| `--worktrees-dir <path>` | Worktree parent. In standalone mode it must remain inside the workspace root. |
+| `--worktrees-dir <path>` | Worktree parent. Defaults to the Ygg Flow root; a custom standalone path must remain inside the workspace root. |
 | `--remote <name>` | Remote used for fetch and branch resolution. |
 | `--no-remote` | Configure a local-only repository. |
 | `--default-branch <branch>` | Default creation base and merge-check target. |
@@ -131,6 +132,25 @@ ygg create feature/payment --cd
 ygg create hotfix/payment --from release/1.x --cd
 ygg create feature/review --tool codex
 ```
+
+## `ygg status`
+
+```text
+ygg status [--json]
+```
+
+Prints a five-row dashboard for the invocation context: workspace and default branch, current
+worktree, local upstream comparison, effective project-configuration trust, and aggregate worktree
+state counts. From the workspace root, `Current` is `workspace root` and tracking is not applicable.
+
+Tracking uses only existing local refs and never fetches. It reports `tracked` data as ahead and
+behind counts, `none` when the branch has no upstream, `gone` when the configured upstream ref is
+not available locally, and `not-applicable` for detached HEAD or the workspace root.
+
+`--json` emits one object with `workspace`, nullable `current`, nullable `project`, and `worktrees`
+fields. The current record includes its tracking state; project trust is `not-required`, `trusted`,
+or `untrusted`. Modified, locked, missing, untrusted, and gone states are informational and still
+exit successfully. Use `ygg list --json` for complete individual worktree records.
 
 ## `ygg list`
 

@@ -123,7 +123,7 @@ tools:
 
     expect(commands.exitCode, commands.stderr).toBe(0);
     expect(suggestionValues(commands.stdout)).toEqual(
-      expect.arrayContaining(["init", "create", "config", "completion"]),
+      expect.arrayContaining(["init", "create", "status", "config", "completion"]),
     );
     expect(suggestionValues(commands.stdout)).not.toContain("complete");
     expect(suggestionValues(commands.stdout)).not.toContain("shell-init");

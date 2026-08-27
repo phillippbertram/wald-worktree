@@ -3,6 +3,24 @@
 Git worktrees let one repository provide several project folders at the same time. This guide builds
 the mental model first, then shows where Ygg fits and how the workflow looks in daily development.
 
+## Yggdrasil as a mental model
+
+Ygg uses the world tree as a teaching aid for real Git concepts. The metaphor never replaces the
+technical names used by Git, the CLI, or configuration:
+
+| Yggdrasil image | Technical meaning |
+| --- | --- |
+| World tree | The complete Ygg workspace. |
+| Roots | `repo.git`, where Git keeps the shared objects, refs, remotes, and worktree metadata. |
+| Trunk | The configured default branch: the normal creation base and merge-check target. |
+| Worlds | Independent worktree folders with their own files, `HEAD`, index, and processes. |
+| Bifröst | `ygg cd` or `ygg open`, which takes you to a selected worktree without changing another. |
+
+The default branch is the closest thing Ygg has to a **Sacred Timeline**: it is the preferred base
+for new work and the comparison target for safe removal. That phrase is a playful nod to Marvel's
+_Loki_, not Old Norse mythology, and Ygg does not enforce one history. An explicit `--from` may start
+new work from another commit.
+
 ## The four building blocks
 
 | Term | Think of it as | Example |
@@ -17,11 +35,11 @@ folders without cloning the complete repository again.
 
 ```mermaid
 flowchart TB
-    Repo["Shared Git repository"]
+    Repo["Roots · shared Git repository"]
     Repo --> History["Commits · branches · tags · remotes"]
-    Repo --> Main["main worktree<br/>HEAD: main"]
-    Repo --> Feature["linked worktree<br/>HEAD: feature/payment"]
-    Repo --> Review["linked worktree<br/>HEAD: contributor/fix"]
+    Repo --> Main["Main world · worktree<br/>HEAD: main · trunk"]
+    Repo --> Feature["Feature world · linked worktree<br/>HEAD: feature/payment"]
+    Repo --> Review["Review world · linked worktree<br/>HEAD: contributor/fix"]
 
     Main --> MainFiles["own files · index · dependencies"]
     Feature --> FeatureFiles["own files · index · dependencies"]
@@ -180,6 +198,9 @@ or other shared services.
 
 ## The worktree lifecycle
 
+This lifecycle works in every supported workspace layout. **Ygg Flow** names the recommended flat
+layout, not a branching model or this create-to-remove sequence.
+
 ```mermaid
 flowchart TB
     Request["ygg create"] --> Resolve["Resolve branch and trusted configuration"]
@@ -204,13 +225,15 @@ flowchart TB
 `remove` is the normal finish path. `prune` is not a faster removal command; it repairs stale Git
 administrative state after a registered directory is already missing. Locked registrations are
 preserved. `init` repairs the workspace infrastructure after stale registrations are gone;
-`uninit` is the explicit path for disconnecting the repository from Ygg.
+`uninit` is the explicit path for disconnecting the repository from Ygg. A normal removal retires
+one worktree world while its branch and the shared roots survive—no repository Ragnarök.
 
 ## Workspace layouts
 
-### Flat standalone workspace
+### Ygg Flow
 
-This is the recommended default. The shared repository and every worktree are siblings:
+**Ygg Flow** is Ygg's recommended flat standalone layout. The shared repository and every worktree
+are siblings directly inside one workspace root:
 
 ```text
 project/
@@ -227,6 +250,10 @@ Create it directly from a remote repository:
 ```sh
 ygg init git@github.com:example/project.git ~/dev/project
 ```
+
+Like git-flow and GitHub Flow, the name describes a preferred way of working. Unlike those branching
+models, Ygg Flow defines only the physical worktree layout. It does not prescribe branch names,
+merge direction, release branches, or deployment policy.
 
 ### Grouped standalone workspace
 
@@ -281,6 +308,7 @@ Ygg does not replace Git. It applies workspace policy around the native operatio
 | Intent | Ygg workflow | Native foundation |
 | --- | --- | --- |
 | Create a checkout | `ygg create <branch>` | `git worktree add` |
+| Understand the current context | `ygg status` | Local Git status, tracking refs, and Ygg configuration |
 | Find all checkouts | `ygg list` | `git worktree list` plus Ygg state |
 | Enter a checkout | `ygg cd <worktree>` | Resolve and print its canonical path |
 | Run hooks, setup, or tasks | `ygg hook run`, `ygg setup`, `ygg run` | Trusted effective project behavior |
@@ -315,7 +343,8 @@ conflicting environment at a time.
 
 Do not do that for normal cleanup. Git keeps administrative links between the shared repository and
 each worktree. Use `ygg remove` so state is inspected first. If a directory is already missing,
-preview its stale registration with `ygg prune`.
+preview its stale registration with `ygg prune`; that repairs the roots without touching surviving
+worlds or branches.
 
 ### Does removing a worktree delete its branch?
 
@@ -338,6 +367,8 @@ job, or parallel agent. For a quick isolated change, normal branch switching may
 ## Further reading
 
 - [Official Git worktree documentation](https://git-scm.com/docs/git-worktree)
+- [Yggdrasil and the worlds of Norse cosmology](https://www.worldhistory.org/article/1305/nine-realms-of-norse-cosmology/)
+- [Marvel's Sacred Timeline](https://www.marvel.com/teams-and-groups/time-keepers/)
 - [DataCamp: Git Worktree Tutorial](https://www.datacamp.com/tutorial/git-worktree-tutorial)
 - [Ygg CLI reference](cli-reference.md)
 - [Ygg configuration](configuration.md)

@@ -1,9 +1,14 @@
 # Worktree operations
 
+**Ygg Flow** means the recommended flat standalone layout: `.ygg`, `repo.git`, and all worktrees are
+siblings in one workspace root. It does not define a branch or merge strategy. Other Ygg layouts use
+the same commands and safety rules.
+
 ## Discover and select
 
-Use `ygg list --json` for machine-readable state and `ygg cd <name-or-branch>` for the canonical
-path. `ygg cd` only changes the parent shell when shell integration is installed.
+Use `ygg status --json` for the current context and local tracking comparison. Use `ygg list --json`
+for complete worktree records and `ygg cd <name-or-branch>` for the canonical path. `ygg cd` only
+changes the parent shell when shell integration is installed.
 
 ## Create
 

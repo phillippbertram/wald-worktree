@@ -252,8 +252,11 @@ export class WorktreeService {
   }
 
   async current(workspace: Workspace, cwd = process.cwd()): Promise<Worktree | null> {
+    return await this.currentFromList(await this.list(workspace), cwd);
+  }
+
+  async currentFromList(worktrees: Worktree[], cwd = process.cwd()): Promise<Worktree | null> {
     const currentPath = await canonicalPath(cwd);
-    const worktrees = await this.list(workspace);
     for (const worktree of worktrees) {
       const worktreePath = await canonicalPath(worktree.path);
       if (currentPath === worktreePath || isPathInside(worktreePath, currentPath)) {

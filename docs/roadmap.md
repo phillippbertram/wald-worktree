@@ -1,13 +1,14 @@
 # Roadmap
 
 The configurable v1 lifecycle, YAML model, interactive CLI, shell integration, tool profiles,
-preview-first metadata pruning, and portable Agent Skill are implemented. The next work should
-strengthen diagnostics before broadening the workflow model.
+read-only context status, preview-first metadata pruning, and portable Agent Skill are implemented.
+The next work should strengthen diagnostics before broadening the workflow model.
 
 ## Next
 
 ### `ygg doctor`
 
+- Diagnose inconsistencies beyond the informational local snapshot provided by `ygg status`.
 - Validate local and project YAML, repository references, hooks, configured file steps, and tools.
 - Detect stale or inconsistent Git worktree metadata.
 - Print safe repair commands without exposing environment-file contents, including

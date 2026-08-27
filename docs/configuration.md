@@ -57,7 +57,8 @@ It does not switch existing branches, rename worktrees, or override an explicit 
 
 ### Supported layouts
 
-The recommended flat standalone workspace uses `paths.worktrees: ..`:
+The recommended flat standalone workspace is called
+[Ygg Flow](worktrees.md#ygg-flow). It uses `paths.worktrees: ..`:
 
 ```text
 project/

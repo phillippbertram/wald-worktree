@@ -58,13 +58,13 @@ export type InitInput = z.output<typeof initInputSchema>;
 export function registerInitCommand(program: Command, context: CliContext): void {
   program
     .command("init")
-    .description("Keep an existing checkout or create a standalone workspace root")
+    .description("Keep an existing checkout or create a standalone workspace (Ygg Flow by default)")
     .argument("[repository]", "Remote URL or local repository to clone when provided")
     .argument("[directory]", "Workspace directory")
     .option("--adopt [path]", "Keep an existing checkout; defaults to the current directory")
     .option(
       "--worktrees-dir <path>",
-      "Worktree directory; inside the workspace root for cloned repositories",
+      "Worktree directory; defaults to the Ygg Flow root for cloned repositories",
     )
     .option("--remote <name>", "Remote used for fetching and branch resolution")
     .option("--no-remote", "Use no remote (local-only repository)")
@@ -461,7 +461,7 @@ async function chooseManagedWorktreeDirectory(initialValue?: string): Promise<st
       "Initialize › Layout · Where should worktrees be created?",
       [
         {
-          label: "Directly in the workspace root (recommended)",
+          label: "Ygg Flow — directly in the workspace root (recommended)",
           value: ".",
           description: "Creates main and feature directories beside repo.git.",
         },

@@ -16,6 +16,10 @@ That is the idea behind Ygg: one Git repository forms the shared root, while eve
 review, or coding agent grows in its own worktree. Each world gets its own files and processes, but
 they all stay connected through the same Git history.
 
+In that mental model, the complete workspace is Yggdrasil, `repo.git` holds the shared roots, the
+default branch forms the trunk, and every worktree is its own world. Ygg keeps the metaphor playful
+while Git remains the source of truth.
+
 ## Why worktrees?
 
 Branches are excellent at organizing history, but a normal checkout still gives you only one set of
@@ -144,7 +148,10 @@ ygg create main --cd
 ygg create feature/payment --tool code
 ```
 
-The recommended flat workspace is easy to scan:
+The recommended layout is called **[Ygg Flow](docs/worktrees.md#ygg-flow)**. Unlike git-flow or
+GitHub Flow, it does not prescribe branches, merges, or releases. Ygg Flow organizes the physical
+workspace: the Git database and every worktree live side by side, making the whole world tree easy
+to scan.
 
 ```text
 project/
@@ -157,22 +164,25 @@ project/
 └── feature-payment/         feature/payment branch worktree
 ```
 
-Branch separators become hyphens in default directory names. Use `ygg list` to see the exact branch,
-state, and path of every worktree.
+Branch separators become hyphens in default directory names. Use `ygg status` for the current
+workspace context and `ygg list` to see the exact branch, state, and path of every worktree.
 
 ### 3. Work, verify, and tidy up
 
 ```sh
+ygg status
 ygg list
 ygg run verify feature-payment
 ygg remove feature-payment
 ```
 
-`ygg run verify` is available when the effective project configuration defines that task. Removal
-checks for modified files, unmerged work, and locks before deleting the linked checkout. It never
-deletes the branch. If project setup failed during creation, fix the cause and retry it with
-`ygg setup feature-payment`. To test any lifecycle hook after editing `.ygg/project.yml`, run it
-explicitly without creating or removing a worktree:
+`ygg status` summarizes the current checkout, local upstream comparison, project trust, and workspace
+states without fetching or changing anything. Think of it as reading the local runes: it never
+consults the remote or changes the repository. `ygg run verify` is available when the effective
+project configuration defines that task. Removal checks for modified files, unmerged work, and
+locks before deleting the linked checkout. It never deletes the branch. If project setup failed
+during creation, fix the cause and retry it with `ygg setup feature-payment`. To test any lifecycle
+hook after editing `.ygg/project.yml`, run it explicitly without creating or removing a worktree:
 
 ```sh
 ygg hook run post_create feature-payment
@@ -211,8 +221,8 @@ ygg completion fish | source
 ```
 
 Add the matching line to your shell configuration once and navigation feels just like a built-in
-shell command. Without it, `ygg cd` still prints the canonical path and `ygg create --cd` prints a
-normal `cd` fallback.
+shell command: a small Bifröst between worktree worlds. Without it, `ygg cd` still prints the
+canonical path and `ygg create --cd` prints a normal `cd` fallback.
 
 ## Make every worktree feel ready
 
@@ -247,11 +257,12 @@ locally before running it.
 Let Ygg do the tidying instead of moving or deleting linked worktree folders manually. `ygg remove`
 checks their state first; `ygg prune` is the recovery path for administrative metadata after a
 folder is already missing. Re-running `ygg init` repairs a missing worktree container, `.ygg` link,
-or shared directory. Use `ygg uninit` only when the repository should stop being managed by Ygg.
+or shared directory. Removing one world keeps its branch and shared history intact: no repository
+Ragnarök. Use `ygg uninit` only when the repository should stop being managed by Ygg.
 
 ## Keep exploring
 
-- [Worktrees explained](docs/worktrees.md): mental model, visual workflows, layouts, and pitfalls.
+- [Worktrees explained](docs/worktrees.md): Ygg Flow, the world-tree model, workflows, and pitfalls.
 - [CLI reference](docs/cli-reference.md): every command, argument, option, and non-interactive rule.
 - [Configuration](docs/configuration.md): YAML schema, trust model, hooks, tasks, files, and tools.
 - [Agent workflows](docs/agent-workflows.md): isolated worktrees for coding agents.

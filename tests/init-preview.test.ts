@@ -21,6 +21,10 @@ describe("workspace initialization preview", () => {
     expect(rendered).toContain("└── repo.git/  new: shared Git database");
     expect(rendered).toContain("New worktrees: /projects/my-app/<branch>  optional next");
     expect(rendered).not.toContain("worktrees/  new: future worktrees");
+    expect(initializationPreviewSummary(preview)).toContainEqual([
+      "Layout",
+      "Ygg Flow — flat standalone workspace",
+    ]);
   });
 
   it("renders a grouped managed layout and its concrete absolute paths", () => {
@@ -32,6 +36,10 @@ describe("workspace initialization preview", () => {
     expect(initializationPreviewSummary(preview)).toContainEqual([
       "New worktrees",
       "/projects/my-app/worktrees",
+    ]);
+    expect(initializationPreviewSummary(preview)).toContainEqual([
+      "Layout",
+      "Grouped standalone workspace",
     ]);
   });
 
@@ -50,6 +58,10 @@ describe("workspace initialization preview", () => {
     expect(rendered).toContain("│       └── ygg/  new: local Ygg metadata");
     expect(rendered).toContain("└── app-worktrees/  new: future worktree container");
     expect(rendered).toContain(".ygg -> /projects/app/.git/ygg  new: metadata link");
+    expect(initializationPreviewSummary(preview)).toContainEqual([
+      "Layout",
+      "Retained existing checkout",
+    ]);
   });
 
   it("uses bare-repository wording and marks an existing worktree container", () => {

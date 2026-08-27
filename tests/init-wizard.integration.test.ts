@@ -116,7 +116,17 @@ describe("interactive init wizard", () => {
         }),
       ]),
     });
+    expect(prompts.choices[1]).toMatchObject({
+      question: "Initialize › Layout · Where should worktrees be created?",
+      options: expect.arrayContaining([
+        expect.objectContaining({
+          label: "Ygg Flow — directly in the workspace root (recommended)",
+        }),
+      ]),
+    });
+    expect(prompts.tables[0]).toContainEqual(["Layout", "Ygg Flow — flat standalone workspace"]);
     const workspace = await context.workspaces.find(target);
+    expect(workspace.worktreeDir).toBe(workspace.root);
     expect(workspace.config.remote?.name).toBe("origin");
     expect(await context.worktrees.resolve(workspace, "main")).toMatchObject({
       path: path.join(workspace.root, "main"),

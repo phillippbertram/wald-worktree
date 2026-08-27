@@ -45,20 +45,14 @@ export async function resolveProjectConfiguration(
   workspace: Workspace,
   context: CliContext,
 ): Promise<ProjectConfigDocument | null> {
-  const current = await context.worktrees.current(workspace);
-  if (current) return await context.configs.resolveProjectConfig(workspace, current.path);
-
-  const all = await context.worktrees.list(workspace);
-  const preferred =
-    all.find((worktree) => worktree.branch === workspace.config.defaultBranch) ??
-    all.find((worktree) => worktree.role === "primary") ??
-    all[0];
-  if (preferred) return await context.configs.resolveProjectConfig(workspace, preferred.path);
-
-  const revision = workspace.config.remote
-    ? `${workspace.config.remote.name}/${workspace.config.defaultBranch}`
-    : workspace.config.defaultBranch;
-  return await context.configs.resolveProjectConfigAtRevision(context.git, workspace, revision);
+  const worktrees = await context.worktrees.list(workspace);
+  const current = await context.worktrees.currentFromList(worktrees);
+  return await context.configs.resolveEffectiveProjectConfig(
+    context.git,
+    workspace,
+    current,
+    worktrees,
+  );
 }
 
 export async function ensureTrusted(
