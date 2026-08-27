@@ -29,6 +29,7 @@
     "unlink:global": "pnpm remove --global ygg-worktree"
   },
   "dependencies": {
+    "@bomb.sh/tab": "0.0.22",
     "@inquirer/prompts": "^8.6.0",
     "commander": "^15.0.0",
     "execa": "^10.0.1",

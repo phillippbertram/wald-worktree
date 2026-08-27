@@ -207,16 +207,17 @@ and project-configuration paths, the project behavior hash, and trust state.
 Non-interactive trust and untrust require `--yes`. See [configuration](configuration.md) for the
 complete schema and trust model.
 
-## `ygg shell-init`
+## `ygg completion`
 
 ```text
-ygg shell-init <bash|zsh|fish>
+ygg completion <bash|zsh|fish>
 ```
 
-Prints the shell function and dynamic completion definitions used by `ygg cd` and `ygg create --cd`.
+Prints the navigation function and dynamic completion definitions used by `ygg cd`,
+`ygg create --cd`, and interactive tab completion.
 
 ```sh
-eval "$(ygg shell-init zsh)"
-eval "$(ygg shell-init bash)"
-ygg shell-init fish | source
+eval "$(ygg completion zsh)"
+eval "$(ygg completion bash)"
+ygg completion fish | source
 ```

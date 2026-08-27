@@ -16,7 +16,6 @@ strengthen diagnostics before broadening the workflow model.
 
 - Add changelog, provenance, and npm publishing automation.
 - Verify global installation across the supported Node and operating-system matrix.
-- Add completion fixtures for bash, zsh, and fish releases.
 
 ### Additional project detectors
 

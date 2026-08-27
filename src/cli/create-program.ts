@@ -11,7 +11,6 @@ import { registerPruneCommand } from "./commands/prune.js";
 import { registerRemoveCommand } from "./commands/remove.js";
 import { registerRunCommand } from "./commands/run.js";
 import { registerSetupCommand } from "./commands/setup.js";
-import { registerShellInitCommand } from "./commands/shell-init.js";
 import { type CliOutput, createCliContext } from "./context.js";
 import { runMainMenu } from "./main-menu.js";
 
@@ -48,7 +47,6 @@ export function createProgram(
   registerRemoveCommand(program, context);
   registerPruneCommand(program, context);
   registerConfigCommand(program, context);
-  registerShellInitCommand(program, context);
   registerCompletionCommand(program, context);
 
   return program;

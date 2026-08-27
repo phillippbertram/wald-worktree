@@ -5,7 +5,7 @@ describe("shell integration", () => {
   const shells = new ShellService();
 
   it.each(["bash", "zsh", "fish"] as const)(
-    "routes create --cd through the path-only protocol for %s",
+    "renders navigation through the path-only protocol for %s",
     (shell) => {
       const script = shells.render(shell);
 
@@ -13,11 +13,8 @@ describe("shell integration", () => {
       expect(script).toContain("--print-path");
       expect(script).toContain("builtin cd");
       expect(script).toContain("command ygg");
-      expect(script).toContain("ygg completion");
+      expect(script).not.toContain("ygg completion");
+      expect(script).not.toContain("_ygg_complete");
     },
   );
-
-  it.each(["bash", "zsh", "fish"] as const)("offers prune completion for %s", (shell) => {
-    expect(shells.render(shell)).toContain("prune");
-  });
 });

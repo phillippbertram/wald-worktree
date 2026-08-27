@@ -99,17 +99,17 @@ Shell integration lets `ygg cd` and `ygg create --cd` change the current termina
 
 ```sh
 # zsh
-eval "$(ygg shell-init zsh)"
+eval "$(ygg completion zsh)"
 
 # bash
-eval "$(ygg shell-init bash)"
+eval "$(ygg completion bash)"
 
 # fish
-ygg shell-init fish | source
+ygg completion fish | source
 ```
 
 Add the matching line to your shell configuration to enable it in future terminals. Without the
-wrapper, `ygg cd` prints the canonical path and `ygg create --cd` prints a normal `cd` fallback.
+integration, `ygg cd` prints the canonical path and `ygg create --cd` prints a normal `cd` fallback.
 
 ## 🌿 Everyday development flows
 

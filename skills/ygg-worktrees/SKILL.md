@@ -22,7 +22,7 @@ commands in non-interactive agent sessions and include required confirmation fla
 - For hooks, tasks, trust, or failures during setup, read
   [references/automation.md](references/automation.md).
 - For starting an editor or coding agent, use `ygg open <worktree> --tool <profile>`. Inspect
-  available profiles with `ygg completion tools` when needed.
+  built-in profiles with `ygg open --help` and project profiles in `.ygg.yml` when needed.
 
 Do not use `--force` for removal without verifying that dirty or unmerged work can be discarded.
 Never infer permission to delete branches or the primary checkout; `ygg` does not perform those

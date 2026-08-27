@@ -20,9 +20,15 @@ describe("CLI contract", () => {
       "remove",
       "prune",
       "config",
-      "shell-init",
       "completion",
+      "complete",
     ]);
+    const completion = program.commands.find((command) => command.name() === "completion");
+    const complete = program.commands.find((command) => command.name() === "complete");
+    expect(completion?.registeredArguments[0]?.argChoices).toEqual(["zsh", "bash", "fish"]);
+    expect(complete?.helpInformation()).toContain("Generate completion suggestions");
+    expect(program.helpInformation()).not.toContain("complete --");
+    expect(program.helpInformation()).not.toContain("shell-init");
     expect(program.commands.find((command) => command.name() === "config")?.commands).toHaveLength(
       3,
     );

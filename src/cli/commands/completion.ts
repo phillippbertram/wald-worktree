@@ -1,49 +1,199 @@
+import type { RootCommand } from "@bomb.sh/tab";
+import tab from "@bomb.sh/tab/commander";
 import type { Command } from "commander";
-import { z } from "zod";
 import type { CliContext } from "../context.js";
-import { findWorkspaceOrNull, writeLine } from "../helpers.js";
-import { parseCliInput } from "../input.js";
+import { findWorkspaceOrNull } from "../helpers.js";
 
-const completionInputSchema = z
-  .object({ kind: z.enum(["worktrees", "branches", "tasks", "tools"]) })
-  .strict();
+const supportedShells = ["zsh", "bash", "fish"] as const;
+const completionDescription = "Generate shell completion and navigation integration";
+
+type CompletionKind = "worktrees" | "branches" | "tasks" | "tools";
+type CompletionCandidate = { value: string; description: string };
+type CompletionCandidates = Record<CompletionKind, CompletionCandidate[]>;
 
 export function registerCompletionCommand(program: Command, context: CliContext): void {
-  program
-    .command("completion", { hidden: true })
-    .argument("<kind>", "worktrees, branches, tasks, or tools")
-    .action(async (kind: unknown) => {
-      const input = parseCliInput(completionInputSchema, { kind });
-      await printCompletionCandidates(input.kind, context);
+  const completion = tab(program, { completionCommandName: "completion" });
+  const publicCommand = findRegisteredCommand(program, "completion");
+  const runtimeCommand = findRegisteredCommand(program, "complete");
+
+  publicCommand
+    .description(completionDescription)
+    .addHelpText(
+      "after",
+      '\nExamples:\n  eval "$(ygg completion zsh)"\n  eval "$(ygg completion bash)"\n  ygg completion fish | source\n',
+    )
+    .hook("preAction", (_thisCommand, actionCommand) => {
+      const shell = actionCommand.processedArgs[0];
+      if (typeof shell === "string") context.output.stdout.write(context.shells.render(shell));
     });
+
+  const shellArgument = publicCommand.registeredArguments[0];
+  if (!shellArgument) throw new Error("Bombshell did not register the completion shell argument.");
+  shellArgument.choices([...supportedShells]);
+
+  const completionMetadata = requiredTabCommand(completion, "completion");
+  completionMetadata.description = completionDescription;
+  const shellMetadata = completionMetadata.arguments.get("shell");
+  if (!shellMetadata) throw new Error("Bombshell did not expose the completion shell argument.");
+  shellMetadata.handler = (complete) => {
+    for (const shell of supportedShells) complete(shell, "");
+  };
+
+  runtimeCommand.hook("preAction", async (_thisCommand, actionCommand) => {
+    const args = actionCommand.processedArgs[0];
+    const request = Array.isArray(args)
+      ? args.filter((value): value is string => typeof value === "string")
+      : [];
+    const kinds = requestedCompletionKinds(request);
+    const candidates = await loadCompletionCandidates(kinds, context);
+    applyDynamicHandlers(completion, candidates);
+  });
 }
 
-async function printCompletionCandidates(
-  kind: z.output<typeof completionInputSchema>["kind"],
+function findRegisteredCommand(program: Command, name: string): Command {
+  const command = program.commands.find((candidate) => candidate.name() === name);
+  if (!command) throw new Error(`Bombshell did not register the ${name} command.`);
+  return command;
+}
+
+function requiredTabCommand(completion: RootCommand, path: string) {
+  const command = completion.commands.get(path);
+  if (!command) throw new Error(`Bombshell did not register completion metadata for ${path}.`);
+  return command;
+}
+
+function requestedCompletionKinds(args: string[]): Set<CompletionKind> {
+  switch (args[0]) {
+    case "create":
+      return new Set(["branches", "tools"]);
+    case "cd":
+    case "setup":
+    case "remove":
+    case "exec":
+      return new Set(["worktrees"]);
+    case "open":
+      return new Set(["worktrees", "tools"]);
+    case "run":
+      return new Set(["tasks", "worktrees"]);
+    case "config":
+      return args[1] === "init" ? new Set(["worktrees"]) : new Set();
+    default:
+      return new Set();
+  }
+}
+
+async function loadCompletionCandidates(
+  kinds: Set<CompletionKind>,
   context: CliContext,
-): Promise<void> {
+): Promise<CompletionCandidates> {
+  const candidates = emptyCompletionCandidates();
+  if (kinds.size === 0) return candidates;
+
   const workspace = await findWorkspaceOrNull(context);
-  if (!workspace) return;
-  const worktrees = await context.worktrees.list(workspace);
-  if (kind === "worktrees") {
-    for (const worktree of worktrees) writeLine(context.output.stdout, worktree.name);
-    return;
+  if (!workspace) return candidates;
+
+  const needsWorktrees = kinds.has("worktrees") || kinds.has("tasks") || kinds.has("tools");
+  const [worktrees, branchCandidates] = await Promise.all([
+    needsWorktrees ? context.worktrees.list(workspace) : Promise.resolve([]),
+    kinds.has("branches") ? context.worktrees.listBranchCandidates(workspace) : Promise.resolve([]),
+  ]);
+
+  if (kinds.has("worktrees")) {
+    candidates.worktrees = worktrees.map((worktree) => ({
+      value: worktree.name,
+      description: `${worktree.branch ?? "detached HEAD"} (${worktree.state})`,
+    }));
   }
-  if (kind === "branches") {
-    const names = new Set(
-      (await context.worktrees.listBranchCandidates(workspace)).map((item) => item.name),
+
+  if (kinds.has("branches")) {
+    const unique = new Map<string, CompletionCandidate>();
+    for (const branch of branchCandidates) {
+      if (!unique.has(branch.name) || branch.source === "local") {
+        unique.set(branch.name, {
+          value: branch.name,
+          description:
+            branch.source === "local"
+              ? "local branch"
+              : `${workspace.config.remote?.name ?? "remote"} branch`,
+        });
+      }
+    }
+    candidates.branches = [...unique.values()].sort((left, right) =>
+      left.value.localeCompare(right.value),
     );
-    for (const name of [...names].sort()) writeLine(context.output.stdout, name);
-    return;
   }
+
+  if (!kinds.has("tasks") && !kinds.has("tools")) return candidates;
   const worktree = (await context.worktrees.current(workspace)) ?? worktrees[0];
-  if (!worktree) return;
+  if (!worktree) return candidates;
   const project = await context.configs.readProjectConfig(worktree.path);
-  if (kind === "tasks") {
-    for (const name of Object.keys(project?.config.tasks ?? {}).sort())
-      writeLine(context.output.stdout, name);
-    return;
+
+  if (kinds.has("tasks")) {
+    candidates.tasks = Object.entries(project?.config.tasks ?? {})
+      .map(([name, task]) => ({
+        value: name,
+        description: task.description ?? "project task",
+      }))
+      .sort((left, right) => left.value.localeCompare(right.value));
   }
-  for (const { name } of await context.tools.availableProfiles(project))
-    writeLine(context.output.stdout, name);
+
+  if (kinds.has("tools")) {
+    candidates.tools = (await context.tools.availableProfiles(project)).map(
+      ({ name, profile }) => ({
+        value: name,
+        description: profile.description ?? "tool profile",
+      }),
+    );
+  }
+
+  return candidates;
+}
+
+function emptyCompletionCandidates(): CompletionCandidates {
+  return { worktrees: [], branches: [], tasks: [], tools: [] };
+}
+
+function applyDynamicHandlers(completion: RootCommand, candidates: CompletionCandidates): void {
+  setArgumentHandler(completion, "create", "branch", candidates.branches);
+  for (const command of ["cd", "open", "setup", "remove", "exec"]) {
+    setArgumentHandler(
+      completion,
+      command,
+      command === "remove" ? "worktrees" : "worktree",
+      candidates.worktrees,
+    );
+  }
+  setArgumentHandler(completion, "run", "task", candidates.tasks);
+  setArgumentHandler(completion, "run", "worktree", candidates.worktrees);
+  setArgumentHandler(completion, "config init", "worktree", candidates.worktrees);
+  setOptionHandler(completion, "create", "tool", candidates.tools);
+  setOptionHandler(completion, "open", "tool", candidates.tools);
+}
+
+function setArgumentHandler(
+  completion: RootCommand,
+  commandPath: string,
+  argumentName: string,
+  candidates: CompletionCandidate[],
+): void {
+  const argument = requiredTabCommand(completion, commandPath).arguments.get(argumentName);
+  if (!argument) {
+    throw new Error(`Bombshell did not expose ${commandPath} argument ${argumentName}.`);
+  }
+  argument.handler = (complete) => {
+    for (const candidate of candidates) complete(candidate.value, candidate.description);
+  };
+}
+
+function setOptionHandler(
+  completion: RootCommand,
+  commandPath: string,
+  optionName: string,
+  candidates: CompletionCandidate[],
+): void {
+  const option = requiredTabCommand(completion, commandPath).options.get(optionName);
+  if (!option) throw new Error(`Bombshell did not expose ${commandPath} option ${optionName}.`);
+  option.handler = (complete) => {
+    for (const candidate of candidates) complete(candidate.value, candidate.description);
+  };
 }

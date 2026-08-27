@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@bomb.sh/tab':
+        specifier: 0.0.22
+        version: 0.0.22(commander@15.0.0)
       '@inquirer/prompts':
         specifier: ^8.6.0
         version: 8.6.0(@types/node@26.3.0)
@@ -104,6 +107,21 @@ packages:
     engines: {node: '>=14.21.3'}
     cpu: [x64]
     os: [win32]
+
+  '@bomb.sh/tab@0.0.22':
+    resolution: {integrity: sha512-l5IuWpV7szqG4MM6A7I+qPMmP2qPMq2TD4veIXaOH0sD53dV0Tv8WZPARp5O5Kp4+y4fnVCl3VL1HZKNghO1yg==}
+    hasBin: true
+    peerDependencies:
+      cac: ^6.7.14 || ^7.0.0
+      citty: ^0.1.6 || ^0.2.0
+      commander: ^13.1.0 || ^14.0.0 || ^15.0.0
+    peerDependenciesMeta:
+      cac:
+        optional: true
+      citty:
+        optional: true
+      commander:
+        optional: true
 
   '@esbuild/aix-ppc64@0.28.2':
     resolution: {integrity: sha512-XExcO+dvLKvVtNTibSTBej1NCAbaGhWn9Ww1ZPx80qsahhPFe/8jgWP0IchNe0F3HwkU7n8ejhH8bjonqht8mQ==}
@@ -1146,6 +1164,10 @@ snapshots:
 
   '@biomejs/cli-win32-x64@2.5.10':
     optional: true
+
+  '@bomb.sh/tab@0.0.22(commander@15.0.0)':
+    optionalDependencies:
+      commander: 15.0.0
 
   '@esbuild/aix-ppc64@0.28.2':
     optional: true
