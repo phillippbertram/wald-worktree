@@ -283,7 +283,7 @@ Ygg does not replace Git. It applies workspace policy around the native operatio
 | Create a checkout | `ygg create <branch>` | `git worktree add` |
 | Find all checkouts | `ygg list` | `git worktree list` plus Ygg state |
 | Enter a checkout | `ygg cd <worktree>` | Resolve and print its canonical path |
-| Run project setup or tasks | `ygg setup`, `ygg run` | Trusted `.ygg.yml` behavior |
+| Run hooks, setup, or tasks | `ygg hook run`, `ygg setup`, `ygg run` | Trusted effective project behavior |
 | Finish with a checkout | `ygg remove <worktree>` | Safety inspection and `git worktree remove` |
 | Clean stale metadata | `ygg prune` | Preview-first `git worktree prune` |
 | Repair workspace infrastructure | `ygg init` | Restore the configured container, metadata link, or shared directory |
@@ -328,6 +328,7 @@ Remove linked worktrees normally, prune registrations for folders that are alrea
 `ygg uninit`. The command previews its changes. `ygg uninit --apply` removes the workspace
 configuration and metadata link but keeps the Git repository, branches, primary checkout, worktree
 container, and `.ygg.yml`. Local files below the Ygg metadata directory require `--force`.
+This includes workspace-local `.ygg/project.yml`; preview its removal before granting `--force`.
 
 ### Do I need a worktree for every branch?
 

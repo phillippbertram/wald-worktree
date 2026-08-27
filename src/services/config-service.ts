@@ -8,6 +8,7 @@ import type {
   AutomationStep,
   ProjectConfig,
   ProjectConfigDocument,
+  ProjectConfigOverlay,
   Workspace,
   WorkspaceConfig,
 } from "../domain/types.js";
@@ -15,6 +16,7 @@ import type { GitClient } from "../infrastructure/git-client.js";
 
 export const workspaceConfigFileName = "workspace.yml";
 export const projectConfigFileName = ".ygg.yml";
+export const workspaceProjectConfigFileName = "project.yml";
 
 const workspaceRemoteFileSchema = z
   .object({
@@ -146,9 +148,39 @@ const projectConfigFileSchema = z
   })
   .strict();
 
+const workspaceProjectConfigFileSchema = z
+  .object({
+    version: z.literal(1),
+    defaults: z
+      .object({
+        fetch: z.boolean().optional(),
+        tool: z.string().min(1).nullable().optional(),
+      })
+      .strict()
+      .optional(),
+    hooks: z
+      .object({
+        pre_create: z.array(automationStepFileSchema).optional(),
+        post_create: z.array(automationStepFileSchema).optional(),
+        pre_remove: z.array(automationStepFileSchema).optional(),
+        post_remove: z.array(automationStepFileSchema).optional(),
+      })
+      .strict()
+      .optional(),
+    tasks: z.record(z.string().min(1), projectTaskFileSchema.nullable()).optional(),
+    tools: z.record(z.string().min(1), toolProfileFileSchema.nullable()).optional(),
+  })
+  .strict();
+
 type WorkspaceConfigFile = z.infer<typeof workspaceConfigFileSchema>;
 type ProjectConfigFile = z.infer<typeof projectConfigFileSchema>;
+type WorkspaceProjectConfigFile = z.infer<typeof workspaceProjectConfigFileSchema>;
 type AutomationStepFile = z.infer<typeof automationStepFileSchema>;
+
+export type WorkspaceProjectConfigDocument = {
+  config: ProjectConfigOverlay;
+  path: string;
+};
 
 export class ConfigService {
   async readWorkspaceConfig(configPath: string): Promise<WorkspaceConfig> {
@@ -196,28 +228,62 @@ export class ConfigService {
   ): Promise<ProjectConfigDocument> {
     const configPath = path.join(root, projectConfigFileName);
     const content = this.formatProjectConfig(config);
-    if (!options.overwrite) {
-      try {
-        await fs.writeFile(configPath, content, { flag: "wx", mode: 0o644 });
-      } catch (error) {
-        if (isAlreadyExists(error)) {
-          throw new YggError(`Project configuration already exists: ${configPath}`);
-        }
-        throw new YggError(`Cannot write project configuration: ${configPath}`, { cause: error });
-      }
-      return this.parseProjectConfig(content, configPath);
-    }
-
-    const temporaryPath = `${configPath}.${randomUUID()}.tmp`;
-    try {
-      await fs.writeFile(temporaryPath, content, { mode: 0o644 });
-      await fs.rename(temporaryPath, configPath);
-    } catch (error) {
-      throw new YggError(`Cannot write project configuration: ${configPath}`, { cause: error });
-    } finally {
-      await fs.rm(temporaryPath, { force: true });
-    }
+    await this.writeProjectDocument(configPath, content, 0o644, options);
     return this.parseProjectConfig(content, configPath);
+  }
+
+  async readWorkspaceProjectConfig(
+    workspace: Workspace,
+  ): Promise<WorkspaceProjectConfigDocument | null> {
+    const configPath = workspaceProjectConfigPath(workspace);
+    let stat: Awaited<ReturnType<typeof fs.lstat>>;
+    try {
+      stat = await fs.lstat(configPath);
+    } catch (error) {
+      if (isNotFound(error)) return null;
+      throw new YggError(`Cannot inspect workspace project configuration: ${configPath}`, {
+        cause: error,
+      });
+    }
+    if (stat.isSymbolicLink() || !stat.isFile()) {
+      throw new YggError(
+        `Workspace project configuration must be a regular file, not a link or directory: ${configPath}`,
+      );
+    }
+    try {
+      return this.parseWorkspaceProjectConfig(await fs.readFile(configPath, "utf8"), configPath);
+    } catch (error) {
+      if (isNotFound(error)) return null;
+      throw error;
+    }
+  }
+
+  async writeWorkspaceProjectConfig(
+    workspace: Workspace,
+    config: ProjectConfigOverlay,
+    options: { overwrite?: boolean } = {},
+  ): Promise<WorkspaceProjectConfigDocument> {
+    const configPath = workspaceProjectConfigPath(workspace);
+    const content = this.formatWorkspaceProjectConfig(config);
+    const existing = await lstatOrNull(configPath);
+    if (existing?.isSymbolicLink() || (existing && !existing.isFile())) {
+      throw new YggError(
+        `Workspace project configuration must be a regular file, not a link or directory: ${configPath}`,
+      );
+    }
+    await this.writeProjectDocument(configPath, content, 0o600, options);
+    return this.parseWorkspaceProjectConfig(content, configPath);
+  }
+
+  async resolveProjectConfig(
+    workspace: Workspace,
+    root: string,
+  ): Promise<ProjectConfigDocument | null> {
+    const [repository, local] = await Promise.all([
+      this.readProjectConfig(root),
+      this.readWorkspaceProjectConfig(workspace),
+    ]);
+    return mergeProjectConfigDocuments(repository, local);
   }
 
   async readProjectConfigAtRevision(
@@ -236,6 +302,18 @@ export class ConfigService {
     return this.parseProjectConfig(result.stdout, `${revision}:${projectConfigFileName}`);
   }
 
+  async resolveProjectConfigAtRevision(
+    git: GitClient,
+    workspace: Workspace,
+    revision: string,
+  ): Promise<ProjectConfigDocument | null> {
+    const [repository, local] = await Promise.all([
+      this.readProjectConfigAtRevision(git, workspace, revision),
+      this.readWorkspaceProjectConfig(workspace),
+    ]);
+    return mergeProjectConfigDocuments(repository, local);
+  }
+
   parseProjectConfig(raw: string, configPath: string): ProjectConfigDocument {
     const parsed = projectConfigFileSchema.safeParse(parseYaml(raw, configPath));
     if (!parsed.success) {
@@ -246,7 +324,19 @@ export class ConfigService {
       config,
       hash: semanticHash(config),
       path: configPath,
+      sources: { repository: configPath, workspace: null },
       requiresTrust: projectConfigRequiresTrust(config),
+    };
+  }
+
+  parseWorkspaceProjectConfig(raw: string, configPath: string): WorkspaceProjectConfigDocument {
+    const parsed = workspaceProjectConfigFileSchema.safeParse(parseYaml(raw, configPath));
+    if (!parsed.success) {
+      throw invalidConfigurationError(configPath, parsed.error);
+    }
+    return {
+      config: fromWorkspaceProjectConfigFile(parsed.data),
+      path: configPath,
     };
   }
 
@@ -276,6 +366,43 @@ export class ConfigService {
     return stringify(parsed.data, { indent: 2, lineWidth: 0 });
   }
 
+  formatWorkspaceProjectConfig(config: ProjectConfigOverlay): string {
+    const parsed = workspaceProjectConfigFileSchema.safeParse(toWorkspaceProjectConfigFile(config));
+    if (!parsed.success) {
+      throw invalidConfigurationError(workspaceProjectConfigFileName, parsed.error);
+    }
+    return stringify(parsed.data, { indent: 2, lineWidth: 0 });
+  }
+
+  private async writeProjectDocument(
+    configPath: string,
+    content: string,
+    mode: number,
+    options: { overwrite?: boolean },
+  ): Promise<void> {
+    if (!options.overwrite) {
+      try {
+        await fs.writeFile(configPath, content, { flag: "wx", mode });
+        return;
+      } catch (error) {
+        if (isAlreadyExists(error)) {
+          throw new YggError(`Project configuration already exists: ${configPath}`);
+        }
+        throw new YggError(`Cannot write project configuration: ${configPath}`, { cause: error });
+      }
+    }
+
+    const temporaryPath = `${configPath}.${randomUUID()}.tmp`;
+    try {
+      await fs.writeFile(temporaryPath, content, { mode });
+      await fs.rename(temporaryPath, configPath);
+    } catch (error) {
+      throw new YggError(`Cannot write project configuration: ${configPath}`, { cause: error });
+    } finally {
+      await fs.rm(temporaryPath, { force: true });
+    }
+  }
+
   private async readYaml(configPath: string): Promise<unknown> {
     let raw: string;
     try {
@@ -301,6 +428,88 @@ export function summarizeExecutableConfig(document: ProjectConfigDocument): stri
     rows.push(`tool ${name}: ${tool.command.join(" ")}`);
   }
   return rows;
+}
+
+export function workspaceProjectConfigPath(workspace: Workspace): string {
+  return path.join(path.dirname(workspace.configPath), workspaceProjectConfigFileName);
+}
+
+function mergeProjectConfigDocuments(
+  repository: ProjectConfigDocument | null,
+  local: WorkspaceProjectConfigDocument | null,
+): ProjectConfigDocument | null {
+  if (!repository && !local) return null;
+  const config = mergeProjectConfigs(repository?.config ?? emptyProjectConfig(), local?.config);
+  const documentPath = local?.path ?? repository?.path;
+  if (!documentPath) throw new Error("Project configuration source path is missing.");
+  return {
+    config,
+    hash: semanticHash(config),
+    path: documentPath,
+    sources: {
+      repository: repository?.sources.repository ?? null,
+      workspace: local?.path ?? null,
+    },
+    requiresTrust: projectConfigRequiresTrust(config),
+  };
+}
+
+function mergeProjectConfigs(
+  base: ProjectConfig,
+  overlay: ProjectConfigOverlay | undefined,
+): ProjectConfig {
+  if (!overlay) return base;
+  const defaults = { ...base.defaults };
+  if (overlay.defaults?.fetch !== undefined) {
+    defaults.fetch = overlay.defaults.fetch;
+  }
+  if (overlay.defaults && Object.hasOwn(overlay.defaults, "tool")) {
+    const tool = overlay.defaults.tool;
+    if (tool === null) {
+      delete defaults.tool;
+    } else if (tool !== undefined) {
+      defaults.tool = tool;
+    }
+  }
+
+  const hooks = { ...base.hooks };
+  for (const event of ["pre_create", "post_create", "pre_remove", "post_remove"] as const) {
+    const steps = overlay.hooks?.[event];
+    if (steps !== undefined) hooks[event] = steps;
+  }
+
+  return {
+    version: 1,
+    defaults,
+    hooks,
+    tasks: mergeNamedEntries(base.tasks, overlay.tasks),
+    tools: mergeNamedEntries(base.tools, overlay.tools),
+  };
+}
+
+function mergeNamedEntries<T>(
+  base: Record<string, T>,
+  overlay: Record<string, T | null> | undefined,
+): Record<string, T> {
+  const merged = { ...base };
+  for (const [name, value] of Object.entries(overlay ?? {})) {
+    if (value === null) {
+      delete merged[name];
+    } else {
+      merged[name] = value;
+    }
+  }
+  return merged;
+}
+
+function emptyProjectConfig(): ProjectConfig {
+  return {
+    version: 1,
+    defaults: { fetch: true },
+    hooks: { pre_create: [], post_create: [], pre_remove: [], post_remove: [] },
+    tasks: {},
+    tools: {},
+  };
 }
 
 function parseYaml(raw: string, configPath: string): unknown {
@@ -417,6 +626,99 @@ function toProjectConfigFile(config: ProjectConfig): ProjectConfigFile {
   };
 }
 
+function fromWorkspaceProjectConfigFile(file: WorkspaceProjectConfigFile): ProjectConfigOverlay {
+  const config: ProjectConfigOverlay = { version: 1 };
+  if (file.defaults) {
+    const defaults: NonNullable<ProjectConfigOverlay["defaults"]> = {};
+    if (file.defaults.fetch !== undefined) defaults.fetch = file.defaults.fetch;
+    if (Object.hasOwn(file.defaults, "tool")) defaults.tool = file.defaults.tool;
+    config.defaults = defaults;
+  }
+  if (file.hooks) {
+    config.hooks = Object.fromEntries(
+      Object.entries(file.hooks).map(([event, steps]) => [
+        event,
+        steps?.map(fromAutomationStepFile),
+      ]),
+    );
+  }
+  if (file.tasks) {
+    config.tasks = Object.fromEntries(
+      Object.entries(file.tasks).map(([name, task]) => [
+        name,
+        task
+          ? {
+              description: task.description,
+              steps: task.steps.map(fromAutomationStepFile),
+            }
+          : null,
+      ]),
+    );
+  }
+  if (file.tools) {
+    config.tools = Object.fromEntries(
+      Object.entries(file.tools).map(([name, tool]) => [
+        name,
+        tool
+          ? {
+              description: tool.description,
+              command: tool.command,
+              mode: tool.mode,
+            }
+          : null,
+      ]),
+    );
+  }
+  return config;
+}
+
+function toWorkspaceProjectConfigFile(config: ProjectConfigOverlay): WorkspaceProjectConfigFile {
+  return {
+    version: 1,
+    defaults: config.defaults
+      ? {
+          fetch: config.defaults.fetch,
+          tool: config.defaults.tool,
+        }
+      : undefined,
+    hooks: config.hooks
+      ? Object.fromEntries(
+          Object.entries(config.hooks).map(([event, steps]) => [
+            event,
+            steps?.map(toAutomationStepFile),
+          ]),
+        )
+      : undefined,
+    tasks: config.tasks
+      ? Object.fromEntries(
+          Object.entries(config.tasks).map(([name, task]) => [
+            name,
+            task
+              ? {
+                  description: task.description,
+                  steps: task.steps.map(toAutomationStepFile),
+                }
+              : null,
+          ]),
+        )
+      : undefined,
+    tools: config.tools
+      ? Object.fromEntries(
+          Object.entries(config.tools).map(([name, tool]) => [
+            name,
+            tool
+              ? {
+                  description: tool.description,
+                  command: tool.command,
+                  mode: tool.mode,
+                }
+              : null,
+          ]),
+        )
+      : undefined,
+  };
+}
+
 function fromAutomationStepFile(step: AutomationStepFile): AutomationStep {
   if (step.type === "command") {
     return {
@@ -528,4 +830,13 @@ function isNotFound(error: unknown): boolean {
 
 function isAlreadyExists(error: unknown): boolean {
   return error instanceof Error && "code" in error && error.code === "EEXIST";
+}
+
+async function lstatOrNull(target: string) {
+  try {
+    return await fs.lstat(target);
+  } catch (error) {
+    if (isNotFound(error)) return null;
+    throw error;
+  }
 }

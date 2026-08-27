@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import { YggError } from "../domain/errors.js";
-import type { AutomationStep, ProjectConfig } from "../domain/types.js";
+import type { AutomationStep, ProjectConfig, ProjectConfigOverlay } from "../domain/types.js";
 
 const packageJsonSchema = z
   .object({
@@ -121,6 +121,25 @@ export class ProjectConfigInitializer {
       tasks,
       tools: {},
     };
+  }
+
+  createWorkspaceOverlay(
+    inspection: ProjectSetupInspection,
+    options: ProjectConfigTemplateOptions,
+  ): ProjectConfigOverlay {
+    const generated = this.createConfig(inspection, options);
+    const overlay: ProjectConfigOverlay = {
+      version: 1,
+      defaults: { fetch: generated.defaults.fetch },
+    };
+    if (generated.defaults.tool) {
+      overlay.defaults = { ...overlay.defaults, tool: generated.defaults.tool };
+    }
+    if (generated.hooks.post_create.length > 0) {
+      overlay.hooks = { post_create: generated.hooks.post_create };
+    }
+    if (Object.keys(generated.tasks).length > 0) overlay.tasks = generated.tasks;
+    return overlay;
   }
 }
 

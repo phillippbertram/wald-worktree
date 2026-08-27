@@ -4,6 +4,7 @@ import { registerCompletionCommand } from "./commands/completion.js";
 import { registerConfigCommand } from "./commands/config.js";
 import { registerCreateCommand } from "./commands/create.js";
 import { registerExecCommand } from "./commands/exec.js";
+import { registerHookCommand } from "./commands/hook.js";
 import { registerInitCommand } from "./commands/init.js";
 import { registerListCommand } from "./commands/list.js";
 import { registerOpenCommand } from "./commands/open.js";
@@ -44,6 +45,7 @@ export function createProgram(
   registerOpenCommand(program, context);
   registerExecCommand(program, context);
   registerRunCommand(program, context);
+  registerHookCommand(program, context);
   registerSetupCommand(program, context);
   registerRemoveCommand(program, context);
   registerPruneCommand(program, context);

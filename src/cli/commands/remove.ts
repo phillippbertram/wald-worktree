@@ -2,6 +2,7 @@ import type { Command } from "commander";
 import { z } from "zod";
 import { YggError } from "../../domain/errors.js";
 import type { RemovePlan } from "../../services/worktree-workflow-service.js";
+import { style } from "../../ui/style.js";
 import {
   confirm,
   isInteractiveTerminal,
@@ -87,7 +88,7 @@ export async function removeWorktrees(input: RemoveInput, context: CliContext): 
       }
       try {
         const accepted = await confirm(
-          `Remove › Confirm · Remove ${plans.map((plan) => plan.inspection.worktree.name).join(", ")}? Branches will be kept.`,
+          `Remove › Confirm · Remove ${plans.map((plan) => style.worktree(plan.inspection.worktree.name)).join(", ")}? Branches will be kept.`,
           false,
           { navigation: promptedForSelection ? "back" : "cancel" },
         );
@@ -108,7 +109,7 @@ export async function removeWorktrees(input: RemoveInput, context: CliContext): 
         force: input.force,
         output: context.output.stderr,
       });
-      await success(`Removed ${plan.inspection.worktree.name}`, context.output);
+      await success(`Removed ${style.worktree(plan.inspection.worktree.name)}`, context.output);
     }
     return;
   }

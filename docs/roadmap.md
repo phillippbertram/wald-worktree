@@ -16,14 +16,17 @@ strengthen diagnostics before broadening the workflow model.
 
 ### Release readiness
 
-- Add changelog, provenance, and npm publishing automation.
+- Publish Ygg as a standalone installable npm package once the core CLI workflows have broader
+  real-world test coverage.
+- Add changelog, provenance, and release automation.
 - Verify global installation across the supported Node and operating-system matrix.
 
 ### Additional project detectors
 
 - Add Flutter, iOS, Rust, or other setup detection only after concrete repositories establish safe
   defaults.
-- Keep manually authored `.ygg.yml` commands as the universal fallback.
+- Keep manually authored project commands in `.ygg/project.yml` or `.ygg.yml` as the universal
+  fallback.
 
 ## Later, based on demonstrated need
 

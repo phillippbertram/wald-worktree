@@ -148,7 +148,10 @@ The recommended flat workspace is easy to scan:
 
 ```text
 project/
-├── .ygg/                    local Ygg configuration and shared files
+├── .ygg/
+│   ├── workspace.yml        local workspace layout and trust
+│   ├── project.yml          local project automation and overrides
+│   └── shared/              local files shared with worktrees
 ├── repo.git/                shared Git repository, no files checked out here
 ├── main/                    main branch worktree
 └── feature-payment/         feature/payment branch worktree
@@ -165,10 +168,15 @@ ygg run verify feature-payment
 ygg remove feature-payment
 ```
 
-`ygg run verify` is available when the repository defines that task in `.ygg.yml`. Removal checks
-for modified files, unmerged work, and locks before deleting the linked checkout. It never deletes
-the branch. If project setup failed during creation, fix the cause and retry it with `ygg setup
-feature-payment`.
+`ygg run verify` is available when the effective project configuration defines that task. Removal
+checks for modified files, unmerged work, and locks before deleting the linked checkout. It never
+deletes the branch. If project setup failed during creation, fix the cause and retry it with
+`ygg setup feature-payment`. To test any lifecycle hook after editing `.ygg/project.yml`, run it
+explicitly without creating or removing a worktree:
+
+```sh
+ygg hook run post_create feature-payment
+```
 
 ## Pick the workflow that fits your day
 
@@ -204,15 +212,18 @@ normal `cd` fallback.
 
 ## Make every worktree feel ready
 
-A repository can commit `.ygg.yml` so a fresh worktree does not feel half-finished. Install
-dependencies, copy or link local files, expose named tasks, and define editor or agent profiles once
-for the whole project.
+By default, Ygg keeps project automation outside Git in `.ygg/project.yml`. It applies to every
+worktree in this Ygg workspace and can install dependencies, copy or link local files, expose named
+tasks, and define editor or agent profiles.
 
 ```sh
 ygg config init
-git diff -- .ygg.yml
 ygg config trust
 ```
+
+Use `ygg config init --scope project` when the team should share a repository-owned `.ygg.yml`.
+When both files exist, `.ygg.yml` is the base and the workspace-local `project.yml` overrides only
+the sections it defines.
 
 See [Configuration](docs/configuration.md) for the YAML schema, local shared files, lifecycle hooks,
 tasks, tools, and trust model. Ygg always asks you to review and trust executable project behavior

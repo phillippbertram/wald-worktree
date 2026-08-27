@@ -1,6 +1,8 @@
 import type { Command } from "commander";
 import { z } from "zod";
 import { YggError } from "../../domain/errors.js";
+import { workspaceProjectConfigPath } from "../../services/config-service.js";
+import { style } from "../../ui/style.js";
 import { confirm, isInteractiveTerminal, isPromptBackError } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
 import {
@@ -19,21 +21,36 @@ const initializationInputSchema = z
     worktree: nonEmptyCliString.optional(),
     force: z.boolean().default(false),
     yes: z.boolean().default(false),
+    scope: z.enum(["workspace", "project"]).default("workspace"),
+    fromProject: z.boolean().default(false),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.fromProject && value.scope !== "workspace") {
+      context.addIssue({
+        code: "custom",
+        path: ["fromProject"],
+        message: "Requires --scope workspace.",
+      });
+    }
+  });
+
+export type ProjectConfigInitializationInput = z.output<typeof initializationInputSchema>;
 
 export function registerConfigCommand(program: Command, context: CliContext): void {
   const config = program
     .command("config")
-    .description("Show configuration or manage repository-owned .ygg.yml behavior")
+    .description("Show or manage workspace-local and repository project configuration")
     .action(async () => showConfiguration(context));
 
   config
     .command("init")
-    .description("Create an initial .ygg.yml through project detection or guided prompts")
+    .description("Create workspace-local project configuration by default")
     .argument("[worktree]", "Worktree name, branch, or path")
+    .option("--scope <scope>", "Write to workspace or project", "workspace")
+    .option("--from-project", "Copy the complete .ygg.yml into workspace configuration")
     .option("--yes", "Use detected defaults without prompting")
-    .option("--force", "Replace an existing .ygg.yml")
+    .option("--force", "Replace an existing configuration at the selected scope")
     .action(async (worktree: unknown, options: unknown) => {
       const input = parseCliInput(initializationInputSchema, {
         worktree,
@@ -50,7 +67,7 @@ export function registerConfigCommand(program: Command, context: CliContext): vo
       const input = parseCliInput(confirmationInputSchema, options);
       const workspace = await context.workspaces.find();
       const project = await resolveProjectConfiguration(workspace, context);
-      if (!project) throw new YggError("No .ygg.yml found on the current or default branch.");
+      if (!project) throw new YggError("No effective project configuration found.");
       printTrustSummary(project, context.output);
       if (!input.yes) {
         if (!isInteractiveTerminal()) throw new YggError("Non-interactive trust requires --yes.");
@@ -60,7 +77,7 @@ export function registerConfigCommand(program: Command, context: CliContext): vo
         }
       }
       await context.configs.trust(workspace, project);
-      await success(`Trusted ${project.path}`, context.output);
+      await success(`Trusted ${style.path(project.path)}`, context.output);
     });
 
   config
@@ -80,7 +97,7 @@ export function registerConfigCommand(program: Command, context: CliContext): vo
 }
 
 export async function initializeProjectConfigurationForWorktree(
-  input: z.output<typeof initializationInputSchema>,
+  input: ProjectConfigInitializationInput,
   context: CliContext,
 ): Promise<void> {
   const workspace = await context.workspaces.find();
@@ -95,7 +112,7 @@ export async function initializeProjectConfigurationForWorktree(
     });
     initialPath = selected.path;
     try {
-      await initializeProjectConfiguration(selected.path, input, context);
+      await initializeProjectConfiguration(workspace, selected.path, input, context);
       return;
     } catch (error) {
       if (!isPromptBackError(error) || !canChooseWorktree) throw error;
@@ -107,12 +124,49 @@ export async function initializeProjectConfigurationForWorktree(
 export async function showConfiguration(context: CliContext): Promise<void> {
   const workspace = await context.workspaces.find();
   context.output.stdout.write(context.configs.formatWorkspaceConfig(workspace.config));
-  writeLine(context.output.stdout, `workspace_config: ${workspace.configPath}`);
-  writeLine(context.output.stdout, `workspace_root: ${workspace.root}`);
-  writeLine(context.output.stdout, `worktrees_path: ${workspace.worktreeDir}`);
-  writeLine(context.output.stdout, `shared_path: ${workspace.sharedDir}`);
+  writeConfigurationField(context.output.stdout, "workspace_config", workspace.configPath, "path");
+  writeConfigurationField(context.output.stdout, "workspace_root", workspace.root, "path");
+  writeConfigurationField(context.output.stdout, "worktrees_path", workspace.worktreeDir, "path");
+  writeConfigurationField(context.output.stdout, "shared_path", workspace.sharedDir, "path");
   const project = await resolveProjectConfiguration(workspace, context);
-  writeLine(context.output.stdout, `project_config: ${project?.path ?? "none"}`);
-  writeLine(context.output.stdout, `project_hash: ${project?.hash ?? "none"}`);
-  writeLine(context.output.stdout, `trusted: ${context.configs.isTrusted(workspace, project)}`);
+  writeConfigurationField(
+    context.output.stdout,
+    "repository_project_config",
+    project?.sources.repository ?? "none",
+    "path",
+  );
+  writeConfigurationField(
+    context.output.stdout,
+    "workspace_project_config",
+    project?.sources.workspace ?? "none",
+    "path",
+  );
+  writeConfigurationField(
+    context.output.stdout,
+    "workspace_project_config_path",
+    workspaceProjectConfigPath(workspace),
+    "path",
+  );
+  writeConfigurationField(context.output.stdout, "project_config", project?.path ?? "none", "path");
+  writeConfigurationField(context.output.stdout, "project_hash", project?.hash ?? "none", "hash");
+  writeConfigurationField(
+    context.output.stdout,
+    "effective_project_hash",
+    project?.hash ?? "none",
+    "hash",
+  );
+  const trusted = context.configs.isTrusted(workspace, project);
+  writeLine(
+    context.output.stdout,
+    `${style.label("trusted:")} ${(trusted ? style.success : style.danger)(String(trusted))}`,
+  );
+}
+
+function writeConfigurationField(
+  stream: NodeJS.WritableStream,
+  key: string,
+  value: string,
+  kind: "hash" | "path",
+): void {
+  writeLine(stream, `${style.label(`${key}:`)} ${style[kind](value)}`);
 }

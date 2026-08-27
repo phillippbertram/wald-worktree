@@ -37,6 +37,11 @@ terminal, ambiguous selection is an error.
 Commands discover the workspace from its root, a linked worktree, or a retained primary checkout.
 Failures use a non-zero exit status. Interrupted foreground tasks exit with status 130.
 
+Human-readable tables, previews, selections, and status messages highlight worktree names,
+branches, paths, commands, states, warnings, and destructive actions when color is supported. Set
+`NO_COLOR=1` to disable color. Machine-readable JSON, completion data, `ygg cd`, and
+`ygg create --print-path` never add presentation formatting.
+
 ## `ygg init`
 
 ```text
@@ -52,8 +57,9 @@ direct command clones a remote or local repository into a standalone workspace.
 
 The guided flow validates the target, previews absolute paths and the resulting directory tree, then
 asks `Initialize this workspace?`. Workspace creation, the optional default-branch worktree, and
-the optional `.ygg.yml` wizard are separate phases. Declining a later phase keeps the initialized
-workspace and prints the corresponding next command.
+the optional project-configuration wizard are separate phases. The wizard recommends the local
+`.ygg/project.yml`; declining a later phase keeps the initialized workspace and prints the
+corresponding next command.
 
 The source, repository settings, destination, worktree layout, and final plan form a navigable
 sequence. After workspace creation, `Esc` only cancels the optional worktree or project-automation
@@ -75,11 +81,14 @@ the visual comparison.
 | `--remote <name>` | Remote used for fetch and branch resolution. |
 | `--no-remote` | Configure a local-only repository. |
 | `--default-branch <branch>` | Default creation base and merge-check target. |
-| `--config` | Offer or create a detected `.ygg.yml` in the retained checkout. |
+| `--config` | Create detected workspace-local project configuration in `.ygg/project.yml`. |
+| `--config-scope <scope>` | With `--config`, write to `workspace` (default) or `project` (`.ygg.yml`). |
 | `--yes` | Accept resolved settings without prompting. |
 
 Non-interactive adoption requires `--adopt` and `--yes`. Clone mode cannot be combined with adoption
 options. Initialization never moves or deletes an existing checkout and never commits `.ygg.yml`.
+It also never copies or removes repository configuration unless an explicit config command requests
+the copy.
 Direct and non-interactive invocations do not show the guided preview.
 
 When the repository already has a valid Ygg configuration, `init` verifies its local infrastructure.
@@ -148,9 +157,9 @@ shell's directory. Without shell integration, use the printed path with a normal
 ygg open [worktree] [--tool <profile>]
 ```
 
-Opens the selected worktree using a built-in or `.ygg.yml` tool profile. The project default is used
-when available. Otherwise a terminal prompts; non-interactive use requires `--tool`. Executable
-project profiles require trusted configuration.
+Opens the selected worktree using a built-in or effective project-configuration tool profile. The
+project default is used when available. Otherwise a terminal prompts; non-interactive use requires
+`--tool`. Executable project profiles require trusted configuration.
 
 ## `ygg exec`
 
@@ -174,13 +183,33 @@ When the command is omitted in a terminal, `ygg` prompts and explicitly runs the
 ygg run [task] [worktree]
 ```
 
-Runs a named `.ygg.yml` task in the selected worktree. Omitting the task opens an interactive task
-selection; non-interactive use requires the task name. Tasks require trusted project configuration
-and stream command output in the foreground.
+Runs a named effective project-configuration task in the selected worktree. Omitting the task opens
+an interactive task selection; non-interactive use requires the task name. Tasks require trusted
+project configuration and stream command output in the foreground.
 
 ```sh
 ygg run verify feature-payment
 ygg run dev feature-payment
+```
+
+## `ygg hook run`
+
+```text
+ygg hook run <event> [worktree]
+```
+
+Runs one hook from the latest effective project configuration. `<event>` is `pre_create`,
+`post_create`, `pre_remove`, or `post_remove`. The configuration must be trusted and contain at
+least one step for the selected event.
+
+This command runs only the configured steps; it never creates or removes a worktree. Every manual
+run uses an existing selected worktree as `YGG_WORKTREE_PATH`. Consequently, manual `pre_create`
+and `post_remove` runs are useful for testing behavior but do not reproduce the absent-target state
+of their automatic lifecycle phase; Ygg prints a warning for these events.
+
+```sh
+ygg hook run post_create feature-payment
+ygg hook run pre_remove feature-payment
 ```
 
 ## `ygg setup`
@@ -189,9 +218,9 @@ ygg run dev feature-payment
 ygg setup [worktree]
 ```
 
-Re-runs the configured `post_create` steps. This is the recovery path after setup failed during
-creation. The selected worktree must contain a trusted `.ygg.yml` with at least one `post_create`
-step.
+Compatibility shortcut for `ygg hook run post_create [worktree]`. This remains the recovery path
+after setup failed during creation. The effective project configuration must be trusted and contain
+at least one `post_create` step.
 
 ## `ygg remove`
 
@@ -243,26 +272,29 @@ including missing or locked registrations, always block uninitialization. Remove
 with `ygg remove` and clean missing registrations with `ygg prune --apply` first.
 
 Files or additional directories below the Ygg metadata directory are local data. This includes
-content below `shared`. Uninitialization preserves them by default and requires `--force` to discard
-them. Project hooks are not run.
+`.ygg/project.yml` and content below `shared`. Uninitialization preserves them by default and
+requires `--force` to discard them. Project hooks are not run.
 
 ## `ygg config`
 
 ```text
 ygg config
-ygg config init [worktree] [--yes] [--force]
+ygg config init [worktree] [--scope workspace|project] [--from-project] [--yes] [--force]
 ygg config trust [--yes]
 ygg config untrust [--yes]
 ```
 
 `ygg config` prints normalized workspace YAML followed by absolute workspace, worktree, shared-file,
-and project-configuration paths, the project behavior hash, and trust state.
+repository-project, workspace-project, and effective configuration data, including the semantic
+behavior hash and trust state.
 
 | Command | Meaning |
 | --- | --- |
-| `config init` | Generate `.ygg.yml` from detected Node package conventions and guided choices. |
+| `config init` | Generate local `.ygg/project.yml` from detected Node conventions and guided choices. |
+| `config init --scope project` | Generate repository-owned `.ygg.yml` explicitly. |
+| `config init --scope workspace --from-project` | Copy the complete `.ygg.yml` locally without deleting it. |
 | `config init --yes` | Use detected defaults without prompting. |
-| `config init --force` | Replace an existing `.ygg.yml`. |
+| `config init --force` | Replace existing configuration at the selected scope. |
 | `config trust` | Review and trust the current/default project behavior until it changes. |
 | `config untrust` | Remove locally recorded trust. |
 

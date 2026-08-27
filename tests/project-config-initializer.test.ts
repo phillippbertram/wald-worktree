@@ -64,6 +64,20 @@ describe("project configuration initialization", () => {
     expect(config.tasks.dev?.steps).toEqual([
       expect.objectContaining({ argv: ["pnpm", "run", "dev"] }),
     ]);
+    const overlay = initializer.createWorkspaceOverlay(inspection, {
+      fetch: true,
+      install: true,
+      copyEnvironment: false,
+      scripts: [],
+      development: false,
+    });
+    expect(overlay).toEqual({
+      version: 1,
+      defaults: { fetch: true },
+      hooks: {
+        post_create: [expect.objectContaining({ argv: ["pnpm", "install", "--frozen-lockfile"] })],
+      },
+    });
 
     const configs = new ConfigService();
     const document = await configs.writeProjectConfig(root, config);

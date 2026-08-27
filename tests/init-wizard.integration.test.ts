@@ -127,7 +127,7 @@ describe("interactive init wizard", () => {
     expect(prompts.confirmationQuestions).toEqual([
       "Initialize this workspace?",
       "Create this first worktree now?",
-      "Configure optional project automation (.ygg.yml) now?",
+      "Configure optional project automation now?",
     ]);
     const rendered = readOutput(output);
     expect(rendered).toContain("Workspace plan");
@@ -500,6 +500,29 @@ describe("interactive init wizard", () => {
     await expect(
       fs.readFile(path.join(repository.source, "uncommitted.txt"), "utf8"),
     ).resolves.toBe("keep me\n");
+  });
+
+  it("writes requested initialization configuration outside the retained checkout by default", async () => {
+    const worktreesDir = path.join(temporaryRoot, "configured-worktrees");
+    const output = new PassThrough();
+    const context = createCliContext({ stdout: output, stderr: output });
+
+    await initializeWorkspace(
+      {
+        adopt: repository.source,
+        worktreesDir,
+        config: true,
+        yes: true,
+      },
+      context,
+    );
+
+    await expect(
+      fs.readFile(path.join(repository.source, ".git", "ygg", "project.yml"), "utf8"),
+    ).resolves.toContain("version: 1");
+    await expect(fs.stat(path.join(repository.source, ".ygg.yml"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
   });
 
   it("recommends retaining a clean checkout that has a stash", async () => {

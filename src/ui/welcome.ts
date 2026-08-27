@@ -1,6 +1,7 @@
 import path from "node:path";
 import pc from "picocolors";
 import type { Worktree } from "../domain/types.js";
+import { style } from "./style.js";
 
 export type WelcomeSummary = {
   workspaceRoot: string;
@@ -53,14 +54,14 @@ export function renderWelcome(
 function renderSummary(summary: WelcomeSummary): string {
   const workspaceName = path.basename(summary.workspaceRoot) || summary.workspaceRoot;
   const current = summary.current
-    ? `${summary.current.name} (${summary.current.branch ?? "detached"})`
+    ? `${style.worktree(summary.current.name)} (${style.branch(summary.current.branch ?? "detached")})`
     : "workspace root";
   const worktreeLabel = summary.worktreeCount === 1 ? "worktree" : "worktrees";
   const separator = pc.dim("·");
 
   return [
-    `  ${pc.cyan("Workspace")} ${workspaceName}`,
-    `${pc.cyan("Current")} ${current}`,
-    `${summary.worktreeCount} ${worktreeLabel}`,
+    `  ${style.label("Workspace")} ${style.path(workspaceName)}`,
+    `${style.label("Current")} ${current}`,
+    `${style.value(summary.worktreeCount)} ${worktreeLabel}`,
   ].join(` ${separator} `);
 }

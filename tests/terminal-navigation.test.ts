@@ -1,3 +1,4 @@
+import { stripVTControlCharacters } from "node:util";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const prompts = vi.hoisted(() => ({
@@ -88,7 +89,9 @@ describe("terminal prompt navigation", () => {
           ["↑↓", "navigate"],
           ["⏎", "select"],
         ]);
-        expect(help).toContain("↑↓ navigate • ⏎ select • Esc back • Ctrl+C exit");
+        expect(stripVTControlCharacters(help ?? "")).toContain(
+          "↑↓ navigate • ⏎ select • Esc back • Ctrl+C exit",
+        );
         return "one";
       },
     );

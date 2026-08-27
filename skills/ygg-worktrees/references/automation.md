@@ -1,17 +1,19 @@
 # Project automation
 
-`.ygg.yml` is repository-owned executable configuration. Validate and inspect it before granting
-trust:
+Ygg merges optional repository-owned `.ygg.yml` behavior with workspace-local
+`.ygg/project.yml` overrides. Validate both reported sources and the effective behavior before
+granting trust:
 
 ```sh
 ygg config
 ygg config trust --yes
 ```
 
-Create a detected starting configuration with `ygg config init`. In non-interactive sessions, use
-`ygg config init <worktree> --yes`; replacing an existing file also requires `--force`.
-Review and commit the generated `.ygg.yml` on the relevant base branch before expecting new
-worktrees to use it, then approve its behavior with `ygg config trust`.
+Create the recommended local starting configuration with `ygg config init`. In non-interactive
+sessions, use `ygg config init <worktree> --yes`; replacing an existing local file also requires
+`--force`. Use `--scope project` only when `.ygg.yml` should be committed and shared. To migrate an
+existing repository file locally without deleting it, use
+`ygg config init <worktree> --scope workspace --from-project --yes`.
 
 Run named tasks in the selected worktree:
 
@@ -26,14 +28,17 @@ An automatically detected package script named exactly `dev` is exposed separate
 Prefer tasks over reimplementing their commands because tasks preserve configured order,
 environment variables, timeouts, working directories, and failure handling.
 
-`post_create` is the only lifecycle hook with a deliberate manual recovery command:
+Run any configured lifecycle hook manually after changing project configuration:
 
 ```sh
-ygg setup <worktree>
+ygg hook run <pre_create|post_create|pre_remove|post_remove> <worktree>
 ```
 
-Other lifecycle hooks run only as part of `ygg create` or `ygg remove`; there is no unrestricted
-public hook runner.
+The command reloads the effective repository base and workspace-local overrides, requires semantic
+trust, and runs only the selected steps. It never creates or removes a worktree. Manual
+`pre_create` and `post_remove` use an existing target and therefore do not reproduce their automatic
+lifecycle state; Ygg prints a warning. `ygg setup <worktree>` remains the recovery shortcut for
+`post_create`.
 
 Command steps using `argv` do not invoke a shell. A configured `shell` step explicitly uses
 `/bin/sh -c`; review quoting and expansion accordingly. `copy` and `symlink` steps are restricted to
@@ -49,4 +54,6 @@ explicit source directory while preserving repository-relative paths:
 ```
 
 Glob steps process files only, validate every destination before changing targets, and require
-`optional: true` when no match should be accepted.
+`optional: true` when no match should be accepted. Copy and symlink steps print scoped source and
+target paths for every processed file. Optional missing sources and empty globs print a skip reason;
+non-optional cases remain errors.

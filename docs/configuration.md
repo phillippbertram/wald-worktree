@@ -1,7 +1,7 @@
 # Configuration
 
-`ygg` has one local configuration, one local shared-file area, and one optional project
-configuration. Both YAML documents are strict and versioned; unknown fields are errors.
+`ygg` has one local workspace configuration, one local shared-file area, and up to two project
+configuration sources. Every YAML document is strict and versioned; unknown fields are errors.
 
 Read [Worktrees explained](worktrees.md) first if the distinction between the shared repository and
 per-worktree state is unfamiliar.
@@ -44,14 +44,14 @@ layout boundaries before using them.
 | `remote.name` | string | Existing Git remote name such as `origin` or `upstream`. |
 | `remote.fetch_refspec` | string | Explicit branch mapping used when `ygg create` fetches. |
 | `default_branch` | branch name | Default base, merge-check target, and preferred project-configuration branch. |
-| `trusted_project_config` | SHA-256 or `null` | Semantic hash of the locally trusted executable `.ygg.yml` behavior. |
+| `trusted_project_config` | SHA-256 or `null` | Semantic hash of the trusted effective project behavior. |
 
 `default_branch` does three jobs:
 
 1. New branches start from its remote-tracking or local ref when `--from` is omitted.
 2. Safe removal checks whether a branch is merged into it.
-3. `ygg` uses its worktree/ref for `.ygg.yml` and `source: default` when there is no better current
-   source.
+3. `ygg` uses its worktree/ref for repository project configuration and `source: default` when
+   there is no better current source.
 
 It does not switch existing branches, rename worktrees, or override an explicit `--from`.
 
@@ -62,6 +62,7 @@ The recommended flat standalone workspace uses `paths.worktrees: ..`:
 ```text
 project/
 ├── .ygg/workspace.yml
+├── .ygg/project.yml         optional local automation and overrides
 ├── .ygg/shared/
 ├── repo.git/
 ├── main/
@@ -73,6 +74,7 @@ A grouped standalone workspace uses a child path such as `paths.worktrees: ../wo
 ```text
 project/
 ├── .ygg/workspace.yml
+├── .ygg/project.yml         optional local automation and overrides
 ├── .ygg/shared/
 ├── repo.git/
 └── worktrees/
@@ -95,6 +97,7 @@ parent/
 ├── project/                         existing primary checkout
 │   └── .git/ygg/
 │       ├── workspace.yml
+│       ├── project.yml      optional local automation and overrides
 │       └── shared/
 └── project-worktrees/
     └── .ygg -> ../project/.git/ygg
@@ -115,10 +118,27 @@ them unless `--force` is also supplied.
 
 ## Project configuration
 
-Generate a starting point interactively from detected Node package conventions:
+Ygg resolves one effective configuration from two optional sources:
+
+1. `<worktree>/.ygg.yml` is the repository-owned base and may vary by branch or revision.
+2. `<workspace>/.ygg/project.yml` is local to one Ygg workspace and overrides that base for every
+   worktree.
+
+In an adopted workspace the local file physically lives at
+`<git-common-dir>/ygg/project.yml`. It is mode `600`, is never committed, and is protected as local
+data during `ygg uninit`. If only one source exists, it supplies the complete effective behavior.
+
+Generate the recommended local starting point from detected Node package conventions:
 
 ```sh
 ygg config init [worktree]
+```
+
+Create shared repository behavior only when intended:
+
+```sh
+ygg config init [worktree] --scope project
+git diff -- .ygg.yml
 ```
 
 The wizard detects npm, pnpm, Yarn, or Bun, package scripts, and files such as `.env.example`. It can
@@ -127,35 +147,35 @@ add an install hook, an environment copy step, a `verify` task, a separate `dev`
 one-shot `verify` task. Interactive setup asks whether to create the `verify` task before offering
 individual scripts; declining or selecting no scripts omits the task.
 
+For workspace scope, the generator writes a sparse overlay: hooks and tasks that were not selected
+are omitted, so existing repository behavior remains inherited. The explicit `--from-project` path
+is the only generator mode that intentionally copies the complete repository configuration.
+
 `Esc` returns to the preceding wizard step and restores the previous answer as its default;
 `Ctrl-C` exits Ygg. Selection prompts list both shortcuts in their footer. From the final preview,
 going back returns to the tool choice without discarding the other detected setup decisions.
 
-For scripts, use `ygg config init --yes`; use `--force` separately when an existing file may be
-replaced. `--yes` keeps the detected recommended verify scripts. Interactive `ygg init` offers the
-same wizard after retaining a checkout or creating the default worktree in a standalone workspace.
-Automatic project detection currently covers Node package managers; other ecosystems use manually
-configured commands.
+For scripts, use `ygg config init --yes`; use `--force` separately when existing configuration at
+the selected scope may be replaced. `--yes` keeps the detected recommended verify scripts.
+Interactive `ygg init` offers the same wizard after retaining a checkout or creating the default
+worktree in a standalone workspace and recommends local storage. Automatic project detection
+currently covers Node package managers; other ecosystems use manually configured commands.
 
 During guided initialization this wizard is presented as a separate optional phase after the
 workspace and, for standalone layouts, the first worktree are ready. Cancelling it does not roll back
 the initialized workspace.
 
-`.ygg.yml` is repository-owned behavior. Review and commit it on the branch used as the base for
-future worktrees before expecting those worktrees to use it:
+When `.ygg.yml` already exists, copy its complete normalized behavior into the local workspace with:
 
 ```sh
-ygg config init
-git diff -- .ygg.yml
-git add .ygg.yml
-git commit -m "chore: configure worktree setup"
-ygg config trust
+ygg config init [worktree] --scope workspace --from-project --yes
 ```
 
-`ygg` never commits or pushes this file automatically. Trust is semantic, so committing the reviewed
-file without changing its behavior does not invalidate an already recorded hash.
+The source `.ygg.yml` remains in place and continues as the repository base until deliberately
+removed. Copying it locally and then removing the source preserves the semantic behavior hash when
+the effective configuration is unchanged. Ygg never deletes, commits, or pushes `.ygg.yml`.
 
-The repository-owned `.ygg.yml` supports this top-level schema:
+The repository-owned `.ygg.yml` supports this complete top-level schema:
 
 ```yaml
 version: 1
@@ -172,6 +192,34 @@ tools: {}
 ```
 
 Every section except `version` is optional and receives the defaults above.
+
+The local `project.yml` uses the same fields as a partial overlay. Only fields present locally
+override the repository base:
+
+```yaml
+version: 1
+defaults:
+  tool: null
+hooks:
+  post_create: []
+tasks:
+  inherited-task: null
+  local-check:
+    steps:
+      - type: command
+        argv: [pnpm, test]
+tools:
+  inherited-tool: null
+```
+
+| Local value | Merge behavior |
+| --- | --- |
+| `defaults.fetch` or `defaults.tool` | Override that field only; `tool: null` clears the inherited default. |
+| `hooks.<event>` | Replace the complete inherited hook; `[]` disables it. |
+| `tasks.<name>` | Add or replace that named task; `null` removes an inherited task. |
+| `tools.<name>` | Add or replace that named tool; `null` removes an inherited tool. |
+
+The effective result, not either source file in isolation, owns execution and trust.
 
 | Field | Default | Purpose |
 | --- | --- | --- |
@@ -372,8 +420,28 @@ hooks:
 The source-relative portion below `env` becomes the target-relative path, producing `.env`,
 `apps/api/.env`, and `apps/web/.env.local`. Editing a shared source updates every symlink
 immediately. A copied target changes only after the corresponding named task or `ygg setup` runs
-again. Because file steps can expose local data, their exact paths and glob patterns participate in
-the same project-configuration trust hash as commands.
+again; `ygg hook run post_create` is the equivalent general hook command. Because file steps can
+expose local data, their exact paths and glob patterns participate in the same project-configuration
+trust hash as commands.
+
+Successful file steps report the effective source and target using their configured scopes:
+
+```text
+Symlinked shared:env/.env -> target:.env
+Copied default:config.example -> target:config.local
+```
+
+Glob steps print one line per processed file in deterministic order. When `overwrite: true` replaces
+an existing target, the line includes `(replaced existing target)`. Optional steps also explain why
+nothing changed instead of staying silent:
+
+```text
+Skipped optional symlink shared:env/.env -> target:.env (source not found)
+Skipped optional copy shared:env/**/*.missing -> target:optional (no files matched)
+```
+
+An unavailable `current`, `default`, or `primary` source is reported as `source unavailable`.
+Non-optional missing sources, empty globs, and target conflicts remain errors.
 
 ### Lifecycle
 
@@ -392,7 +460,7 @@ safety inspection -> trust -> pre_remove -> git worktree remove -> post_remove
 ```mermaid
 flowchart LR
     subgraph Creation
-      C1[Resolve branch and .ygg.yml] --> C2[Validate and trust]
+      C1[Resolve repository base and local overrides] --> C2[Validate and trust]
       C2 --> C3[pre_create]
       C3 --> C4[git worktree add]
       C4 --> C5[post_create]
@@ -412,6 +480,29 @@ flowchart LR
 
 `pre_create` failure leaves no new worktree. `post_create` failure keeps the worktree and reports
 `ygg setup <worktree>` for recovery. A `pre_remove` failure preserves the worktree.
+
+### Run hooks manually
+
+After changing `.ygg/project.yml` or `.ygg.yml`, inspect and trust the effective behavior from the
+target worktree, then run the hook explicitly:
+
+```sh
+cd feature-payment
+ygg config
+ygg config trust --yes
+ygg hook run post_create
+```
+
+`ygg hook run <event> [worktree]` accepts all four lifecycle events and reloads both configuration
+sources for every invocation. If the edit changes executable behavior, the semantic hash changes
+and Ygg requires a new trust decision. Formatting-only changes keep existing trust valid.
+
+Manual execution never performs `git worktree add` or `git worktree remove`. It uses the selected
+existing worktree as `YGG_WORKTREE_PATH`; the normal working-directory defaults still apply:
+`pre_create` uses the preferred source, `post_remove` uses the workspace, and the other events use
+the target. Because `pre_create` normally runs before the target exists and `post_remove` normally
+runs after it is gone, Ygg warns that manual runs of these two events simulate a different lifecycle
+state. `ygg setup [worktree]` remains a compatibility shortcut for manually running `post_create`.
 
 ### Named tasks and tool profiles
 
@@ -453,9 +544,10 @@ commands are omitted from interactive selection.
 
 ## Trust
 
-Any non-empty hook, task, or custom tool makes `.ygg.yml` executable configuration. `ygg` hashes the
-validated, normalized behavior with SHA-256. This means comments, whitespace, and mapping order do
-not change trust, while behavioral changes do.
+Any non-empty effective hook, task, or custom tool makes project configuration executable. Ygg
+hashes the merged, validated, normalized behavior with SHA-256. Comments, whitespace, mapping order,
+and moving identical behavior between `.ygg.yml` and `.ygg/project.yml` do not change trust;
+behavioral changes in either source do.
 
 ```sh
 ygg config
@@ -463,5 +555,5 @@ ygg config trust --yes
 ygg config untrust --yes
 ```
 
-For a new standalone workspace without a checkout, these commands inspect `.ygg.yml` directly from the
-configured default branch.
+For a standalone workspace without a checkout, these commands combine local `project.yml` with
+`.ygg.yml` read directly from the configured default branch or revision.

@@ -6,6 +6,7 @@ import { YggError } from "../../domain/errors.js";
 import type { ProjectConfigDocument, Workspace } from "../../domain/types.js";
 import { humanizeRepositoryName } from "../../infrastructure/path-utils.js";
 import type { AdoptionInspection, AdoptionOptions } from "../../services/workspace-service.js";
+import { style } from "../../ui/style.js";
 import {
   confirm,
   isInteractiveTerminal,
@@ -24,7 +25,10 @@ import {
   type WorkspaceInitializationPreview,
 } from "../init-preview.js";
 import { nonEmptyCliString, parseCliInput } from "../input.js";
-import { initializeProjectConfiguration } from "../project-config-wizard.js";
+import {
+  initializeProjectConfiguration,
+  type ProjectConfigScope,
+} from "../project-config-wizard.js";
 
 const initInputSchema = z
   .object({
@@ -35,9 +39,19 @@ const initInputSchema = z
     remote: z.union([nonEmptyCliString, z.literal(false)]).optional(),
     defaultBranch: nonEmptyCliString.optional(),
     config: z.boolean().optional(),
+    configScope: z.enum(["workspace", "project"]).optional(),
     yes: z.boolean().optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.configScope && !value.config) {
+      context.addIssue({
+        code: "custom",
+        path: ["configScope"],
+        message: "Requires --config.",
+      });
+    }
+  });
 
 export type InitInput = z.output<typeof initInputSchema>;
 
@@ -55,11 +69,12 @@ export function registerInitCommand(program: Command, context: CliContext): void
     .option("--remote <name>", "Remote used for fetching and branch resolution")
     .option("--no-remote", "Use no remote (local-only repository)")
     .option("--default-branch <branch>", "Default branch used for creation and merge checks")
-    .option("--config", "Create a detected .ygg.yml in the retained checkout")
+    .option("--config", "Create detected workspace-local project configuration")
+    .option("--config-scope <scope>", "Write configuration to workspace or project")
     .option("--yes", "Accept detected settings without prompting")
     .addHelpText(
       "after",
-      "\nExamples:\n  cd ~/dev/project && ygg init\n  ygg init git@github.com:example/project.git ~/dev/project\n  ygg init git@github.com:example/project.git ~/dev/project --worktrees-dir worktrees\n  ygg init --adopt . --yes --config\n",
+      "\nExamples:\n  cd ~/dev/project && ygg init\n  ygg init git@github.com:example/project.git ~/dev/project\n  ygg init git@github.com:example/project.git ~/dev/project --worktrees-dir worktrees\n  ygg init --adopt . --yes --config\n  ygg init --adopt . --yes --config --config-scope project\n",
     )
     .action(async (repository: unknown, directory: unknown, options: unknown) => {
       const input = parseCliInput(initInputSchema, {
@@ -91,11 +106,14 @@ export async function initializeWorkspace(
       worktreeDir: input.worktreesDir,
     }),
   );
-  await success(`Initialized workspace at ${workspace.root}`, context.output);
-  writeLine(context.output.stdout, `Next: cd ${shellQuote(workspace.root)}`);
+  await success(`Initialized workspace at ${style.path(workspace.root)}`, context.output);
   writeLine(
     context.output.stdout,
-    `Then: ygg create ${shellQuote(workspace.config.defaultBranch)} --cd`,
+    `${style.label("Next:")} ${style.command(`cd ${shellQuote(workspace.root)}`)}`,
+  );
+  writeLine(
+    context.output.stdout,
+    `${style.label("Then:")} ${style.command(`ygg create ${shellQuote(workspace.config.defaultBranch)} --cd`)}`,
   );
   return workspace;
 }
@@ -122,7 +140,12 @@ async function initializeGuidedExistingRepository(
       ) ??
       worktrees[0] ??
       null;
-    await maybeInitializeProjectConfig(preferred?.path ?? null, {}, context);
+    await maybeInitializeProjectConfig(
+      inspection.existingWorkspace,
+      preferred?.path ?? null,
+      {},
+      context,
+    );
     return inspection.existingWorkspace;
   }
 
@@ -322,7 +345,7 @@ async function initializeGuidedRemoteSource(context: CliContext): Promise<Worksp
       worktreeDir,
     }),
   );
-  await success(`Initialized workspace at ${workspace.root}`, context.output);
+  await success(`Initialized workspace at ${style.path(workspace.root)}`, context.output);
   await completeNewWorkspace(workspace, context);
   return workspace;
 }
@@ -414,8 +437,11 @@ async function initializeCopiedWorkspace(
       worktreeDir,
     }),
   );
-  await success(`Initialized workspace at ${workspace.root}`, context.output);
-  writeLine(context.output.stdout, `Original repository kept at ${sourceRepository}`);
+  await success(`Initialized workspace at ${style.path(workspace.root)}`, context.output);
+  writeLine(
+    context.output.stdout,
+    `${style.label("Original repository kept at")} ${style.path(sourceRepository)}`,
+  );
   await completeNewWorkspace(workspace, context);
   return workspace;
 }
@@ -471,7 +497,7 @@ async function completeNewWorkspace(
   context: CliContext,
 ): Promise<void> {
   writeLine(context.output.stdout, "");
-  writeLine(context.output.stdout, "Optional setup");
+  writeLine(context.output.stdout, style.heading("Optional setup"));
   const plan = await runTask("Preparing default worktree", () =>
     context.workflow.planCreate(workspace, {
       branch: workspace.config.defaultBranch,
@@ -492,10 +518,13 @@ async function completeNewWorkspace(
   }
   if (!createFirstWorktree) {
     writeLine(context.output.stdout, "Workspace remains initialized; no worktree was created.");
-    writeLine(context.output.stdout, `Next: cd ${shellQuote(workspace.root)}`);
     writeLine(
       context.output.stdout,
-      `Then: ygg create ${shellQuote(workspace.config.defaultBranch)} --cd`,
+      `${style.label("Next:")} ${style.command(`cd ${shellQuote(workspace.root)}`)}`,
+    );
+    writeLine(
+      context.output.stdout,
+      `${style.label("Then:")} ${style.command(`ygg create ${shellQuote(workspace.config.defaultBranch)} --cd`)}`,
     );
     return;
   }
@@ -503,10 +532,19 @@ async function completeNewWorkspace(
   const created = await context.workflow.executeCreate(plan, {
     output: context.output.stderr,
   });
-  await success(`Created ${created.name} at ${created.path}`, context.output);
-  await maybeInitializeProjectConfig(created.path, {}, context);
-  writeLine(context.output.stdout, `Next: cd ${shellQuote(created.path)}`);
-  writeLine(context.output.stdout, "Then create a feature worktree with: ygg create <branch> --cd");
+  await success(
+    `Created ${style.worktree(created.name)} at ${style.path(created.path)}`,
+    context.output,
+  );
+  await maybeInitializeProjectConfig(workspace, created.path, {}, context);
+  writeLine(
+    context.output.stdout,
+    `${style.label("Next:")} ${style.command(`cd ${shellQuote(created.path)}`)}`,
+  );
+  writeLine(
+    context.output.stdout,
+    `${style.label("Then create a feature worktree with:")} ${style.command("ygg create <branch> --cd")}`,
+  );
 }
 
 async function initializeAdoptedWorkspace(
@@ -528,6 +566,7 @@ async function initializeAdoptedWorkspace(
     await repairOrReportExistingWorkspace(inspection.existingWorkspace, context);
     if (input.config) {
       await maybeInitializeProjectConfig(
+        inspection.existingWorkspace,
         inspection.existingWorkspace.primaryWorktree,
         input,
         context,
@@ -571,10 +610,19 @@ async function initializeAdoptedWorkspace(
   const workspace = await runTask("Adopting repository", () =>
     context.workspaces.adopt(inspection),
   );
-  await success(`Connected existing checkout to ygg at ${workspace.root}`, context.output);
-  writeLine(context.output.stdout, `Worktrees: ${workspace.worktreeDir}`);
-  await maybeInitializeProjectConfig(workspace.primaryWorktree, input, context);
-  writeLine(context.output.stdout, "Create another worktree: ygg create <branch> --cd");
+  await success(
+    `Connected existing checkout to ygg at ${style.path(workspace.root)}`,
+    context.output,
+  );
+  writeLine(
+    context.output.stdout,
+    `${style.label("Worktrees:")} ${style.path(workspace.worktreeDir)}`,
+  );
+  await maybeInitializeProjectConfig(workspace, workspace.primaryWorktree, input, context);
+  writeLine(
+    context.output.stdout,
+    `${style.label("Create another worktree:")} ${style.command("ygg create <branch> --cd")}`,
+  );
   return workspace;
 }
 
@@ -590,15 +638,18 @@ async function repairOrReportExistingWorkspace(
   ].filter((entry): entry is string => Boolean(entry));
 
   if (restored.length === 0) {
-    await success(`Workspace already initialized at ${workspace.root}`, context.output);
+    await success(`Workspace already initialized at ${style.path(workspace.root)}`, context.output);
     return;
   }
 
-  await success(`Repaired workspace at ${workspace.root}`, context.output);
-  for (const entry of restored) writeLine(context.output.stdout, `Restored ${entry}`);
+  await success(`Repaired workspace at ${style.path(workspace.root)}`, context.output);
+  for (const entry of restored) {
+    writeLine(context.output.stdout, `${style.label("Restored")} ${style.value(entry)}`);
+  }
 }
 
 async function maybeInitializeProjectConfig(
+  workspace: Workspace,
   primaryWorktree: string | null,
   input: InitInput,
   context: CliContext,
@@ -606,24 +657,29 @@ async function maybeInitializeProjectConfig(
   if (!primaryWorktree) {
     if (input.config) {
       throw new YggError(
-        "Cannot create .ygg.yml while retaining a bare repository without a worktree. Create a worktree, then run ygg config init.",
+        "Cannot detect project configuration without a worktree. Create a worktree, then run ygg config init.",
       );
     }
     return;
   }
-  if (await context.configs.readProjectConfig(primaryWorktree)) return;
-
   const requested = Boolean(input.config);
   let shouldCreate = requested;
+  let scope: ProjectConfigScope = input.configScope ?? "workspace";
+  if (scope === "workspace" && (await context.configs.readWorkspaceProjectConfig(workspace))) {
+    return;
+  }
+  if (scope === "project" && (await context.configs.readProjectConfig(primaryWorktree))) {
+    return;
+  }
   if (!requested && isInteractiveTerminal() && !input.yes) {
     writeLine(context.output.stdout, "");
-    writeLine(context.output.stdout, "Project automation (optional)");
+    writeLine(context.output.stdout, style.heading("Project automation (optional)"));
     writeLine(
       context.output.stdout,
-      "A .ygg.yml can prepare new worktrees and define dev or verify tasks.",
+      "Workspace-local project configuration can prepare worktrees and define dev or verify tasks.",
     );
     try {
-      shouldCreate = await confirm("Configure optional project automation (.ygg.yml) now?", true, {
+      shouldCreate = await confirm("Configure optional project automation now?", true, {
         navigation: "cancel",
       });
     } catch (error) {
@@ -636,14 +692,57 @@ async function maybeInitializeProjectConfig(
       context.output.stdout,
       "Workspace remains initialized; no project config was written.",
     );
-    writeLine(context.output.stdout, "Later: ygg config init");
+    writeLine(
+      context.output.stdout,
+      `${style.label("Later:")} ${style.command("ygg config init")}`,
+    );
     return;
+  }
+  if (!requested) {
+    try {
+      scope = (await selectValue(
+        "Configure › Location · Where should project automation be stored?",
+        [
+          {
+            label: "Local Ygg workspace (recommended)",
+            value: "workspace",
+            description: "Keep project.yml outside Git and apply it to every worktree.",
+          },
+          {
+            label: "Project repository",
+            value: "project",
+            description: "Create .ygg.yml in this worktree so it can be committed and shared.",
+          },
+        ],
+        { navigation: "cancel", initialValue: scope },
+      )) as ProjectConfigScope;
+    } catch (error) {
+      if (!isPromptBackError(error)) throw error;
+      writeLine(
+        context.output.stdout,
+        "Workspace remains initialized; project configuration was cancelled.",
+      );
+      writeLine(
+        context.output.stdout,
+        `${style.label("Later:")} ${style.command("ygg config init")}`,
+      );
+      return;
+    }
+    if (scope === "project" && (await context.configs.readProjectConfig(primaryWorktree))) {
+      return;
+    }
   }
   let document: ProjectConfigDocument | null;
   try {
     document = await initializeProjectConfiguration(
+      workspace,
       primaryWorktree,
-      { force: false, yes: Boolean(input.yes) },
+      {
+        force: false,
+        yes: Boolean(input.yes),
+        scope,
+        fromProject: false,
+      },
       context,
     );
   } catch (error) {
@@ -652,7 +751,10 @@ async function maybeInitializeProjectConfig(
       context.output.stdout,
       "Workspace remains initialized; project configuration was cancelled.",
     );
-    writeLine(context.output.stdout, "Later: ygg config init");
+    writeLine(
+      context.output.stdout,
+      `${style.label("Later:")} ${style.command("ygg config init")}`,
+    );
     return;
   }
   if (!document) {
@@ -810,7 +912,7 @@ async function confirmInitialization(
   context: CliContext,
 ): Promise<boolean> {
   writeLine(context.output.stdout, "");
-  writeLine(context.output.stdout, "Workspace plan");
+  writeLine(context.output.stdout, style.heading("Workspace plan"));
   await printKeyValueTable(initializationPreviewSummary(preview));
   writeLine(context.output.stdout, "");
   writeLine(context.output.stdout, renderInitializationPreview(preview));

@@ -3,6 +3,7 @@ import { YggError } from "../domain/errors.js";
 import type { ProjectConfigDocument, Workspace, Worktree } from "../domain/types.js";
 import { summarizeExecutableConfig } from "../services/config-service.js";
 import type { WorktreeService } from "../services/worktree-service.js";
+import { style } from "../ui/style.js";
 import {
   confirm,
   isInteractiveTerminal,
@@ -45,19 +46,19 @@ export async function resolveProjectConfiguration(
   context: CliContext,
 ): Promise<ProjectConfigDocument | null> {
   const current = await context.worktrees.current(workspace);
-  if (current) return await context.configs.readProjectConfig(current.path);
+  if (current) return await context.configs.resolveProjectConfig(workspace, current.path);
 
   const all = await context.worktrees.list(workspace);
   const preferred =
     all.find((worktree) => worktree.branch === workspace.config.defaultBranch) ??
     all.find((worktree) => worktree.role === "primary") ??
     all[0];
-  if (preferred) return await context.configs.readProjectConfig(preferred.path);
+  if (preferred) return await context.configs.resolveProjectConfig(workspace, preferred.path);
 
   const revision = workspace.config.remote
     ? `${workspace.config.remote.name}/${workspace.config.defaultBranch}`
     : workspace.config.defaultBranch;
-  return await context.configs.readProjectConfigAtRevision(context.git, workspace, revision);
+  return await context.configs.resolveProjectConfigAtRevision(context.git, workspace, revision);
 }
 
 export async function ensureTrusted(
@@ -84,9 +85,18 @@ export async function ensureTrusted(
 }
 
 export function printTrustSummary(project: ProjectConfigDocument, output: CliOutput): void {
-  writeLine(output.stderr, `Project configuration: ${project.path}`);
-  writeLine(output.stderr, `Behavior hash: ${project.hash}`);
-  for (const row of summarizeExecutableConfig(project)) writeLine(output.stderr, `- ${row}`);
+  writeLine(
+    output.stderr,
+    `${style.label("Repository configuration:")} ${style.path(project.sources.repository ?? "none")}`,
+  );
+  writeLine(
+    output.stderr,
+    `${style.label("Workspace configuration:")} ${style.path(project.sources.workspace ?? "none")}`,
+  );
+  writeLine(output.stderr, `${style.label("Behavior hash:")} ${style.hash(project.hash)}`);
+  for (const row of summarizeExecutableConfig(project)) {
+    writeLine(output.stderr, `- ${style.value(row)}`);
+  }
 }
 
 export async function chooseBranch(
@@ -97,7 +107,10 @@ export async function chooseBranch(
   const unique = new Map<string, { label: string; value: string }>();
   for (const candidate of await worktrees.listBranchCandidates(workspace)) {
     if (!unique.has(candidate.name) || candidate.source === "local") {
-      unique.set(candidate.name, { label: candidate.label, value: candidate.name });
+      unique.set(candidate.name, {
+        label: `${style.branch(candidate.name)}${candidate.label.slice(candidate.name.length)}`,
+        value: candidate.name,
+      });
     }
   }
   const createValue = "__create_new_branch__";
@@ -146,16 +159,19 @@ export function removalError(worktree: Worktree, blockers: string[]): YggError {
 }
 
 export function printPlainWorktrees(worktrees: Worktree[], stream: NodeJS.WritableStream): void {
-  writeLine(stream, "NAME\tBRANCH\tROLE\tSTATUS\tPATH");
+  writeLine(
+    stream,
+    ["NAME", "BRANCH", "ROLE", "STATUS", "PATH"].map((header) => style.label(header)).join("\t"),
+  );
   for (const worktree of worktrees) {
     writeLine(
       stream,
       [
-        worktree.name,
-        worktree.branch ?? "detached",
+        style.worktree(worktree.name),
+        style.branch(worktree.branch ?? "detached"),
         worktree.role,
-        worktree.state,
-        worktree.path,
+        style.state(worktree.state, worktree.state),
+        style.path(worktree.path),
       ].join("\t"),
     );
   }

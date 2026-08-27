@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { runProjectHook } from "../src/cli/commands/hook.js";
 import { openWorktree } from "../src/cli/commands/open.js";
 import { removeWorktrees } from "../src/cli/commands/remove.js";
 import { runProjectTask } from "../src/cli/commands/run.js";
@@ -12,6 +13,7 @@ const prompts = vi.hoisted(() => ({
   manySelections: [] as Worktree[][],
   promptTexts: [] as Array<string | Error>,
   searchSelections: [] as Array<string | Error>,
+  searchOptions: [] as Array<Array<{ label: string; value: string }>>,
   worktreeSelections: [] as Array<Worktree | Error>,
   manyOptions: [] as Array<{ initialValues?: string[] }>,
 }));
@@ -33,7 +35,8 @@ vi.mock("../src/ui/terminal.js", async (importOriginal) => {
       if (result instanceof Error) throw result;
       return result;
     },
-    searchSelect: async () => {
+    searchSelect: async (_question: string, options: Array<{ label: string; value: string }>) => {
+      prompts.searchOptions.push(options);
       const result = prompts.searchSelections.shift() ?? "";
       if (result instanceof Error) throw result;
       return result;
@@ -65,6 +68,7 @@ describe("interactive command navigation", () => {
     prompts.manySelections = [];
     prompts.promptTexts = [];
     prompts.searchSelections = [];
+    prompts.searchOptions = [];
     prompts.worktreeSelections = [];
     prompts.manyOptions = [];
   });
@@ -123,6 +127,38 @@ describe("interactive command navigation", () => {
       workspace,
       feature,
       "verify",
+      expect.objectContaining({ output: context.output.stderr }),
+    );
+  });
+
+  it("offers only configured hooks for the selected worktree", async () => {
+    prompts.searchSelections.push("pre_remove");
+    const runHook = vi.fn();
+    const project = {
+      config: {
+        hooks: {
+          pre_create: [],
+          post_create: [],
+          pre_remove: [{ type: "command" }],
+          post_remove: [],
+        },
+      },
+    };
+    const context = commandContext(workspace, primary, [primary, feature], {
+      configs: { isTrusted: vi.fn().mockReturnValue(true) },
+      workflow: {
+        projectForWorktree: vi.fn().mockResolvedValue(project),
+        runHook,
+      },
+    });
+
+    await runProjectHook({}, context);
+
+    expect(prompts.searchOptions.at(-1)?.map((option) => option.value)).toEqual(["pre_remove"]);
+    expect(runHook).toHaveBeenCalledWith(
+      workspace,
+      primary,
+      "pre_remove",
       expect.objectContaining({ output: context.output.stderr }),
     );
   });

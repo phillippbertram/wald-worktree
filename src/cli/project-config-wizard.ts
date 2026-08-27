@@ -1,12 +1,17 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { YggError } from "../domain/errors.js";
-import type { ProjectConfigDocument } from "../domain/types.js";
-import { projectConfigFileName } from "../services/config-service.js";
+import type { ProjectConfigDocument, ProjectConfigOverlay, Workspace } from "../domain/types.js";
+import {
+  projectConfigFileName,
+  workspaceProjectConfigFileName,
+  workspaceProjectConfigPath,
+} from "../services/config-service.js";
 import type {
   ProjectConfigTemplateOptions,
   ProjectSetupInspection,
 } from "../services/project-config-initializer.js";
+import { style } from "../ui/style.js";
 import {
   confirm,
   isInteractiveTerminal,
@@ -19,16 +24,34 @@ import {
 import type { CliContext } from "./context.js";
 import { success, writeLine } from "./helpers.js";
 
+export type ProjectConfigScope = "workspace" | "project";
+
+export type ProjectConfigInitializationOptions = {
+  force: boolean;
+  yes: boolean;
+  scope: ProjectConfigScope;
+  fromProject: boolean;
+};
+
 export async function initializeProjectConfiguration(
+  workspace: Workspace,
   root: string,
-  options: { force: boolean; yes: boolean },
+  options: ProjectConfigInitializationOptions,
   context: CliContext,
 ): Promise<ProjectConfigDocument | null> {
   if (!options.yes && !isInteractiveTerminal()) {
     throw new YggError("Non-interactive configuration initialization requires --yes.");
   }
 
-  const configPath = path.join(root, projectConfigFileName);
+  if (options.fromProject && options.scope !== "workspace") {
+    throw new YggError("--from-project requires --scope workspace.");
+  }
+  const configPath =
+    options.scope === "workspace"
+      ? workspaceProjectConfigPath(workspace)
+      : path.join(root, projectConfigFileName);
+  const configFileName =
+    options.scope === "workspace" ? workspaceProjectConfigFileName : projectConfigFileName;
   const exists = await fileExists(configPath);
   let overwrite = options.force;
   if (exists && !overwrite) {
@@ -37,11 +60,38 @@ export async function initializeProjectConfiguration(
         `Project configuration already exists: ${configPath}. Use --force to replace it.`,
       );
     }
-    overwrite = await confirm(`Replace the existing ${projectConfigFileName}?`);
+    overwrite = await confirm(`Replace the existing ${configFileName}?`);
     if (!overwrite) {
       writeLine(context.output.stdout, "Cancelled.");
       return null;
     }
+  }
+
+  let importProject = options.fromProject;
+  const repositoryConfig =
+    options.scope === "workspace" ? await context.configs.readProjectConfig(root) : null;
+  if (repositoryConfig && !options.yes && !importProject) {
+    importProject = await confirm(
+      `Copy the complete ${projectConfigFileName} into ${workspaceProjectConfigFileName}?`,
+      false,
+    );
+  }
+
+  if (importProject) {
+    if (!repositoryConfig) {
+      throw new YggError(`No ${projectConfigFileName} found in ${root} to copy.`);
+    }
+    return await writeConfiguration(
+      workspace,
+      root,
+      repositoryConfig.config,
+      configPath,
+      configFileName,
+      options,
+      overwrite,
+      true,
+      context,
+    );
   }
 
   const inspection = await runTask("Inspecting project", () =>
@@ -55,7 +105,12 @@ export async function initializeProjectConfiguration(
     const prompted = await promptForTemplate(inspection, promptState, resumeAtLastStep);
     promptState = prompted.state;
     templateOptions = prompted.options;
-    const config = context.projectConfigs.createConfig(inspection, templateOptions);
+    const config = createGeneratedConfiguration(
+      inspection,
+      templateOptions,
+      options.scope,
+      context,
+    );
 
     await printKeyValueTable([
       ["Package manager", inspection.packageManager ?? "none"],
@@ -66,9 +121,9 @@ export async function initializeProjectConfiguration(
       ["Default tool", templateOptions.tool ?? "none"],
     ]);
     writeLine(context.output.stdout, "");
-    context.output.stdout.write(context.configs.formatProjectConfig(config));
+    context.output.stdout.write(formatConfiguration(config, options.scope, context));
     try {
-      if (!(await confirm(`Write ${projectConfigFileName}?`, true, { navigation: "back" }))) {
+      if (!(await confirm(`Write ${configFileName}?`, true, { navigation: "back" }))) {
         writeLine(context.output.stdout, "Cancelled.");
         return null;
       }
@@ -79,20 +134,110 @@ export async function initializeProjectConfiguration(
     }
   }
 
-  const config = context.projectConfigs.createConfig(inspection, templateOptions);
+  const config = createGeneratedConfiguration(inspection, templateOptions, options.scope, context);
 
-  const document = await runTask(`Writing ${projectConfigFileName}`, () =>
-    context.configs.writeProjectConfig(inspection.root, config, { overwrite }),
+  return await writeConfiguration(
+    workspace,
+    inspection.root,
+    config,
+    configPath,
+    configFileName,
+    options,
+    overwrite,
+    false,
+    context,
   );
-  await success(`Created ${document.path}`, context.output);
-  writeLine(
-    context.output.stdout,
-    `Next: review and commit ${projectConfigFileName} on the branch used to create future worktrees.`,
-  );
+}
+
+async function writeConfiguration(
+  workspace: Workspace,
+  root: string,
+  config: ProjectConfigOverlay,
+  configPath: string,
+  configFileName: string,
+  options: ProjectConfigInitializationOptions,
+  overwrite: boolean,
+  copiedFromProject: boolean,
+  context: CliContext,
+): Promise<ProjectConfigDocument> {
+  if (copiedFromProject && options.fromProject && !options.yes) {
+    context.output.stdout.write(formatConfiguration(config, options.scope, context));
+    if (!(await confirm(`Write ${configFileName}?`, true))) {
+      throw new YggError("Configuration migration was cancelled.", { exitCode: 130 });
+    }
+  }
+  await runTask(`Writing ${configFileName}`, async () => {
+    if (options.scope === "workspace") {
+      await context.configs.writeWorkspaceProjectConfig(workspace, config, { overwrite });
+    } else {
+      await context.configs.writeProjectConfig(
+        root,
+        normalizeRepositoryConfiguration(config, configPath, context),
+        { overwrite },
+      );
+    }
+  });
+  const document = await context.configs.resolveProjectConfig(workspace, root);
+  if (!document) {
+    throw new YggError(`Could not resolve project configuration after writing ${configPath}.`);
+  }
+  await success(`Created ${style.path(configPath)}`, context.output);
+  if (options.scope === "project") {
+    writeLine(
+      context.output.stdout,
+      `${style.label("Next:")} review and commit ${style.path(projectConfigFileName)} on the branch used to create future worktrees.`,
+    );
+  } else {
+    writeLine(
+      context.output.stdout,
+      `${style.label("Next:")} review the local ${style.path(workspaceProjectConfigFileName)}.`,
+    );
+    if (copiedFromProject) {
+      writeLine(
+        context.output.stdout,
+        `${style.path(projectConfigFileName)} was kept and remains the repository base configuration.`,
+      );
+    }
+  }
   if (document.requiresTrust) {
-    writeLine(context.output.stdout, "Then: ygg config trust");
+    writeLine(
+      context.output.stdout,
+      `${style.label("Then:")} ${style.command("ygg config trust")}`,
+    );
   }
   return document;
+}
+
+function formatConfiguration(
+  config: ProjectConfigOverlay,
+  scope: ProjectConfigScope,
+  context: CliContext,
+): string {
+  return scope === "workspace"
+    ? context.configs.formatWorkspaceProjectConfig(config)
+    : context.configs.formatProjectConfig(
+        normalizeRepositoryConfiguration(config, projectConfigFileName, context),
+      );
+}
+
+function createGeneratedConfiguration(
+  inspection: ProjectSetupInspection,
+  options: ProjectConfigTemplateOptions,
+  scope: ProjectConfigScope,
+  context: CliContext,
+): ProjectConfigOverlay {
+  return scope === "workspace"
+    ? context.projectConfigs.createWorkspaceOverlay(inspection, options)
+    : context.projectConfigs.createConfig(inspection, options);
+}
+
+function normalizeRepositoryConfiguration(
+  config: ProjectConfigOverlay,
+  configPath: string,
+  context: CliContext,
+) {
+  const serialized = context.configs.formatWorkspaceProjectConfig(config);
+  return context.configs.parseProjectConfig(serialized, configPath).config;
 }
 
 async function promptForTemplate(

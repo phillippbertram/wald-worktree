@@ -1,6 +1,7 @@
 import type { RootCommand } from "@bomb.sh/tab";
 import tab from "@bomb.sh/tab/commander";
 import type { Command } from "commander";
+import { hookEvents } from "../../domain/types.js";
 import type { CliContext } from "../context.js";
 import { findWorkspaceOrNull } from "../helpers.js";
 
@@ -39,6 +40,12 @@ export function registerCompletionCommand(program: Command, context: CliContext)
     for (const shell of supportedShells) complete(shell, "");
   };
 
+  const hookEventMetadata = requiredTabCommand(completion, "hook run").arguments.get("event");
+  if (!hookEventMetadata) throw new Error("Bombshell did not expose the hook event argument.");
+  hookEventMetadata.handler = (complete) => {
+    for (const event of hookEvents) complete(event, "lifecycle hook");
+  };
+
   runtimeCommand.hook("preAction", async (_thisCommand, actionCommand) => {
     const args = actionCommand.processedArgs[0];
     const request = Array.isArray(args)
@@ -75,6 +82,8 @@ function requestedCompletionKinds(args: string[]): Set<CompletionKind> {
       return new Set(["worktrees", "tools"]);
     case "run":
       return new Set(["tasks", "worktrees"]);
+    case "hook":
+      return args[1] === "run" ? new Set(["worktrees"]) : new Set();
     case "config":
       return args[1] === "init" ? new Set(["worktrees"]) : new Set();
     default:
@@ -126,7 +135,7 @@ async function loadCompletionCandidates(
   if (!kinds.has("tasks") && !kinds.has("tools")) return candidates;
   const worktree = (await context.worktrees.current(workspace)) ?? worktrees[0];
   if (!worktree) return candidates;
-  const project = await context.configs.readProjectConfig(worktree.path);
+  const project = await context.configs.resolveProjectConfig(workspace, worktree.path);
 
   if (kinds.has("tasks")) {
     candidates.tasks = Object.entries(project?.config.tasks ?? {})
@@ -165,6 +174,7 @@ function applyDynamicHandlers(completion: RootCommand, candidates: CompletionCan
   }
   setArgumentHandler(completion, "run", "task", candidates.tasks);
   setArgumentHandler(completion, "run", "worktree", candidates.worktrees);
+  setArgumentHandler(completion, "hook run", "worktree", candidates.worktrees);
   setArgumentHandler(completion, "config init", "worktree", candidates.worktrees);
   setOptionHandler(completion, "create", "tool", candidates.tools);
   setOptionHandler(completion, "open", "tool", candidates.tools);

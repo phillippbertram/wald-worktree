@@ -1,6 +1,7 @@
 import type { Command } from "commander";
 import { z } from "zod";
 import { YggError } from "../../domain/errors.js";
+import { style } from "../../ui/style.js";
 import { isInteractiveTerminal, isPromptBackError, searchSelect } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
 import { ensureTrusted, resolveWorktree, success } from "../helpers.js";
@@ -18,8 +19,8 @@ export type RunInput = z.output<typeof runInputSchema>;
 export function registerRunCommand(program: Command, context: CliContext): void {
   program
     .command("run")
-    .description("Run a named .ygg.yml project task in a worktree")
-    .argument("[task]", "Task name from .ygg.yml")
+    .description("Run a named project task in a worktree")
+    .argument("[task]", "Task name from the effective project configuration")
     .argument("[worktree]", "Worktree name, branch, or path")
     .addHelpText(
       "after",
@@ -43,10 +44,10 @@ export async function runProjectTask(input: RunInput, context: CliContext): Prom
       navigation: forcePrompt ? "cancel" : undefined,
     });
     initialPath = worktree.path;
-    const project = await context.workflow.projectForWorktree(worktree);
-    if (!project) throw new YggError(`No .ygg.yml found in ${worktree.path}`);
+    const project = await context.workflow.projectForWorktree(workspace, worktree);
+    if (!project) throw new YggError(`No project configuration found for ${worktree.path}`);
     if (Object.keys(project.config.tasks).length === 0) {
-      throw new YggError("No tasks are configured in .ygg.yml.");
+      throw new YggError("No tasks are configured in the effective project configuration.");
     }
     while (true) {
       let task = input.task;
@@ -54,9 +55,9 @@ export async function runProjectTask(input: RunInput, context: CliContext): Prom
         if (!isInteractiveTerminal()) throw new YggError("Task is required without a TTY.");
         try {
           task = await searchSelect(
-            `Run › Task · Select a task for ${worktree.name}:`,
+            `Run › Task · Select a task for ${style.worktree(worktree.name)}:`,
             Object.entries(project.config.tasks).map(([name, definition]) => ({
-              label: name,
+              label: style.value(name),
               value: name,
               description: definition.description,
             })),
@@ -83,7 +84,10 @@ export async function runProjectTask(input: RunInput, context: CliContext): Prom
       await context.workflow.runTask(workspace, worktree, task, {
         output: context.output.stderr,
       });
-      await success(`Completed task ${task} in ${worktree.name}`, context.output);
+      await success(
+        `Completed task ${style.value(task)} in ${style.worktree(worktree.name)}`,
+        context.output,
+      );
       return;
     }
   }

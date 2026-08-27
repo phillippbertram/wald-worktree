@@ -3,6 +3,7 @@ import { z } from "zod";
 import { toErrorMessage, YggError } from "../../domain/errors.js";
 import type { Worktree } from "../../domain/types.js";
 import { builtInToolNames } from "../../services/tool-service.js";
+import { style } from "../../ui/style.js";
 import { isPromptBackError, runTask } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
 import {
@@ -101,12 +102,12 @@ export async function createWorktree(input: CreateInput, context: CliContext): P
     try {
       await openSelectedWorktree(created, input.tool, context, {
         silent: input.printPath,
-        project: await context.workflow.projectForWorktree(created),
+        project: await context.workflow.projectForWorktree(workspace, created),
       });
     } catch (error) {
       if (isPromptBackError(error)) {
         await success(
-          `Created ${created.name} at ${created.path}; opening was cancelled.`,
+          `Created ${style.worktree(created.name)} at ${style.path(created.path)}; opening was cancelled.`,
           context.output,
         );
         return created;
@@ -121,15 +122,24 @@ export async function createWorktree(input: CreateInput, context: CliContext): P
   if (input.printPath) {
     writeLine(context.output.stdout, created.path);
   } else {
-    await success(`Created ${created.name} at ${created.path}`, context.output);
+    await success(
+      `Created ${style.worktree(created.name)} at ${style.path(created.path)}`,
+      context.output,
+    );
     if (input.cd) {
       writeLine(
         context.output.stdout,
-        `Shell integration is not active for this invocation. Enter with: cd ${shellQuote(created.path)}`,
+        `Shell integration is not active for this invocation. ${style.label("Enter with:")} ${style.command(`cd ${shellQuote(created.path)}`)}`,
       );
     } else if (!input.open && !input.tool) {
-      writeLine(context.output.stdout, `Next: ygg cd ${shellQuote(created.name)}`);
-      writeLine(context.output.stdout, `Without shell integration: cd ${shellQuote(created.path)}`);
+      writeLine(
+        context.output.stdout,
+        `${style.label("Next:")} ${style.command(`ygg cd ${shellQuote(created.name)}`)}`,
+      );
+      writeLine(
+        context.output.stdout,
+        `${style.label("Without shell integration:")} ${style.command(`cd ${shellQuote(created.path)}`)}`,
+      );
     }
   }
   return created;

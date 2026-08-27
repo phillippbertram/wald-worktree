@@ -2,6 +2,7 @@ import type { Command } from "commander";
 import { z } from "zod";
 import { YggError } from "../../domain/errors.js";
 import type { Worktree } from "../../domain/types.js";
+import { style } from "../../ui/style.js";
 import { confirm, isInteractiveTerminal } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
 import { success, writeLine } from "../helpers.js";
@@ -59,7 +60,7 @@ export async function uninitializeWorkspace(
   if (!input.apply) {
     writeLine(
       context.output.stdout,
-      "Preview only. Run ygg uninit --apply to remove the Ygg workspace metadata.",
+      `${style.warning("Preview only.")} Run ${style.command("ygg uninit --apply")} to remove the Ygg workspace metadata.`,
     );
     return false;
   }
@@ -79,7 +80,7 @@ export async function uninitializeWorkspace(
       throw new YggError("Non-interactive uninitialization requires --apply --yes.");
     }
     const accepted = await confirm(
-      `Uninitialize Ygg at ${workspace.root}? The Git repository, branches, and worktree directory will be kept.`,
+      `Uninitialize Ygg at ${style.path(workspace.root)}? The Git repository, branches, and worktree directory will be kept.`,
     );
     if (!accepted) {
       writeLine(context.output.stdout, "Cancelled.");
@@ -109,25 +110,36 @@ function printUninitializationPreview(
   blockingWorktrees: Worktree[],
   stream: NodeJS.WritableStream,
 ): void {
-  writeLine(stream, "Ygg workspace metadata:");
-  writeLine(stream, `- remove\t${inspection.metadataDir}`);
-  if (inspection.markerPath) writeLine(stream, `- remove\t${inspection.markerPath}`);
-  writeLine(stream, `- keep Git database\t${workspace.gitDir}`);
-  writeLine(stream, `- keep worktree directory\t${workspace.worktreeDir}`);
+  writeLine(stream, style.heading("Ygg workspace metadata:"));
+  writeLine(stream, `- ${style.danger("remove")}\t${style.path(inspection.metadataDir)}`);
+  if (inspection.markerPath) {
+    writeLine(stream, `- ${style.danger("remove")}\t${style.path(inspection.markerPath)}`);
+  }
+  writeLine(stream, `- ${style.success("keep Git database")}\t${style.path(workspace.gitDir)}`);
+  writeLine(
+    stream,
+    `- ${style.success("keep worktree directory")}\t${style.path(workspace.worktreeDir)}`,
+  );
   if (workspace.primaryWorktree) {
-    writeLine(stream, `- keep primary checkout\t${workspace.primaryWorktree}`);
+    writeLine(
+      stream,
+      `- ${style.success("keep primary checkout")}\t${style.path(workspace.primaryWorktree)}`,
+    );
   }
 
   if (blockingWorktrees.length > 0) {
-    writeLine(stream, "Registered worktrees must be removed or pruned first:");
+    writeLine(stream, style.warning("Registered worktrees must be removed or pruned first:"));
     for (const worktree of blockingWorktrees) {
-      writeLine(stream, `- ${worktree.name}\t${worktree.state}\t${worktree.path}`);
+      writeLine(
+        stream,
+        `- ${style.worktree(worktree.name)}\t${style.state(worktree.state, worktree.state)}\t${style.path(worktree.path)}`,
+      );
     }
   }
   if (inspection.dataEntries.length > 0) {
-    writeLine(stream, "Local data that --force would discard:");
+    writeLine(stream, style.warning("Local data that --force would discard:"));
     for (const entry of inspection.dataEntries.slice(0, 20)) {
-      writeLine(stream, `- ${entry}`);
+      writeLine(stream, `- ${style.path(entry)}`);
     }
     if (inspection.dataEntries.length > 20) {
       writeLine(stream, `- ... and ${inspection.dataEntries.length - 20} more entries`);

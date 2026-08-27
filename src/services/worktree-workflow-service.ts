@@ -47,7 +47,7 @@ export class WorktreeWorkflowService {
       from,
       fetch: options.fetch ?? sourceDocument?.config.defaults.fetch ?? true,
     });
-    const project = await this.configs.readProjectConfigAtRevision(
+    const project = await this.configs.resolveProjectConfigAtRevision(
       this.git,
       workspace,
       prepared.projectRevision,
@@ -79,10 +79,10 @@ export class WorktreeWorkflowService {
     await this.automation.runHook(plan.project, "pre_create", preCreateContext);
 
     const created = await this.worktrees.createPrepared(plan.workspace, plan.prepared);
-    const targetProject = await this.configs.readProjectConfig(created.path);
+    const targetProject = await this.configs.resolveProjectConfig(plan.workspace, created.path);
     if ((plan.project?.hash ?? null) !== (targetProject?.hash ?? null)) {
       throw new YggError(
-        `Worktree was created at ${created.path}, but its ${targetProject?.path ?? ".ygg.yml"} does not match the configuration inspected before creation. Review the worktree before running hooks.`,
+        `Worktree was created at ${created.path}, but its effective project configuration does not match the configuration inspected before creation. Review the worktree before running hooks.`,
       );
     }
 
@@ -114,7 +114,7 @@ export class WorktreeWorkflowService {
       this.readWorktreeContext(workspace),
       this.worktrees.inspectRemoval(workspace, identifier),
     ]);
-    const project = await this.configs.readProjectConfig(inspection.worktree.path);
+    const project = await this.configs.resolveProjectConfig(workspace, inspection.worktree.path);
     return {
       workspace,
       inspection,
@@ -158,11 +158,11 @@ export class WorktreeWorkflowService {
     options: { trustProjectConfig?: boolean; output?: NodeJS.WritableStream } = {},
   ): Promise<void> {
     const [project, context] = await Promise.all([
-      this.configs.readProjectConfig(worktree.path),
+      this.configs.resolveProjectConfig(workspace, worktree.path),
       this.readWorktreeContext(workspace),
     ]);
     if (!project) {
-      throw new YggError(`No .ygg.yml found in ${worktree.path}`);
+      throw new YggError(`No project configuration found for ${worktree.path}`);
     }
     await this.ensureTrusted(workspace, project, options.trustProjectConfig);
     await this.automation.runTask(project, name, {
@@ -183,7 +183,7 @@ export class WorktreeWorkflowService {
     options: { trustProjectConfig?: boolean; output?: NodeJS.WritableStream } = {},
   ): Promise<void> {
     const [project, context] = await Promise.all([
-      this.configs.readProjectConfig(worktree.path),
+      this.configs.resolveProjectConfig(workspace, worktree.path),
       this.readWorktreeContext(workspace),
     ]);
     await this.ensureTrusted(workspace, project, options.trustProjectConfig);
@@ -198,8 +198,11 @@ export class WorktreeWorkflowService {
     });
   }
 
-  async projectForWorktree(worktree: Worktree): Promise<ProjectConfigDocument | null> {
-    return await this.configs.readProjectConfig(worktree.path);
+  async projectForWorktree(
+    workspace: Workspace,
+    worktree: Worktree,
+  ): Promise<ProjectConfigDocument | null> {
+    return await this.configs.resolveProjectConfig(workspace, worktree.path);
   }
 
   async trust(workspace: Workspace, project: ProjectConfigDocument): Promise<void> {
@@ -223,12 +226,12 @@ export class WorktreeWorkflowService {
   ): Promise<ProjectConfigDocument | null> {
     const source = context.current ?? context.defaultWorktree ?? context.primary;
     if (source) {
-      return await this.configs.readProjectConfig(source.path);
+      return await this.configs.resolveProjectConfig(workspace, source.path);
     }
     const revision = workspace.config.remote
       ? `${workspace.config.remote.name}/${workspace.config.defaultBranch}`
       : workspace.config.defaultBranch;
-    return await this.configs.readProjectConfigAtRevision(this.git, workspace, revision);
+    return await this.configs.resolveProjectConfigAtRevision(this.git, workspace, revision);
   }
 
   private async resolveRequestedBase(
@@ -257,7 +260,7 @@ export class WorktreeWorkflowService {
       return;
     }
     throw new YggError(
-      `Project configuration is not trusted: ${project?.path ?? ".ygg.yml"}\nReview it, then run: ygg config trust`,
+      `Project configuration is not trusted: ${project?.path ?? "effective configuration"}\nReview it, then run: ygg config trust`,
     );
   }
 

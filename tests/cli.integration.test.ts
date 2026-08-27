@@ -13,7 +13,7 @@ function cliArguments(...args: string[]): string[] {
   return ["--import", tsxLoader, cli, ...args];
 }
 
-describe("CLI smoke flow", () => {
+describe("CLI smoke flow", { timeout: 15_000 }, () => {
   let temporaryRoot: string;
   let repository: TestRepository;
 
@@ -78,10 +78,13 @@ describe("CLI smoke flow", () => {
     );
     expect(configured.exitCode, configured.stderr).toBe(0);
     expect(configured.stdout).toContain("Created");
-    expect(configured.stdout).toContain("review and commit .ygg.yml");
-    await expect(fs.readFile(path.join(workspace, "main", ".ygg.yml"), "utf8")).resolves.toContain(
-      "version: 1",
-    );
+    expect(configured.stdout).toContain("review the local project.yml");
+    await expect(
+      fs.readFile(path.join(workspace, ".ygg", "project.yml"), "utf8"),
+    ).resolves.toContain("version: 1");
+    await expect(fs.stat(path.join(workspace, "main", ".ygg.yml"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
     const refusedOverwrite = await execa(
       process.execPath,
       cliArguments("config", "init", "main", "--yes"),
@@ -89,6 +92,12 @@ describe("CLI smoke flow", () => {
     );
     expect(refusedOverwrite.exitCode).toBe(1);
     expect(refusedOverwrite.stderr).toContain("Use --force to replace it");
+    const forcedOverwrite = await execa(
+      process.execPath,
+      cliArguments("config", "init", "main", "--yes", "--force"),
+      { cwd: workspace, reject: false },
+    );
+    expect(forcedOverwrite.exitCode, forcedOverwrite.stderr).toBe(0);
 
     await fs.writeFile(path.join(workspace, "main", "untracked.txt"), "keep me\n", "utf8");
 
@@ -386,11 +395,14 @@ describe("CLI smoke flow", () => {
     expect(repeated.stdout).toContain(
       `Restored shared directory ${path.join(await fs.realpath(path.dirname(sharedDir)), "shared")}`,
     );
-    expect(repeated.stdout).toContain("review and commit .ygg.yml");
+    expect(repeated.stdout).toContain("review the local project.yml");
     await expect(fs.stat(sharedDir)).resolves.toSatisfy((stat) => stat.isDirectory());
-    await expect(fs.readFile(path.join(repository.source, ".ygg.yml"), "utf8")).resolves.toContain(
-      "version: 1",
-    );
+    await expect(
+      fs.readFile(path.join(repository.source, ".git", "ygg", "project.yml"), "utf8"),
+    ).resolves.toContain("version: 1");
+    await expect(fs.stat(path.join(repository.source, ".ygg.yml"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
   });
 
   it("initializes a grouped standalone layout and reports its absolute paths", async () => {
@@ -443,6 +455,8 @@ describe("CLI smoke flow", () => {
       { cwd: workspace },
     );
     const basePath = path.join(workspace, "feature-base");
+    await execa("git", ["config", "user.email", "tests@example.invalid"], { cwd: basePath });
+    await execa("git", ["config", "user.name", "ygg tests"], { cwd: basePath });
     await fs.writeFile(path.join(basePath, "stacked.txt"), "base\n", "utf8");
     await execa("git", ["add", "stacked.txt"], { cwd: basePath });
     await execa("git", ["commit", "-m", "add stacked base"], { cwd: basePath });
@@ -581,5 +595,5 @@ tools:
     expect(await fs.readFile(path.join(workspace, "main", "tool.log"), "utf8")).toBe(
       await fs.realpath(path.join(workspace, "main")),
     );
-  }, 15_000);
+  });
 });

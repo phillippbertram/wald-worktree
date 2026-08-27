@@ -17,6 +17,7 @@ const interactions = vi.hoisted(() => ({
   findWorkspaceOrNull: vi.fn(),
   initializeWorkspace: vi.fn(),
   createWorktree: vi.fn(),
+  runProjectHook: vi.fn(),
   uninitializeWorkspace: vi.fn(),
 }));
 
@@ -63,6 +64,14 @@ vi.mock("../src/cli/commands/create.js", async (importOriginal) => {
   };
 });
 
+vi.mock("../src/cli/commands/hook.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/cli/commands/hook.js")>();
+  return {
+    ...actual,
+    runProjectHook: interactions.runProjectHook,
+  };
+});
+
 vi.mock("../src/cli/commands/uninit.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/cli/commands/uninit.js")>();
   return {
@@ -83,6 +92,7 @@ describe("interactive main menu", () => {
       interactions.events.push("init");
     });
     interactions.createWorktree.mockReset();
+    interactions.runProjectHook.mockReset();
     interactions.uninitializeWorkspace.mockReset();
   });
 
@@ -109,6 +119,11 @@ describe("interactive main menu", () => {
           label: "🌱 Create worktree",
           description: "Create an isolated checkout for a branch.",
           group: "Common",
+        }),
+        expect.objectContaining({
+          label: "Run lifecycle hook",
+          description: "Run a configured hook without changing Git state.",
+          group: "Project automation",
         }),
       ]),
     });
@@ -138,6 +153,17 @@ describe("interactive main menu", () => {
 
     expect(interactions.createWorktree).toHaveBeenCalledOnce();
     expect(interactions.events.filter((event) => event === "prompt")).toHaveLength(2);
+  });
+
+  it("runs the general lifecycle hook flow from the main menu", async () => {
+    const workspace = { root: "/tmp/ygg-project" } as Workspace;
+    const current = { name: "main", branch: "main" } as Worktree;
+    interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
+    interactions.selections = ["hook", "exit"];
+
+    await runMainMenu(new Command().name("ygg"), createContext(current, [current]));
+
+    expect(interactions.runProjectHook).toHaveBeenCalledWith({}, expect.anything());
   });
 
   it("closes the menu after the workspace is uninitialized", async () => {

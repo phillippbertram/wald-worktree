@@ -2,6 +2,7 @@ import type { Command } from "commander";
 import { z } from "zod";
 import { YggError } from "../../domain/errors.js";
 import type { Worktree } from "../../domain/types.js";
+import { style } from "../../ui/style.js";
 import { confirm, isInteractiveTerminal } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
 import { success, writeLine } from "../helpers.js";
@@ -48,7 +49,7 @@ export async function pruneWorktrees(input: PruneInput, context: CliContext): Pr
   if (!input.apply) {
     writeLine(
       context.output.stdout,
-      "Preview only. Run ygg prune --apply to remove this metadata.",
+      `${style.warning("Preview only.")} Run ${style.command("ygg prune --apply")} to remove this metadata.`,
     );
     return;
   }
@@ -58,7 +59,7 @@ export async function pruneWorktrees(input: PruneInput, context: CliContext): Pr
       throw new YggError("Non-interactive pruning requires --apply --yes.");
     }
     const accepted = await confirm(
-      `Prune metadata for ${candidates.map((worktree) => worktree.name).join(", ")}?`,
+      `Prune metadata for ${candidates.map((worktree) => style.worktree(worktree.name)).join(", ")}?`,
     );
     if (!accepted) {
       writeLine(context.output.stdout, "Cancelled.");
@@ -72,14 +73,17 @@ export async function pruneWorktrees(input: PruneInput, context: CliContext): Pr
   );
   const removed = candidates.filter((worktree) => !remaining.has(worktree.path));
   await success(
-    `Pruned ${removed.length} stale worktree ${removed.length === 1 ? "registration" : "registrations"}. Branches and directories were not removed.`,
+    `Pruned ${style.value(removed.length)} stale worktree ${removed.length === 1 ? "registration" : "registrations"}. Branches and directories were not removed.`,
     context.output,
   );
 }
 
 function printPrunePreview(worktrees: Worktree[], stream: NodeJS.WritableStream): void {
-  writeLine(stream, "Stale worktree metadata:");
+  writeLine(stream, style.heading("Stale worktree metadata:"));
   for (const worktree of worktrees) {
-    writeLine(stream, `- ${worktree.name}\t${worktree.branch ?? "detached"}\t${worktree.path}`);
+    writeLine(
+      stream,
+      `- ${style.worktree(worktree.name)}\t${style.branch(worktree.branch ?? "detached")}\t${style.path(worktree.path)}`,
+    );
   }
 }

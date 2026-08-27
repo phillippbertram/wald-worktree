@@ -1,17 +1,18 @@
 import type { Command } from "commander";
 import { YggError } from "../domain/errors.js";
+import { style } from "../ui/style.js";
 import { isInteractiveTerminal, isPromptBackError, selectValue } from "../ui/terminal.js";
 import { renderWelcome } from "../ui/welcome.js";
 import { initializeProjectConfigurationForWorktree, showConfiguration } from "./commands/config.js";
 import { createWorktree } from "./commands/create.js";
 import { executeCommand } from "./commands/exec.js";
+import { runProjectHook } from "./commands/hook.js";
 import { initializeWorkspace } from "./commands/init.js";
 import { listWorktrees } from "./commands/list.js";
 import { openWorktree } from "./commands/open.js";
 import { pruneWorktrees } from "./commands/prune.js";
 import { removeWorktrees } from "./commands/remove.js";
 import { runProjectTask } from "./commands/run.js";
-import { setupWorktree } from "./commands/setup.js";
 import { uninitializeWorkspace } from "./commands/uninit.js";
 import type { CliContext } from "./context.js";
 import { findWorkspaceOrNull, writeLine } from "./helpers.js";
@@ -74,13 +75,13 @@ export async function runMainMenu(program: Command, context: CliContext): Promis
             {
               label: "Run project task",
               value: "run",
-              description: "Run a task defined in .ygg.yml.",
+              description: "Run a task from effective project configuration.",
               group: "Project automation",
             },
             {
-              label: "Run worktree setup",
-              value: "setup",
-              description: "Re-run configured post-create steps.",
+              label: "Run lifecycle hook",
+              value: "hook",
+              description: "Run a configured hook without changing Git state.",
               group: "Project automation",
             },
             {
@@ -92,7 +93,7 @@ export async function runMainMenu(program: Command, context: CliContext): Promis
             {
               label: "Create project configuration",
               value: "config-init",
-              description: "Create or update the repository-owned .ygg.yml.",
+              description: "Create or update workspace-local project configuration.",
               group: "Project automation",
             },
             {
@@ -173,15 +174,21 @@ export async function runMainMenu(program: Command, context: CliContext): Promis
         case "run":
           await runProjectTask({}, context);
           break;
-        case "setup":
-          await setupWorktree({}, context);
+        case "hook":
+          await runProjectHook({}, context);
           break;
         case "config":
           await showConfiguration(context);
           break;
         case "config-init": {
           await initializeProjectConfigurationForWorktree(
-            { worktree: undefined, force: false, yes: false },
+            {
+              worktree: undefined,
+              force: false,
+              yes: false,
+              scope: "workspace",
+              fromProject: false,
+            },
             context,
           );
           break;
@@ -190,7 +197,7 @@ export async function runMainMenu(program: Command, context: CliContext): Promis
     } catch (error) {
       if (isPromptBackError(error)) continue;
       if (error instanceof YggError && error.exitCode !== 130) {
-        writeLine(context.output.stderr, `Error: ${error.message}`);
+        writeLine(context.output.stderr, `${style.danger("Error:")} ${error.message}`);
         continue;
       }
       throw error;

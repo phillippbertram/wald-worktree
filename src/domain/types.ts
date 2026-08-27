@@ -80,7 +80,8 @@ export type SymlinkStep = StepBase & {
 };
 
 export type AutomationStep = CommandStep | CopyStep | SymlinkStep;
-export type HookEvent = "pre_create" | "post_create" | "pre_remove" | "post_remove";
+export const hookEvents = ["pre_create", "post_create", "pre_remove", "post_remove"] as const;
+export type HookEvent = (typeof hookEvents)[number];
 
 export type ProjectTask = {
   description?: string;
@@ -104,9 +105,24 @@ export type ProjectConfig = {
   tools: Record<string, ToolProfile>;
 };
 
+export type ProjectConfigOverlay = {
+  version: 1;
+  defaults?: {
+    fetch?: boolean;
+    tool?: string | null;
+  };
+  hooks?: Partial<Record<HookEvent, AutomationStep[]>>;
+  tasks?: Record<string, ProjectTask | null>;
+  tools?: Record<string, ToolProfile | null>;
+};
+
 export type ProjectConfigDocument = {
   config: ProjectConfig;
   hash: string;
   path: string;
+  sources: {
+    repository: string | null;
+    workspace: string | null;
+  };
   requiresTrust: boolean;
 };

@@ -16,6 +16,7 @@ describe("CLI contract", () => {
       "open",
       "exec",
       "run",
+      "hook",
       "setup",
       "remove",
       "prune",
@@ -76,10 +77,28 @@ describe("CLI contract", () => {
     ).rejects.toThrow(/--cd: Cannot be combined with --open or --tool/u);
   });
 
+  it("validates project configuration scope combinations before workspace discovery", async () => {
+    const output = new PassThrough();
+    const program = createProgram({ stdout: output, stderr: output });
+
+    await expect(
+      program.parseAsync(["node", "ygg", "init", "--config-scope", "project"]),
+    ).rejects.toThrow(/--config-scope: Requires --config/u);
+    await expect(
+      program.parseAsync(["node", "ygg", "config", "init", "--scope", "project", "--from-project"]),
+    ).rejects.toThrow(/--from-project: Requires --scope workspace/u);
+  });
+
   it("keeps onboarding and built-in tools discoverable in help", () => {
     const output = new PassThrough();
     const program = createProgram({ stdout: output, stderr: output });
     const init = program.commands.find((command) => command.name() === "init");
+    const configInit = program.commands
+      .find((command) => command.name() === "config")
+      ?.commands.find((command) => command.name() === "init");
+    const hookRun = program.commands
+      .find((command) => command.name() === "hook")
+      ?.commands.find((command) => command.name() === "run");
     const create = program.commands.find((command) => command.name() === "create");
     const open = program.commands.find((command) => command.name() === "open");
     let captured = "";
@@ -97,6 +116,8 @@ describe("CLI contract", () => {
     const initHelp = captureHelp(init);
     const createHelp = captureHelp(create);
     const openHelp = captureHelp(open);
+    const configInitHelp = captureHelp(configInit);
+    const hookRunHelp = captureHelp(hookRun);
 
     expect(rootHelp).toContain("Usage: ygg");
     expect(rootHelp).toContain("🌳 Create and work in isolated Git checkouts safely.");
@@ -105,8 +126,18 @@ describe("CLI contract", () => {
     expect(initHelp).toContain("Keep an existing checkout or create a standalone workspace root");
     expect(initHelp).toContain("inside the workspace root for");
     expect(initHelp).toContain("cloned repositories");
+    expect(initHelp).toContain("--config-scope <scope>");
     expect(createHelp).toContain("ygg create feature/payment --cd");
     expect(createHelp).toContain("codex-app");
     expect(openHelp).toContain("ygg open feature-payment --tool code");
+    expect(configInitHelp).toContain("--scope <scope>");
+    expect(configInitHelp).toContain("--from-project");
+    expect(hookRunHelp).toContain("<event> [worktree]");
+    expect(hookRun?.registeredArguments[0]?.argChoices).toEqual([
+      "pre_create",
+      "post_create",
+      "pre_remove",
+      "post_remove",
+    ]);
   });
 });

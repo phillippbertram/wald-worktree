@@ -3,6 +3,7 @@ import { z } from "zod";
 import { toErrorMessage, YggError } from "../../domain/errors.js";
 import type { ProjectConfigDocument, Worktree } from "../../domain/types.js";
 import { builtInToolNames } from "../../services/tool-service.js";
+import { style } from "../../ui/style.js";
 import {
   isInteractiveTerminal,
   isPromptBackError,
@@ -25,7 +26,7 @@ export function registerOpenCommand(program: Command, context: CliContext): void
     .command("open")
     .description("Open a worktree in an editor, app, or agent tool")
     .argument("[worktree]", "Worktree name, branch, or path")
-    .option("--tool <profile>", "Tool profile from built-ins or .ygg.yml")
+    .option("--tool <profile>", "Tool profile from built-ins or project configuration")
     .addHelpText(
       "after",
       `\nBuilt-in tools: ${builtInToolNames.join(", ")}\n\nExamples:\n  ygg open feature-payment --tool code\n  ygg open feature-payment --tool codex\n`,
@@ -78,7 +79,7 @@ export async function openSelectedWorktree(
   const workspace = await context.workspaces.find();
   const project =
     options.project === undefined
-      ? await context.workflow.projectForWorktree(worktree)
+      ? await context.workflow.projectForWorktree(workspace, worktree)
       : options.project;
   const available = await context.tools.availableProfiles(project);
   if (available.length === 0) throw new YggError("No supported editor or agent tool is available.");
@@ -90,9 +91,9 @@ export async function openSelectedWorktree(
         throw new YggError("Tool is required without a TTY. Use --tool.");
       }
       tool = await searchSelect(
-        `Open › Tool · Open ${worktree.name} with:`,
+        `Open › Tool · Open ${style.worktree(worktree.name)} with:`,
         available.map(({ name, profile }) => ({
-          label: name,
+          label: style.value(name),
           value: name,
           description: profile.description,
         })),
@@ -118,6 +119,9 @@ export async function openSelectedWorktree(
     });
   }
   if (!options.silent) {
-    await success(`Opened ${worktree.name} with ${tool}`, context.output);
+    await success(
+      `Opened ${style.worktree(worktree.name)} with ${style.value(tool)}`,
+      context.output,
+    );
   }
 }

@@ -5,6 +5,7 @@ import { PassThrough } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CliContext } from "../src/cli/context.js";
 import { initializeProjectConfiguration } from "../src/cli/project-config-wizard.js";
+import type { Workspace } from "../src/domain/types.js";
 import { ConfigService } from "../src/services/config-service.js";
 import { ProjectConfigInitializer } from "../src/services/project-config-initializer.js";
 import { PromptBackError } from "../src/ui/terminal.js";
@@ -50,6 +51,7 @@ vi.mock("../src/ui/terminal.js", async (importOriginal) => {
 
 describe("interactive project configuration wizard", () => {
   let root: string;
+  let workspace: Workspace;
 
   beforeEach(async () => {
     prompts.confirmations = [];
@@ -58,6 +60,8 @@ describe("interactive project configuration wizard", () => {
     prompts.manySelections = [];
     prompts.manyCalls = [];
     root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "ygg-config-wizard-test-")));
+    await fs.mkdir(path.join(root, ".ygg"));
+    workspace = createWorkspace(root);
     await fs.writeFile(path.join(root, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n", "utf8");
     await fs.writeFile(
       path.join(root, "package.json"),
@@ -76,8 +80,9 @@ describe("interactive project configuration wizard", () => {
     prompts.confirmations.push(true, false, false, false, true);
 
     const document = await initializeProjectConfiguration(
+      workspace,
       root,
-      { force: false, yes: false },
+      { force: false, yes: false, scope: "workspace", fromProject: false },
       createContext(),
     );
 
@@ -94,8 +99,9 @@ describe("interactive project configuration wizard", () => {
     prompts.manySelections.push([]);
 
     const document = await initializeProjectConfiguration(
+      workspace,
       root,
-      { force: false, yes: false },
+      { force: false, yes: false, scope: "workspace", fromProject: false },
       createContext(),
     );
 
@@ -114,8 +120,9 @@ describe("interactive project configuration wizard", () => {
 
   it("keeps detected verify defaults for non-interactive initialization", async () => {
     const document = await initializeProjectConfiguration(
+      workspace,
       root,
-      { force: false, yes: true },
+      { force: false, yes: true, scope: "workspace", fromProject: false },
       createContext(),
     );
 
@@ -134,7 +141,12 @@ describe("interactive project configuration wizard", () => {
     prompts.confirmations.push(false, new PromptBackError(), false, true, false, false, true);
     prompts.selections.push("__none__");
 
-    await initializeProjectConfiguration(root, { force: false, yes: false }, createContext());
+    await initializeProjectConfiguration(
+      workspace,
+      root,
+      { force: false, yes: false, scope: "workspace", fromProject: false },
+      createContext(),
+    );
 
     const fetchCalls = prompts.confirmationCalls.filter((call) =>
       call.question.includes("Fetch before resolving branches"),
@@ -153,4 +165,23 @@ function createContext(): CliContext {
     configs: new ConfigService(),
     projectConfigs: new ProjectConfigInitializer(),
   } as unknown as CliContext;
+}
+
+function createWorkspace(root: string): Workspace {
+  return {
+    root,
+    configPath: path.join(root, ".ygg", "workspace.yml"),
+    sharedDir: path.join(root, ".ygg", "shared"),
+    gitDir: path.join(root, "repo.git"),
+    worktreeDir: root,
+    primaryWorktree: null,
+    config: {
+      version: 1,
+      mode: "managed",
+      paths: { git: "../repo.git", worktrees: "..", primaryWorktree: null },
+      remote: null,
+      defaultBranch: "main",
+      trustedProjectConfig: null,
+    },
+  };
 }

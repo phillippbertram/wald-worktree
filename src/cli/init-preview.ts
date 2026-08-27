@@ -3,6 +3,7 @@ import type {
   AdoptionInspection,
   ManagedInitializationPlan,
 } from "../services/workspace-service.js";
+import { style } from "../ui/style.js";
 
 export type ManagedWorkspacePreview = {
   mode: "remote" | "copy";
@@ -130,7 +131,9 @@ function renderManagedTree(target: ManagedInitializationPlan): string {
 
   const lines = [renderPathTree(target.root, entries)];
   if (target.worktreeDir === target.root) {
-    lines.push(`New worktrees: ${path.join(target.root, "<branch>")}  optional next`);
+    lines.push(
+      `${style.label("New worktrees:")} ${style.path(path.join(target.root, "<branch>"))}  optional next`,
+    );
   }
   return lines.join("\n\n");
 }
@@ -255,12 +258,17 @@ function renderChildren(node: TreeNode, prefix = ""): string[] {
 }
 
 function formatNode(node: TreeNode): string {
-  if (node.label) return node.label;
-  return node.kind === "directory" ? `${node.name}${path.sep}` : node.name;
+  if (node.label) return style.path(node.label);
+  return style.path(node.kind === "directory" ? `${node.name}${path.sep}` : node.name);
 }
 
 function formatAnnotation(annotation: string | undefined): string {
-  return annotation ? `  ${annotation}` : "";
+  if (!annotation) return "";
+  if (annotation.startsWith("new:")) return `  ${style.success("new:")}${annotation.slice(4)}`;
+  if (annotation.startsWith("existing:")) {
+    return `  ${style.label("existing:")}${annotation.slice(9)}`;
+  }
+  return `  ${annotation}`;
 }
 
 function commonAncestor(paths: string[]): string {

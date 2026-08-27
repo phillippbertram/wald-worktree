@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { PassThrough } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GitClient } from "../src/infrastructure/git-client.js";
 import { ConfigService } from "../src/services/config-service.js";
@@ -111,6 +112,63 @@ tasks:
     expect(await worktrees.list(workspace)).toEqual([]);
   });
 
+  it("applies one workspace-local overlay to repository behavior during creation and tasks", async () => {
+    await commitProjectConfig(
+      repository,
+      `version: 1
+hooks:
+  post_create:
+    - type: command
+      argv: [node, -e, "require('node:fs').writeFileSync('base.log', 'base')"]
+tasks:
+  inherited:
+    steps:
+      - type: command
+        argv: [node, --version]
+  removed:
+    steps:
+      - type: command
+        argv: [node, --version]
+`,
+    );
+    const workspace = await workspaces.initialize(
+      repository.remote,
+      path.join(temporaryRoot, "overlay-workspace"),
+    );
+    const overlay = configs.parseWorkspaceProjectConfig(
+      `version: 1
+hooks:
+  post_create:
+    - type: command
+      argv: [node, -e, "require('node:fs').writeFileSync('local.log', 'local')"]
+tasks:
+  removed: null
+  local:
+    steps:
+      - type: command
+        argv: [node, -e, "require('node:fs').writeFileSync('task.log', 'local')"]
+`,
+      path.join(workspace.root, ".ygg", "project.yml"),
+    ).config;
+    await configs.writeWorkspaceProjectConfig(workspace, overlay);
+    const workflow = new WorktreeWorkflowService(git, worktrees, configs);
+    const plan = await workflow.planCreate(workspace, { branch: "main", fetch: false });
+
+    expect(plan.project?.sources.repository).toBe("refs/heads/main:.ygg.yml");
+    expect(plan.project?.sources.workspace).toBe(path.join(workspace.root, ".ygg", "project.yml"));
+    expect(Object.keys(plan.project?.config.tasks ?? {})).toEqual(["inherited", "local"]);
+    if (!plan.project) throw new Error("Expected effective project configuration.");
+    await configs.trust(workspace, plan.project);
+    const created = await workflow.executeCreate(plan);
+
+    await expect(fs.stat(path.join(created.path, "base.log"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    expect(await fs.readFile(path.join(created.path, "local.log"), "utf8")).toBe("local");
+    await workflow.runTask(workspace, created, "local");
+    expect(await fs.readFile(path.join(created.path, "task.log"), "utf8")).toBe("local");
+  });
+
   it("keeps a created worktree when post-create setup fails", async () => {
     await commitProjectConfig(
       repository,
@@ -184,6 +242,13 @@ tasks:
         from: missing.txt
         to: optional.txt
         optional: true
+  optional-unavailable:
+    steps:
+      - type: symlink
+        source: primary
+        from: .env
+        to: unavailable.env
+        optional: true
 `,
     );
     const workspace = await workspaces.initialize(
@@ -208,7 +273,17 @@ tasks:
     const plan = await workflow.planCreate(workspace, { branch: "main", fetch: false });
     if (!plan.project) throw new Error("Expected project configuration.");
     await configs.trust(workspace, plan.project);
-    const created = await workflow.executeCreate(plan);
+    const createOutput = new PassThrough();
+    const created = await workflow.executeCreate(plan, { output: createOutput });
+
+    expect(readOutput(createOutput)).toBe(
+      [
+        "Symlinked shared:env/.env -> target:.env",
+        "Symlinked shared:env/apps/api/.env -> target:apps/api/.env",
+        "Copied shared:config/tool.json -> target:.local/tool.json",
+        "",
+      ].join("\n"),
+    );
 
     const rootLink = await fs.readlink(path.join(created.path, ".env"));
     expect(path.isAbsolute(rootLink)).toBe(false);
@@ -222,7 +297,18 @@ tasks:
     await expect(workflow.runHook(workspace, created, "post_create")).rejects.toThrow(
       /Target path already exists/u,
     );
-    await workflow.runTask(workspace, created, "optional-local");
+    const optionalOutput = new PassThrough();
+    await workflow.runTask(workspace, created, "optional-local", { output: optionalOutput });
+    expect(readOutput(optionalOutput)).toBe(
+      "Skipped optional copy shared:missing.txt -> target:optional.txt (source not found)\n",
+    );
+    const unavailableOutput = new PassThrough();
+    await workflow.runTask(workspace, created, "optional-unavailable", {
+      output: unavailableOutput,
+    });
+    expect(readOutput(unavailableOutput)).toBe(
+      "Skipped optional symlink primary:.env -> target:unavailable.env (source unavailable)\n",
+    );
     await expect(fs.stat(path.join(created.path, "optional.txt"))).rejects.toMatchObject({
       code: "ENOENT",
     });
@@ -235,7 +321,11 @@ tasks:
       '{"version":2}\n',
       "utf8",
     );
-    await workflow.runTask(workspace, created, "sync-local");
+    const overwriteOutput = new PassThrough();
+    await workflow.runTask(workspace, created, "sync-local", { output: overwriteOutput });
+    expect(readOutput(overwriteOutput)).toBe(
+      "Copied shared:config/tool.json -> target:.local/tool.json (replaced existing target)\n",
+    );
     expect(await fs.readFile(path.join(created.path, ".local", "tool.json"), "utf8")).toBe(
       '{"version":2}\n',
     );
@@ -372,7 +462,17 @@ tasks:
     const plan = await workflow.planCreate(workspace, { branch: "main", fetch: false });
     if (!plan.project) throw new Error("Expected project configuration.");
     await configs.trust(workspace, plan.project);
-    const created = await workflow.executeCreate(plan);
+    const createOutput = new PassThrough();
+    const created = await workflow.executeCreate(plan, { output: createOutput });
+
+    expect(readOutput(createOutput)).toBe(
+      [
+        "Symlinked shared:env/.env -> target:.env",
+        "Symlinked shared:env/apps/api/.env -> target:apps/api/.env",
+        "Symlinked shared:env/apps/web/.env.local -> target:apps/web/.env.local",
+        "",
+      ].join("\n"),
+    );
 
     for (const file of [".env", "apps/api/.env", "apps/web/.env.local"]) {
       const target = path.join(created.path, file);
@@ -386,7 +486,11 @@ tasks:
     expect(
       await fs.readFile(path.join(created.path, ".snapshots", "apps", "web", ".env.local"), "utf8"),
     ).toBe("WEB=true\n");
-    await workflow.runTask(workspace, created, "optional-empty");
+    const optionalOutput = new PassThrough();
+    await workflow.runTask(workspace, created, "optional-empty", { output: optionalOutput });
+    expect(readOutput(optionalOutput)).toBe(
+      "Skipped optional copy shared:env/**/*.missing -> target:optional (no files matched)\n",
+    );
     await expect(fs.stat(path.join(created.path, "optional"))).rejects.toMatchObject({
       code: "ENOENT",
     });
@@ -445,4 +549,8 @@ async function commitProjectConfig(
 
 async function gitRun(cwd: string, args: string[]): Promise<void> {
   await new GitClient().run(args, { cwd });
+}
+
+function readOutput(output: PassThrough): string {
+  return output.read()?.toString() ?? "";
 }

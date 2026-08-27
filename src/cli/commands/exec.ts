@@ -1,6 +1,7 @@
 import type { Command } from "commander";
 import { z } from "zod";
 import { YggError } from "../../domain/errors.js";
+import { style } from "../../ui/style.js";
 import { isInteractiveTerminal, isPromptBackError, promptText } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
 import { resolveWorktree, writeLine } from "../helpers.js";
@@ -66,7 +67,10 @@ export async function executeCommand(
       continue;
     }
     if (!rawCommand) throw new YggError("Command cannot be empty.");
-    writeLine(context.output.stderr, `Running through /bin/sh: ${rawCommand}`);
+    writeLine(
+      context.output.stderr,
+      `${style.label("Running through /bin/sh:")} ${style.command(rawCommand)}`,
+    );
     await context.processes.runInteractiveShell(rawCommand, selected.path);
     return;
   }

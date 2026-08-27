@@ -32,8 +32,9 @@ project/
 └── feature-ui/              Codex App edits and commits feature/ui here
 ```
 
-Built-in profiles cover Code, Cursor, Zed, Codex, Codex App, and Claude. A repository can define
-additional profiles under `tools` in `.ygg.yml`.
+Built-in profiles cover Code, Cursor, Zed, Codex, Codex App, and Claude. Effective project
+configuration can define additional profiles under `tools`; workspace-local definitions override
+same-named repository profiles.
 
 Open foreground agents from separate terminals:
 

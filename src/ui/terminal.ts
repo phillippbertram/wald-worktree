@@ -10,6 +10,7 @@ import ora from "ora";
 import pc from "picocolors";
 import { YggError } from "../domain/errors.js";
 import type { Worktree } from "../domain/types.js";
+import { style } from "./style.js";
 
 type Choice = {
   label: string;
@@ -88,9 +89,9 @@ export async function selectWorktree(
   const selectedPath = await searchSelect(
     "Select a worktree:",
     worktrees.map((worktree) => ({
-      label: `${worktree.name}  ${worktree.branch ?? "detached"}`,
+      label: `${style.worktree(worktree.name)}  ${style.branch(worktree.branch ?? "detached")}`,
       value: worktree.path,
-      description: `${worktree.role}, ${worktree.state}`,
+      description: `${worktree.role}, ${style.state(worktree.state, worktree.state)}`,
     })),
     options,
   );
@@ -172,9 +173,9 @@ export async function selectManyWorktrees(
   const selectedPaths = await selectManyValues(
     question,
     worktrees.map((worktree) => ({
-      label: `${worktree.name}  ${worktree.branch ?? "detached"}`,
+      label: `${style.worktree(worktree.name)}  ${style.branch(worktree.branch ?? "detached")}`,
       value: worktree.path,
-      description: worktree.state,
+      description: style.state(worktree.state, worktree.state),
     })),
     options,
   );
@@ -210,8 +211,10 @@ export async function printWorktreeTable(worktrees: Worktree[]): Promise<void> {
       worktree.path,
     ]),
     (cell, column, row) => {
-      if (column === 0) return pc.bold(cell);
-      if (column === 3) return colorState(cell, worktrees[row]?.state);
+      if (column === 0) return style.worktree(cell);
+      if (column === 1) return style.branch(cell);
+      if (column === 3) return style.state(cell, worktrees[row]?.state);
+      if (column === 4) return style.path(cell);
       return cell;
     },
   );
@@ -219,7 +222,7 @@ export async function printWorktreeTable(worktrees: Worktree[]): Promise<void> {
 
 export async function printKeyValueTable(rows: Array<[string, string]>): Promise<void> {
   printTable(["SETTING", "VALUE"], rows, (cell, column) =>
-    column === 0 ? pc.cyan(pc.bold(cell)) : cell,
+    column === 0 ? style.label(cell) : style.value(cell),
   );
 }
 
@@ -257,20 +260,6 @@ function printTable(
   process.stdout.write(`${render(headers, -1, true)}\n`);
   for (const [index, row] of rows.entries()) {
     process.stdout.write(`${render(row, index)}\n`);
-  }
-}
-
-function colorState(value: string, state: Worktree["state"] | undefined): string {
-  switch (state) {
-    case "clean":
-      return pc.green(value);
-    case "modified":
-      return pc.yellow(value);
-    case "locked":
-    case "missing":
-      return pc.red(value);
-    default:
-      return value;
   }
 }
 

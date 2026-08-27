@@ -22,7 +22,8 @@ commands in non-interactive agent sessions and include required confirmation fla
 - For hooks, tasks, trust, or failures during setup, read
   [references/automation.md](references/automation.md).
 - For starting an editor or coding agent, use `ygg open <worktree> --tool <profile>`. Inspect
-  built-in profiles with `ygg open --help` and project profiles in `.ygg.yml` when needed.
+  built-in profiles with `ygg open --help` and effective project profiles with `ygg config` when
+  needed.
 
 Do not use `--force` for removal without verifying that dirty or unmerged work can be discarded.
 Never infer permission to delete branches or the primary checkout; `ygg` does not perform those
@@ -35,6 +36,7 @@ repair it. To stop managing a repository with Ygg, preview `ygg uninit`; apply n
 with `ygg uninit --apply --yes`. Never add `--force` without permission to discard local metadata and
 shared files.
 
-If `.ygg.yml` is untrusted, inspect the reported hooks, tasks, and tools before running
-`ygg config trust --yes`. A formatting-only edit preserves its semantic trust, but changed behavior
-requires a new decision.
+If effective project configuration is untrusted, inspect both reported sources plus the hooks,
+tasks, and tools before running `ygg config trust --yes`. Formatting-only edits preserve semantic
+trust, but changed behavior in either source requires a new decision. Use
+`ygg hook run <event> <worktree>` to test a hook without creating or removing a worktree.

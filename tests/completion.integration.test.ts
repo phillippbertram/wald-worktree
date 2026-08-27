@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { stripVTControlCharacters } from "node:util";
 import { execa } from "execa";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -92,6 +93,22 @@ tools:
     await Promise.all([
       fs.writeFile(path.join(workspace, "main", ".ygg.yml"), projectConfig, "utf8"),
       fs.writeFile(path.join(workspace, "feature-local", ".ygg.yml"), projectConfig, "utf8"),
+      fs.writeFile(
+        path.join(workspace, ".ygg", "project.yml"),
+        `version: 1
+tasks:
+  local-check:
+    description: Local workspace check
+    steps:
+      - type: command
+        argv: [node, --version]
+tools:
+  local-agent:
+    description: Local workspace agent
+    command: [node, --version]
+`,
+        "utf8",
+      ),
     ]);
   });
 
@@ -118,11 +135,30 @@ tools:
 
   it("completes branches and worktrees with descriptions", async () => {
     const branches = await runCli(workspace, "complete", "--", "create", "");
+    const hookEvents = await runCli(workspace, "complete", "--", "hook", "run", "");
+    const hookWorktrees = await runCli(
+      workspace,
+      "complete",
+      "--",
+      "hook",
+      "run",
+      "post_create",
+      "",
+    );
 
     expect(branches.exitCode, branches.stderr).toBe(0);
     expect(branches.stdout).toContain("feature/local\tlocal branch");
     expect(branches.stdout).toContain("feature/remote\torigin branch");
     expect(branches.stdout.match(/^main\t/gmu)).toHaveLength(1);
+    expect(suggestionValues(hookEvents.stdout)).toEqual([
+      "pre_create",
+      "post_create",
+      "pre_remove",
+      "post_remove",
+    ]);
+    expect(suggestionValues(hookWorktrees.stdout)).toEqual(
+      expect.arrayContaining(["main", "feature-local"]),
+    );
 
     for (const command of ["cd", "open", "setup", "remove", "exec"]) {
       const worktrees = await runCli(workspace, "complete", "--", command, "");
@@ -139,6 +175,7 @@ tools:
 
     expect(tasks.exitCode, tasks.stderr).toBe(0);
     expect(tasks.stdout).toContain("verify\tVerify configured project");
+    expect(tasks.stdout).toContain("local-check\tLocal workspace check");
     expect(suggestionValues(runWorktree.stdout)).toEqual(
       expect.arrayContaining(["main", "feature-local"]),
     );
@@ -149,6 +186,28 @@ tools:
       const tools = await runCli(workspace, "complete", "--", command, "--tool", "");
       expect(tools.exitCode, tools.stderr).toBe(0);
       expect(tools.stdout).toContain("fixture-agent\tFixture agent");
+      expect(tools.stdout).toContain("local-agent\tLocal workspace agent");
     }
+  });
+
+  it("colors human-readable output without formatting JSON", async () => {
+    const env = { FORCE_COLOR: "1", NO_COLOR: undefined };
+    const colored = await execa(process.execPath, cliArguments("list"), {
+      cwd: workspace,
+      env,
+      reject: false,
+    });
+    const json = await execa(process.execPath, cliArguments("list", "--json"), {
+      cwd: workspace,
+      env,
+      reject: false,
+    });
+
+    expect(colored.exitCode, colored.stderr).toBe(0);
+    expect(colored.stdout).toContain("\u001B[");
+    expect(stripVTControlCharacters(colored.stdout)).toContain("main\tmain\tlinked\tmodified");
+    expect(json.exitCode, json.stderr).toBe(0);
+    expect(json.stdout).not.toContain("\u001B[");
+    expect(JSON.parse(json.stdout)).toEqual(expect.arrayContaining([expect.any(Object)]));
   });
 });

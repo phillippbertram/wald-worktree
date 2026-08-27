@@ -11,6 +11,7 @@ import type {
 } from "../domain/types.js";
 import { isPathInsideOrEqual } from "../infrastructure/path-utils.js";
 import { ProcessRunner } from "../infrastructure/process-runner.js";
+import { style } from "../ui/style.js";
 
 export type AutomationContext = {
   workspace: Workspace;
@@ -58,7 +59,7 @@ export class AutomationService {
         if (step.continueOnError) {
           writeLine(
             context.output ?? process.stderr,
-            `Warning: step ${index + 1} failed and was allowed to continue: ${toErrorMessage(error)}`,
+            `${style.warning("Warning:")} step ${style.value(index + 1)} failed and was allowed to continue: ${toErrorMessage(error)}`,
           );
           continue;
         }
@@ -116,6 +117,13 @@ export class AutomationService {
     const sourceRoot = resolveSourceRoot(step.source, context);
     if (!sourceRoot) {
       if (step.optional) {
+        writeFileStepSkip(
+          step,
+          configuredSourcePath(step),
+          step.to,
+          "source unavailable",
+          context.output,
+        );
         return;
       }
       throw new YggError(`Cannot resolve ${step.source} source for ${step.type} step.`);
@@ -128,6 +136,7 @@ export class AutomationService {
     const sourceStat = await lstatOrNull(source);
     if (!sourceStat) {
       if (step.optional) {
+        writeFileStepSkip(step, step.from, step.to, "source not found", context.output);
         return;
       }
       throw new YggError(`Source path does not exist: ${source}`);
@@ -144,6 +153,7 @@ export class AutomationService {
         source,
         sourceStat,
         context.targetPath,
+        context.output,
       );
       return;
     }
@@ -162,11 +172,25 @@ export class AutomationService {
 
     if (step.type === "copy") {
       await copyWithoutSymlinks(source, target);
+      writeFileStepSuccess(
+        step,
+        path.relative(sourceRoot, source),
+        path.relative(context.targetPath, target),
+        Boolean(targetStat),
+        context.output,
+      );
       return;
     }
 
     const realSource = await fs.realpath(source);
     await fs.symlink(path.relative(path.dirname(target), realSource), target);
+    writeFileStepSuccess(
+      step,
+      path.relative(sourceRoot, source),
+      path.relative(context.targetPath, target),
+      Boolean(targetStat),
+      context.output,
+    );
   }
 }
 
@@ -176,6 +200,7 @@ type PlannedFileOperation = {
   source: string;
   realSource: string;
   target: string;
+  replacesTarget: boolean;
 };
 
 async function runGlobFileStep(
@@ -184,6 +209,7 @@ async function runGlobFileStep(
   sourceDirectory: string,
   sourceStat: Awaited<ReturnType<typeof fs.lstat>>,
   targetRoot: string,
+  output?: NodeJS.WritableStream,
 ): Promise<void> {
   if (!sourceStat.isDirectory() || sourceStat.isSymbolicLink()) {
     throw new YggError(`Glob source must be a directory: ${sourceDirectory}`);
@@ -232,11 +258,17 @@ async function runGlobFileStep(
       throw new YggError(`Glob produces the same target more than once: ${target}`);
     }
     targets.add(target);
-    operations.push({ source: candidate, realSource: await fs.realpath(candidate), target });
+    operations.push({
+      source: candidate,
+      realSource: await fs.realpath(candidate),
+      target,
+      replacesTarget: false,
+    });
   }
 
   if (operations.length === 0) {
     if (step.optional) {
+      writeFileStepSkip(step, configuredSourcePath(step), step.to, "no files matched", output);
       return;
     }
     throw new YggError(`Glob did not match any files: ${step.glob}`);
@@ -248,6 +280,7 @@ async function runGlobFileStep(
     if (targetStat && !step.overwrite) {
       throw new YggError(`Target path already exists: ${operation.target}`);
     }
+    operation.replacesTarget = Boolean(targetStat);
   }
 
   for (const operation of operations) {
@@ -263,7 +296,58 @@ async function runGlobFileStep(
         operation.target,
       );
     }
+    writeFileStepSuccess(
+      step,
+      path.relative(sourceRoot, operation.source),
+      path.relative(targetRoot, operation.target),
+      operation.replacesTarget,
+      output,
+    );
   }
+}
+
+function writeFileStepSuccess(
+  step: FileStep,
+  source: string,
+  target: string,
+  replaced: boolean,
+  output?: NodeJS.WritableStream,
+): void {
+  if (!output) return;
+  const verb = step.type === "copy" ? "Copied" : "Symlinked";
+  const suffix = replaced ? " (replaced existing target)" : "";
+  writeLine(
+    output,
+    `${style.label(verb)} ${style.path(scopedPath(step.source, source))} -> ${style.path(scopedPath("target", target))}${suffix}`,
+  );
+}
+
+function writeFileStepSkip(
+  step: FileStep,
+  source: string,
+  target: string,
+  reason: string,
+  output?: NodeJS.WritableStream,
+): void {
+  if (!output) return;
+  writeLine(
+    output,
+    `${style.warning("Skipped")} optional ${step.type} ${style.path(scopedPath(step.source, source))} -> ${style.path(scopedPath("target", target))} (${reason})`,
+  );
+}
+
+function configuredSourcePath(step: FileStep & { glob?: string }): string {
+  const from = stripTrailingSlash(step.from);
+  return step.glob ? [from, step.glob].filter(Boolean).join("/") : step.from;
+}
+
+function stripTrailingSlash(value: string): string {
+  return value === "." ? "" : value.replace(/\/$/u, "");
+}
+
+function scopedPath(scope: StepSource | "target", relativePath: string): string {
+  const normalized = relativePath.split(path.sep).join("/") || ".";
+  return `${scope}:${normalized}`;
 }
 
 function resolveWorkingDirectory(

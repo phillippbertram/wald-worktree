@@ -17,12 +17,14 @@ editor or agent. These destinations cannot be combined. When run inside a worktr
 `--from HEAD` uses that worktree's current commit; without `--from`, new branches use the configured
 default branch.
 
-Fetching follows the `.ygg.yml` default. Override it only when the task requires it with
-`--fetch` or `--no-fetch`. Use `--tool <profile>` to open an editor or agent after setup.
+Fetching follows the effective project-configuration default. Override it only when the task
+requires it with `--fetch` or `--no-fetch`. Use `--tool <profile>` to open an editor or agent after
+setup.
 
 Creation runs trusted `pre_create` before Git creates the checkout, followed by `post_create`. If
 the latter phase fails, keep the created checkout, inspect the error, fix the
-cause, and retry the printed `ygg setup <worktree>` command.
+cause, and retry the printed `ygg setup <worktree>` command. To test hooks independently after a
+configuration change, use `ygg hook run <event> <worktree>`; this runs no Git creation or removal.
 
 ## Execute and remove
 
