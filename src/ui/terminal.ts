@@ -1,16 +1,18 @@
+import { stripVTControlCharacters } from "node:util";
 import {
-  checkbox,
-  input,
-  confirm as inquirerConfirm,
-  Separator,
-  search,
+  autocomplete,
+  confirm as clackConfirm,
+  spinner as createSpinner,
+  isCancel,
+  log,
+  multiselect,
   select,
-} from "@inquirer/prompts";
-import ora from "ora";
-import pc from "picocolors";
+  text,
+} from "@clack/prompts";
 import { YggError } from "../domain/errors.js";
 import type { Worktree } from "../domain/types.js";
 import { style } from "./style.js";
+import { renderTable } from "./table.js";
 
 type Choice = {
   label: string;
@@ -18,6 +20,13 @@ type Choice = {
   description?: string;
   checked?: boolean;
   group?: string;
+};
+
+type ClackChoice = {
+  value: string;
+  label: string;
+  hint?: string;
+  disabled?: boolean;
 };
 
 export type PromptNavigation = "back" | "cancel" | "exit";
@@ -55,13 +64,14 @@ export async function runTask<T>(label: string, task: () => Promise<T>): Promise
     return await task();
   }
 
-  const spinner = ora({ text: label, stream: process.stderr }).start();
+  const spinner = createSpinner({ output: process.stderr, withGuide: false });
+  spinner.start(label);
   try {
     const result = await task();
-    spinner.stop();
+    spinner.clear();
     return result;
   } catch (error) {
-    spinner.stop();
+    spinner.clear();
     throw error;
   }
 }
@@ -72,13 +82,7 @@ export async function confirm(
   _options: PromptOptions = {},
 ): Promise<boolean> {
   return await promptWithNavigation((signal) =>
-    inquirerConfirm(
-      {
-        message: question,
-        default: defaultValue,
-      },
-      { signal },
-    ),
+    clackConfirm({ message: question, initialValue: defaultValue, signal }),
   );
 }
 
@@ -103,18 +107,15 @@ export async function selectValue(
   choices: Choice[],
   options: PromptOptions = {},
 ): Promise<string> {
-  const selected = await promptWithNavigation((signal) =>
-    select(
-      {
-        message: question,
-        choices: toInquirerChoices(choices),
-        default: options.initialValue,
-        pageSize: 10,
-      },
-      { signal },
-    ),
+  return await promptWithNavigation((signal) =>
+    select({
+      message: question,
+      options: toClackChoices(choices, true),
+      initialValue: options.initialValue,
+      maxItems: 10,
+      signal,
+    }),
   );
-  return selected;
 }
 
 export async function searchSelect(
@@ -122,24 +123,25 @@ export async function searchSelect(
   choices: Choice[],
   options: PromptOptions = {},
 ): Promise<string> {
-  const selected = await promptWithNavigation((signal) =>
-    search(
-      {
-        message: question,
-        pageSize: 10,
-        default: options.initialValue,
-        source: (term) => {
-          const normalized = term?.trim().toLocaleLowerCase() ?? "";
-          const matches = choices.filter((option) =>
-            `${option.label} ${option.description ?? ""}`.toLocaleLowerCase().includes(normalized),
-          );
-          return matches.map(toInquirerChoice);
-        },
+  const choicesByValue = new Map(choices.map((choice) => [choice.value, choice]));
+  return await promptWithNavigation((signal) =>
+    autocomplete({
+      message: question,
+      options: toClackChoices(choices, false),
+      initialValue: options.initialValue,
+      maxItems: 10,
+      signal,
+      filter: (term, option) => {
+        const choice = choicesByValue.get(option.value);
+        const searchable = choice
+          ? `${choice.label} ${choice.description ?? ""} ${choice.value}`
+          : `${option.label ?? ""} ${option.hint ?? ""} ${option.value}`;
+        return stripVTControlCharacters(searchable)
+          .toLocaleLowerCase()
+          .includes(term.trim().toLocaleLowerCase());
       },
-      { signal },
-    ),
+    }),
   );
-  return selected;
 }
 
 export async function selectManyValues(
@@ -148,17 +150,16 @@ export async function selectManyValues(
   options: PromptOptions = {},
 ): Promise<string[]> {
   return await promptWithNavigation((signal) =>
-    checkbox(
-      {
-        message: question,
-        choices: choices.map((option) => ({
-          ...toInquirerChoice(option),
-          checked: options.initialValues?.includes(option.value) ?? option.checked,
-        })),
-        pageSize: 10,
-      },
-      { signal },
-    ),
+    multiselect({
+      message: question,
+      options: toClackChoices(choices, false),
+      initialValues:
+        options.initialValues ??
+        choices.filter((choice) => choice.checked).map((choice) => choice.value),
+      maxItems: 10,
+      required: false,
+      signal,
+    }),
   );
 }
 
@@ -186,13 +187,7 @@ export async function promptText(
 ): Promise<string> {
   return (
     await promptWithNavigation((signal) =>
-      input(
-        {
-          message: question,
-          default: defaultValue,
-        },
-        { signal },
-      ),
+      text({ message: question, initialValue: defaultValue, signal }),
     )
   ).trim();
 }
@@ -209,28 +204,32 @@ export async function printWorktreeTable(worktrees: Worktree[]): Promise<void> {
     }
     return;
   }
-  printTable(
-    ["NAME", "BRANCH", "ROLE", "STATUS", "PATH"],
-    worktrees.map((worktree) => [
-      worktree.name,
-      worktree.branch ?? "detached",
-      worktree.role,
-      worktree.state,
-      worktree.path,
-    ]),
-    (cell, column, row) => {
-      if (column === 0) return style.worktree(cell);
-      if (column === 1) return style.branch(cell);
-      if (column === 3) return style.state(cell, worktrees[row]?.state);
-      if (column === 4) return style.path(cell);
-      return cell;
-    },
+  process.stdout.write(
+    `${renderTable(
+      ["NAME", "BRANCH", "ROLE", "STATUS", "PATH"],
+      worktrees.map((worktree) => [
+        worktree.name,
+        worktree.branch ?? "detached",
+        worktree.role,
+        worktree.state,
+        worktree.path,
+      ]),
+      (cell, column, row) => {
+        if (column === 0) return style.worktree(cell);
+        if (column === 1) return style.branch(cell);
+        if (column === 3) return style.state(cell, worktrees[row]?.state);
+        if (column === 4) return style.path(cell);
+        return cell;
+      },
+    )}\n`,
   );
 }
 
 export async function printKeyValueTable(rows: Array<[string, string]>): Promise<void> {
-  printTable(["SETTING", "VALUE"], rows, (cell, column) =>
-    column === 0 ? style.label(cell) : style.value(cell),
+  process.stdout.write(
+    `${renderTable(["SETTING", "VALUE"], rows, (cell, column) =>
+      column === 0 ? style.label(cell) : style.value(cell),
+    )}\n`,
   );
 }
 
@@ -238,80 +237,46 @@ export async function printStatus(
   variant: "success" | "error" | "warning" | "info",
   message: string,
 ): Promise<void> {
-  const symbol = {
-    success: pc.green("✔"),
-    error: pc.red("✖"),
-    warning: pc.yellow("⚠"),
-    info: pc.cyan("ℹ"),
-  }[variant];
-  process.stdout.write(`${symbol} ${message}\n`);
+  const logger = variant === "warning" ? log.warn : log[variant];
+  logger(message, { output: process.stdout, spacing: 0 });
 }
 
-function printTable(
-  headers: string[],
-  rows: string[][],
-  formatCell: (cell: string, column: number, row: number) => string = (cell) => cell,
-): void {
-  const widths = headers.map((header, index) =>
-    Math.max(header.length, ...rows.map((row) => row[index]?.length ?? 0)),
-  );
-  const render = (row: string[], rowIndex: number, header = false): string =>
-    row
-      .map((cell, column) => {
-        const padded = cell.padEnd(
-          (widths[column] ?? cell.length) + (column === row.length - 1 ? 0 : 2),
-        );
-        return header ? pc.cyan(pc.bold(padded)) : formatCell(padded, column, rowIndex);
-      })
-      .join("");
-
-  process.stdout.write(`${render(headers, -1, true)}\n`);
-  for (const [index, row] of rows.entries()) {
-    process.stdout.write(`${render(row, index)}\n`);
-  }
-}
-
-function toInquirerChoice(option: Choice): {
-  name: string;
-  value: string;
-  description?: string;
-} {
-  return {
-    name: option.label,
-    value: option.value,
-    description: option.description,
-  };
-}
-
-function toInquirerChoices(
-  choices: Choice[],
-): Array<ReturnType<typeof toInquirerChoice> | Separator> {
-  const rendered: Array<ReturnType<typeof toInquirerChoice> | Separator> = [];
+function toClackChoices(choices: Choice[], includeGroups: boolean): ClackChoice[] {
+  const rendered: ClackChoice[] = [];
   let previousGroup: string | undefined;
-  for (const choice of choices) {
-    if (choice.group && choice.group !== previousGroup) {
-      rendered.push(new Separator(choice.group));
+  for (const [index, choice] of choices.entries()) {
+    if (includeGroups && choice.group && choice.group !== previousGroup) {
+      rendered.push({
+        value: `__ygg_group_${index}`,
+        label: `── ${choice.group.toLocaleUpperCase()} ──`,
+        disabled: true,
+      });
     }
-    rendered.push(toInquirerChoice(choice));
+    rendered.push({
+      value: choice.value,
+      label: choice.label,
+      hint: choice.description,
+    });
     previousGroup = choice.group;
   }
   return rendered;
 }
 
-async function promptWithNavigation<T>(prompt: (signal: AbortSignal) => Promise<T>): Promise<T> {
+async function promptWithNavigation<T>(
+  prompt: (signal: AbortSignal) => Promise<T | symbol>,
+): Promise<T> {
   const controller = new AbortController();
-  const onKeypress = (_input: string, key: { name?: string; ctrl?: boolean } | undefined): void => {
-    if (key?.name === "escape" && !key.ctrl) controller.abort();
+  let cancellation: "back" | "exit" | undefined;
+  const onKeypress = (input: string, key: { name?: string; ctrl?: boolean } | undefined): void => {
+    if (key?.name === "escape" && !key.ctrl) cancellation = "back";
+    if ((key?.name === "c" && key.ctrl) || input === "\u0003") cancellation = "exit";
   };
   process.stdin.on("keypress", onKeypress);
   try {
-    return await prompt(controller.signal);
-  } catch (error) {
-    if (error instanceof Error && error.name === "AbortPromptError") throw new PromptBackError();
-    if (error instanceof Error && error.name === "ExitPromptError") {
-      throw new PromptExitError({ cause: error });
-    }
-    throw error;
+    const result = await prompt(controller.signal);
+    if (!isCancel(result)) return result;
+    if (cancellation === "back") throw new PromptBackError();
+    throw new PromptExitError();
   } finally {
     process.stdin.off("keypress", onKeypress);
   }

@@ -30,10 +30,10 @@
   },
   "dependencies": {
     "@bomb.sh/tab": "0.0.22",
-    "@inquirer/prompts": "^8.6.0",
+    "@clack/prompts": "^1.7.0",
+    "cli-table3": "^0.6.5",
     "commander": "^15.0.0",
     "execa": "^10.0.1",
-    "ora": "^9.4.1",
     "picocolors": "^1.1.1",
     "yaml": "^2.8.1",
     "zod": "^4.4.3"

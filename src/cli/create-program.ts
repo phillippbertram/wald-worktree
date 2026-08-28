@@ -1,4 +1,5 @@
 import { Command } from "commander";
+import pc from "picocolors";
 import { registerCdCommand } from "./commands/cd.js";
 import { registerCompletionCommand } from "./commands/completion.js";
 import { registerConfigCommand } from "./commands/config.js";
@@ -28,11 +29,18 @@ export function createProgram(
     .description("🌳 Create and work in isolated Git checkouts safely.")
     .version("0.10.0")
     .showSuggestionAfterError()
-    .showHelpAfterError();
+    .showHelpAfterError()
+    .configureHelp({
+      styleTitle: (text) => pc.cyan(pc.bold(text)),
+      styleCommandText: (text) => pc.green(pc.bold(text)),
+      styleSubcommandText: (text) => pc.green(text),
+      styleOptionText: (text) => pc.yellow(text),
+      styleArgumentText: (text) => pc.magenta(text),
+    });
 
   program.addHelpText(
     "after",
-    "\n🌱 Start here:\n  cd ~/dev/project && ygg init\n  ygg create feature/payment --cd\n  ygg create feature/review --tool codex\n",
+    `\n${pc.cyan(pc.bold("🌱 Start here:"))}\n  ${pc.green("cd ~/dev/project && ygg init")}\n  ${pc.green("ygg create feature/payment --cd")}\n  ${pc.green("ygg create feature/review --tool codex")}\n`,
   );
 
   program.configureOutput({
