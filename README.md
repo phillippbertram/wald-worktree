@@ -124,9 +124,8 @@ grouped, and retained-checkout variants.
 ### Prefer a guided menu?
 
 Run `ygg` without a command. The menu stays open, refreshes the workspace after every action, and
-always brings you back to an up-to-date overview. Prompts show how `Esc` goes back or cancels and
-how `Ctrl-C` exits; the complete navigation contract lives in the
-[CLI reference](docs/cli-reference.md#general-behavior).
+always brings you back to an up-to-date overview. `Esc` goes back or cancels and `Ctrl-C` exits; the
+complete navigation contract lives in the [CLI reference](docs/cli-reference.md#general-behavior).
 
 ### 2. Add your first worktrees
 

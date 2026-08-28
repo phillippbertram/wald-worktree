@@ -69,12 +69,12 @@ export async function runTask<T>(label: string, task: () => Promise<T>): Promise
 export async function confirm(
   question: string,
   defaultValue = false,
-  options: PromptOptions = {},
+  _options: PromptOptions = {},
 ): Promise<boolean> {
   return await promptWithNavigation((signal) =>
     inquirerConfirm(
       {
-        message: promptMessage(question, options.navigation),
+        message: question,
         default: defaultValue,
       },
       { signal },
@@ -110,7 +110,6 @@ export async function selectValue(
         choices: toInquirerChoices(choices),
         default: options.initialValue,
         pageSize: 10,
-        theme: navigationTheme(options.navigation),
       },
       { signal },
     ),
@@ -136,7 +135,6 @@ export async function searchSelect(
           );
           return matches.map(toInquirerChoice);
         },
-        theme: navigationTheme(options.navigation),
       },
       { signal },
     ),
@@ -158,7 +156,6 @@ export async function selectManyValues(
           checked: options.initialValues?.includes(option.value) ?? option.checked,
         })),
         pageSize: 10,
-        theme: navigationTheme(options.navigation),
       },
       { signal },
     ),
@@ -185,13 +182,13 @@ export async function selectManyWorktrees(
 export async function promptText(
   question: string,
   defaultValue?: string,
-  options: PromptOptions = {},
+  _options: PromptOptions = {},
 ): Promise<string> {
   return (
     await promptWithNavigation((signal) =>
       input(
         {
-          message: promptMessage(question, options.navigation),
+          message: question,
           default: defaultValue,
         },
         { signal },
@@ -299,23 +296,6 @@ function toInquirerChoices(
     previousGroup = choice.group;
   }
   return rendered;
-}
-
-function navigationTheme(navigation: PromptNavigation | undefined): {
-  style: { keysHelpTip: (keys: [key: string, action: string][]) => string };
-} {
-  return {
-    style: {
-      keysHelpTip: (keys) =>
-        [...keys, ["Esc", navigation ?? "cancel"], ["Ctrl+C", "exit"]]
-          .map(([key, action]) => `${pc.bold(key)} ${pc.dim(action)}`)
-          .join(pc.dim(" • ")),
-    },
-  };
-}
-
-function promptMessage(question: string, navigation: PromptNavigation | undefined): string {
-  return `${question} ${pc.dim(`[Esc ${navigation ?? "cancel"} · Ctrl+C exit]`)}`;
 }
 
 async function promptWithNavigation<T>(prompt: (signal: AbortSignal) => Promise<T>): Promise<T> {

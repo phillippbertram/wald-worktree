@@ -266,8 +266,8 @@ describe("interactive command navigation", () => {
     expect(stderr).toContain("not merged into main");
   });
 
-  it("offers eligible local branch deletion with a safe default before confirmation", async () => {
-    prompts.confirmations.push(true, true);
+  it("uses the eligible branch decision as the final removal confirmation", async () => {
+    prompts.confirmations.push(true);
     const executeRemove = vi.fn();
     const context = commandContext(workspace, primary, [primary, feature], {
       workflow: {
@@ -301,7 +301,7 @@ describe("interactive command navigation", () => {
 
     expect(prompts.confirmationQuestions[0]).toContain("Delete merged local branch feature too?");
     expect(prompts.confirmationDefaults[0]).toBe(false);
-    expect(prompts.confirmationQuestions[1]).toContain("Delete local branch: feature.");
+    expect(prompts.confirmationQuestions).toHaveLength(1);
     expect(executeRemove).toHaveBeenCalledWith(
       expect.any(Object),
       expect.objectContaining({ deleteBranch: true }),
@@ -310,7 +310,6 @@ describe("interactive command navigation", () => {
 
   it("offers multiple eligible branches as an unselected checkbox list", async () => {
     prompts.manyValueSelections.push(["refs/heads/review"]);
-    prompts.confirmations.push(true);
     const executeRemove = vi.fn();
     const context = commandContext(workspace, primary, [primary, feature, review], {
       workflow: {
@@ -346,6 +345,7 @@ describe("interactive command navigation", () => {
     );
 
     expect(prompts.manyValueOptions).toEqual([{ initialValues: [], navigation: "cancel" }]);
+    expect(prompts.confirmationQuestions).toEqual([]);
     expect(executeRemove).toHaveBeenNthCalledWith(
       1,
       expect.any(Object),

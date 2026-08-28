@@ -128,6 +128,7 @@ export async function removeWorktrees(input: RemoveInput, context: CliContext): 
     }
 
     let branchesToDelete: BranchDeletionPlan[] = [];
+    let confirmedByBranchChoice = false;
     if (input.deleteBranch) {
       branchesToDelete = plans.flatMap((plan) => {
         const deletion = plan.inspection.branchDeletion;
@@ -138,6 +139,7 @@ export async function removeWorktrees(input: RemoveInput, context: CliContext): 
         throw new YggError("Non-interactive removal requires --yes.");
       }
       try {
+        confirmedByBranchChoice = plans.some((plan) => plan.inspection.branchDeletion.eligible);
         branchesToDelete = await chooseBranchesToDelete(
           plans,
           previousBranchRefs,
@@ -151,7 +153,7 @@ export async function removeWorktrees(input: RemoveInput, context: CliContext): 
       }
     }
 
-    if (!input.yes) {
+    if (!input.yes && !confirmedByBranchChoice) {
       if (!isInteractiveTerminal()) {
         throw new YggError("Non-interactive removal requires --yes.");
       }

@@ -153,8 +153,8 @@ are omitted, so existing repository behavior remains inherited. The explicit `--
 is the only generator mode that intentionally copies the complete repository configuration.
 
 `Esc` returns to the preceding wizard step and restores the previous answer as its default;
-`Ctrl-C` exits Ygg. Selection prompts list both shortcuts in their footer. From the final preview,
-going back returns to the tool choice without discarding the other detected setup decisions.
+`Ctrl-C` exits Ygg. From the final preview, going back returns to the tool choice without discarding
+the other detected setup decisions.
 
 For scripts, use `ygg config init --yes`; use `--force` separately when existing configuration at
 the selected scope may be replaced. `--yes` keeps the detected recommended verify scripts.

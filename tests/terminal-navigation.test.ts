@@ -1,4 +1,3 @@
-import { stripVTControlCharacters } from "node:util";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const prompts = vi.hoisted(() => ({
@@ -25,6 +24,7 @@ import {
   PromptBackError,
   PromptExitError,
   promptText,
+  searchSelect,
   selectManyValues,
   selectValue,
 } from "../src/ui/terminal.js";
@@ -72,32 +72,44 @@ describe("terminal prompt navigation", () => {
     expect(process.stdin.listenerCount("keypress")).toBe(listenersBefore);
   });
 
-  it("shows navigation in the footer without adding a Back choice", async () => {
+  it("keeps navigation hints out of prompt titles and selection footers", async () => {
+    prompts.confirm.mockResolvedValue(false);
+    prompts.input.mockResolvedValue("");
+    prompts.search.mockResolvedValue("one");
+    prompts.checkbox.mockResolvedValue([]);
     prompts.select.mockImplementation(
       async (config: {
         message: string;
         choices: Array<{ name?: string; value?: string }>;
-        theme?: {
-          style?: { keysHelpTip?: (keys: [string, string][]) => string };
-        };
+        theme?: unknown;
       }) => {
         expect(config.message).toBe("Choose:");
         expect(config.choices).not.toEqual(
           expect.arrayContaining([expect.objectContaining({ name: "← Back" })]),
         );
-        const help = config.theme?.style?.keysHelpTip?.([
-          ["↑↓", "navigate"],
-          ["⏎", "select"],
-        ]);
-        expect(stripVTControlCharacters(help ?? "")).toContain(
-          "↑↓ navigate • ⏎ select • Esc back • Ctrl+C exit",
-        );
+        expect(config.theme).toBeUndefined();
         return "one";
       },
     );
 
+    await confirm("Continue?", false, { navigation: "cancel" });
+    await promptText("Value:", undefined, { navigation: "back" });
     await expect(
       selectValue("Choose:", [{ label: "One", value: "one" }], { navigation: "back" }),
     ).resolves.toBe("one");
+    await searchSelect("Search:", [{ label: "One", value: "one" }], {
+      navigation: "cancel",
+    });
+    await selectManyValues("Values:", [], { navigation: "back" });
+
+    expect(prompts.confirm.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ message: "Continue?" }),
+    );
+    expect(prompts.input.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ message: "Value:" }),
+    );
+    for (const prompt of [prompts.search, prompts.checkbox]) {
+      expect(prompt.mock.calls[0]?.[0]).not.toHaveProperty("theme");
+    }
   });
 });

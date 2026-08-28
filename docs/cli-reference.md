@@ -23,9 +23,6 @@ Interactive prompts use the same navigation throughout:
 | `Esc` | Return one prompt step; cancel at a command's first prompt; exit from the main menu. |
 | `Ctrl-C` | Exit the complete Ygg process with status 130. |
 
-Selection prompts list these shortcuts in the existing footer beside `navigate` and `select`, not in
-the prompt title or as additional choices.
-
 Entered values and selections are retained when moving back. `No`, empty text, and empty checkbox
 selections remain regular answers rather than cancellation signals. Navigation does not cross an
 already completed workspace or worktree mutation.
@@ -329,9 +326,11 @@ ygg remove [worktrees...] [--delete-branch] [--force] [--yes]
 ```
 
 Without identifiers, a terminal offers removable linked worktrees. Non-interactive use requires
-explicit identifiers and `--yes`. Before final confirmation, an interactive terminal offers each
-eligible merged local branch for deletion; the safe default keeps every branch. Multiple eligible
-branches use an unselected checkbox list. `--yes` without `--delete-branch` keeps every branch.
+explicit identifiers and `--yes`. An interactive terminal offers each eligible merged local branch
+for deletion; the safe default keeps every branch. That branch choice also confirms the removal, so
+Ygg does not ask the same question again. Multiple eligible branches use an unselected checkbox
+list. When no branch choice is available, Ygg retains a separate removal confirmation. `--yes`
+without `--delete-branch` keeps every branch.
 
 | Option | Meaning |
 | --- | --- |
