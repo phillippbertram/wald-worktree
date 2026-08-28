@@ -433,37 +433,50 @@ again; `ygg hook run post_create` is the equivalent general hook command. Becaus
 expose local data, their exact paths and glob patterns participate in the same project-configuration
 trust hash as commands.
 
-Every non-empty automation run reports its selected worktree, branch, target path, and one status
-row per command or file operation:
+Every non-empty automation run reports its selected worktree, branch, target path, and step results.
+In a terminal, Ygg groups each configured step and nests concrete file operations beneath it:
 
 ```text
-Hook        post_create
-Worktree    feature-payment
-Branch      feature/payment
-Path        /workspace/feature-payment
-
-STEP  STATUS     TYPE      SOURCE / COMMAND                    TARGET / CWD                  NOTE
-1     RUNNING    command   pnpm install --frozen-lockfile      /workspace/feature-payment
-1     DONE       command   pnpm install --frozen-lockfile      /workspace/feature-payment
-
-2     RUNNING    symlink   shared:env/.env                     target:.env
-2     UNCHANGED  symlink   shared:env/.env                     target:.env                   already linked
-
-3     RUNNING    symlink   shared:env/local                    target:.local
-3     SKIPPED    symlink   shared:env/local                    target:.local                 target exists
-
-4     RUNNING    copy      default:config.example              target:config.local
-4     REPLACED   copy      default:config.example              target:config.local           existing target
+┌  Hook post_create
+│  Worktree  feature-payment
+│  Branch    feature/payment
+│  Path      /workspace/feature-payment
+│
+◇  1 command  pnpm install --frozen-lockfile
+│  command output remains visible here
+◆  DONE · 1.4s
+│
+◇  2 symlink  shared:env/**/*.env* → target:.
+├  UNCHANGED  shared:env/.env → target:.env · already linked
+├  CREATED    shared:env/apps/api/.env → target:apps/api/.env
+└  1 created · 1 unchanged
+│
+└  2 steps · 1 created · 1 unchanged · 1 done
 ```
 
 Each lifecycle hook receives its own labeled block; consecutive hooks are separated by a blank
-line. Named tasks use the same layout with a `Task` heading. Within either block, every configured
-step forms a separate group: `RUNNING` is printed before validation or execution, followed by the
-result. Glob results remain together under their shared step number.
+line. Named tasks use the same layout with a `Task` heading. Each configured step number appears
+once, and sorted glob results remain together beneath their shared source pattern. File steps end
+with an outcome count when they produce multiple results.
 
 Command argument arrays retain visible argument boundaries; shell expressions show the actual
-`/bin/sh -c` invocation and the resolved working directory. Child output remains unmodified between
-`RUNNING` and the result. Environment values are never printed or expanded.
+`/bin/sh -c` invocation. A working directory is shown only when it differs from the selected
+worktree. While a command runs, the terminal keeps the latest ten output lines in view; after it
+finishes, the complete output remains in the scrollback. Cursor and erase sequences may be
+normalized so progress-oriented child output does not corrupt the surrounding layout. Environment
+values are never printed or expanded.
+
+Redirected and other non-TTY output keeps the append-only row format. It prints `RUNNING` before
+each configured step, streams command output without presentation changes, and then prints the
+result. This format remains suitable for logs and scripts:
+
+```text
+STEP  STATUS     TYPE      SOURCE / COMMAND                    TARGET / CWD                  NOTE
+1     RUNNING    command   pnpm install --frozen-lockfile      /workspace/feature-payment
+1     DONE       command   pnpm install --frozen-lockfile      /workspace/feature-payment
+2     RUNNING    symlink   shared:env/.env                     target:.env
+2     UNCHANGED  symlink   shared:env/.env                     target:.env                   already linked
+```
 
 File operations report `CREATED`, `UNCHANGED`, `SKIPPED`, `REPLACED`, or `FAILED` after their
 `RUNNING` row, with scoped source and target paths. Glob results remain sorted. Optional missing
@@ -471,8 +484,9 @@ sources and empty globs use `SKIPPED` with `source not found`, `source unavailab
 `no files matched` in the note. A target conflict under the default policy uses `FAILED` and points
 to `on_existing: skip|replace`; `continue_on_error` adds `continuing` before the next step begins.
 
-Non-optional missing sources and empty globs remain errors. Statuses, worktree and branch names, and
-paths are colored in a terminal while redirected output remains readable plain text.
+Non-optional missing sources and empty globs remain errors. A continued failure is included in the
+terminal summary before the next step runs. Statuses, worktree and branch names, and paths are
+colored in a terminal while redirected output remains readable plain text.
 
 ### Lifecycle
 

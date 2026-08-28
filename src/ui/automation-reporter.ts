@@ -1,9 +1,12 @@
+import type { Writable } from "node:stream";
 import type {
   AutomationObserver,
   AutomationPresentationContext,
   AutomationRow,
+  AutomationRunOutcome,
   AutomationStatus,
 } from "../services/automation-observer.js";
+import { InteractiveAutomationReporter } from "./interactive-automation-reporter.js";
 import { style } from "./style.js";
 
 const columnWidths = [4, 9, 8, 38, 34] as const;
@@ -79,6 +82,12 @@ export class AutomationReporter implements AutomationObserver {
     if (this.output) this.write("");
   }
 
+  commandOutput(): undefined {
+    return undefined;
+  }
+
+  finish(_outcome: AutomationRunOutcome): void {}
+
   private writeContext(label: string, value: string): void {
     this.write(`${style.label(label.padEnd(10))}  ${value}`);
   }
@@ -86,6 +95,20 @@ export class AutomationReporter implements AutomationObserver {
   private write(value: string): void {
     this.output?.write(`${value}\n`);
   }
+}
+
+export function createAutomationReporter(
+  output: NodeJS.WritableStream | undefined,
+  context: AutomationPresentationContext,
+): AutomationObserver {
+  if (isTtyOutput(output)) return new InteractiveAutomationReporter(output, context);
+  return new AutomationReporter(output, context);
+}
+
+function isTtyOutput(
+  output: NodeJS.WritableStream | undefined,
+): output is Writable & { isTTY: true } {
+  return Boolean(output && "isTTY" in output && output.isTTY === true);
 }
 
 function readOutputColumns(output: NodeJS.WritableStream | undefined): number {

@@ -68,40 +68,52 @@ export class AutomationService {
       path: context.targetPath,
     });
     reporter.start();
-    for (const [index, step] of steps.entries()) {
-      const stepNumber = index + 1;
-      if (index > 0) reporter.separateStep();
-      const planned = describeStep(step, context);
-      reporter.row({
-        step: stepNumber,
-        status: "RUNNING",
-        type: step.type,
-        source: planned.source,
-        target: planned.target,
-      });
-      try {
-        await this.runStep(step, context, stepNumber, reporter);
-      } catch (error) {
-        const interrupted = error instanceof YggError && error.exitCode === 130;
-        const presentation = describeStep(step, context, error);
+    try {
+      for (const [index, step] of steps.entries()) {
+        const stepNumber = index + 1;
+        if (index > 0) reporter.separateStep();
+        const planned = describeStep(step, context);
         reporter.row({
           step: stepNumber,
-          status: "FAILED",
+          status: "RUNNING",
           type: step.type,
-          source: presentation.source,
-          target: presentation.target,
-          note: `${singleLine(toErrorMessage(error))}${step.continueOnError && !interrupted ? "; continuing" : ""}`,
+          source: planned.source,
+          target: planned.target,
         });
-        if (interrupted) throw error;
-        if (step.continueOnError) {
-          continue;
+        try {
+          await this.runStep(step, context, stepNumber, reporter);
+        } catch (error) {
+          const interrupted = error instanceof YggError && error.exitCode === 130;
+          const presentation = describeStep(step, context, error);
+          reporter.row({
+            step: stepNumber,
+            status: "FAILED",
+            type: step.type,
+            source: presentation.source,
+            target: presentation.target,
+            note: `${singleLine(toErrorMessage(error))}${step.continueOnError && !interrupted ? "; continuing" : ""}`,
+          });
+          if (interrupted) throw error;
+          if (step.continueOnError) {
+            continue;
+          }
+          throw new YggError(
+            `Automation step ${stepNumber} (${step.type} ${presentation.target}) failed: ${toErrorMessage(error)}`,
+            { cause: error },
+          );
         }
-        throw new YggError(
-          `Automation step ${stepNumber} (${step.type} ${presentation.target}) failed: ${toErrorMessage(error)}`,
-          { cause: error },
-        );
       }
+    } catch (error) {
+      try {
+        reporter.finish(
+          error instanceof YggError && error.exitCode === 130 ? "interrupted" : "failed",
+        );
+      } catch {
+        // A presentation cleanup failure must not replace the automation error or its exit code.
+      }
+      throw error;
     }
+    reporter.finish("success");
   }
 
   private async runStep(
@@ -138,7 +150,7 @@ export class AutomationService {
       cwd,
       env: environment,
       timeoutMs: step.timeoutSeconds ? step.timeoutSeconds * 1_000 : undefined,
-      output: context.output,
+      output: reporter.commandOutput(stepNumber) ?? context.output,
     };
     if (step.argv) {
       await this.processes.runArgv(step.argv, options);

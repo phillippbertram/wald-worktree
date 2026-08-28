@@ -9,7 +9,7 @@ import { WorkspaceService } from "../services/workspace-service.js";
 import { WorkspaceStatusService } from "../services/workspace-status-service.js";
 import { WorktreeService } from "../services/worktree-service.js";
 import { WorktreeWorkflowService } from "../services/worktree-workflow-service.js";
-import { AutomationReporter } from "../ui/automation-reporter.js";
+import { createAutomationReporter } from "../ui/automation-reporter.js";
 
 export type CliOutput = {
   stdout: NodeJS.WritableStream;
@@ -26,10 +26,7 @@ export function createCliContext(
   const workspaces = new WorkspaceService(git, configs);
   const worktrees = new WorktreeService(git);
   const processes = new ProcessRunner();
-  const automation = new AutomationService(
-    processes,
-    (automationOutput, presentation) => new AutomationReporter(automationOutput, presentation),
-  );
+  const automation = new AutomationService(processes, createAutomationReporter);
   return {
     output,
     git,

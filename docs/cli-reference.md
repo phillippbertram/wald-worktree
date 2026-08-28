@@ -13,8 +13,9 @@ ygg [--version] [--help] <command>
 ```
 
 Run `ygg` without a command for the guided menu. Direct commands are deterministic and are preferred
-for scripts and agents. The guided menu remains open after an action, refreshes the workspace state,
-and returns to the action list. Expected command errors are shown there without closing the session.
+for scripts and agents. After an action completes, its output remains visible until `Esc` refreshes
+the workspace state and returns to the action list or the session is explicitly closed. Expected
+command errors use the same result view instead of immediately reopening the menu.
 
 Interactive prompts use the same navigation throughout:
 
@@ -277,10 +278,12 @@ run uses an existing selected worktree as `YGG_WORKTREE_PATH`. Consequently, man
 and `post_remove` runs are useful for testing behavior but do not reproduce the absent-target state
 of their automatic lifecycle phase; Ygg prints a warning for these events.
 
-Automation rows report command outcomes and each copy/symlink source and target. An already correct
-symlink is `UNCHANGED`; a configured `on_existing: skip` conflict is `SKIPPED` and does not fail the
-hook. Each hook has its own labeled block, consecutive lifecycle hooks have a blank line between
-them, and the steps inside the block are visually grouped. See
+In a terminal, automation output groups each configured step, nests concrete copy/symlink results,
+and summarizes their outcomes. Command steps keep the latest ten lines visible while running and
+retain their complete output afterward. Redirected output preserves the append-only `RUNNING` and
+result rows with raw child output. An already correct symlink is `UNCHANGED`; a configured
+`on_existing: skip` conflict is `SKIPPED` and does not fail the hook. Each hook has its own labeled
+block, and consecutive lifecycle hooks remain separated. See
 [configuration](configuration.md#file-steps) for conflict policies and status meanings.
 
 ```sh

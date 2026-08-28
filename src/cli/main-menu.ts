@@ -250,8 +250,26 @@ export async function runMainMenu(program: Command, context: CliContext): Promis
           context.output.stderr,
           `${style.danger("Error:")} ${sanitizeTerminalText(redactSensitiveText(error.message), { multiline: true })}`,
         );
-        continue;
+      } else {
+        throw error;
       }
+    }
+
+    try {
+      await selectValue(
+        "What next?",
+        [
+          {
+            label: "Exit",
+            value: "exit",
+            description: "Close the interactive Ygg session.",
+          },
+        ],
+        { navigation: "back" },
+      );
+      return;
+    } catch (error) {
+      if (isPromptBackError(error)) continue;
       throw error;
     }
   }

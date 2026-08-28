@@ -3,6 +3,7 @@ import { Command } from "commander";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CliContext } from "../src/cli/context.js";
 import { runMainMenu } from "../src/cli/main-menu.js";
+import { YggError } from "../src/domain/errors.js";
 import type { Workspace, Worktree } from "../src/domain/types.js";
 import { PromptBackError } from "../src/ui/terminal.js";
 
@@ -18,6 +19,7 @@ const interactions = vi.hoisted(() => ({
   initializeWorkspace: vi.fn(),
   createWorktree: vi.fn(),
   handoffWorktree: vi.fn(),
+  listWorktrees: vi.fn(),
   renameWorktree: vi.fn(),
   runProjectHook: vi.fn(),
   uninitializeWorkspace: vi.fn(),
@@ -74,6 +76,14 @@ vi.mock("../src/cli/commands/handoff.js", async (importOriginal) => {
   };
 });
 
+vi.mock("../src/cli/commands/list.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/cli/commands/list.js")>();
+  return {
+    ...actual,
+    listWorktrees: interactions.listWorktrees,
+  };
+});
+
 vi.mock("../src/cli/commands/rename.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/cli/commands/rename.js")>();
   return {
@@ -111,6 +121,7 @@ describe("interactive main menu", () => {
     });
     interactions.createWorktree.mockReset();
     interactions.handoffWorktree.mockReset();
+    interactions.listWorktrees.mockReset();
     interactions.renameWorktree.mockReset();
     interactions.runProjectHook.mockReset();
     interactions.uninitializeWorkspace.mockReset();
@@ -162,7 +173,13 @@ describe("interactive main menu", () => {
     const current = { name: "main", branch: "main" } as Worktree;
     const linked = { name: "feature", branch: "feature/work", role: "linked" } as Worktree;
     interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
-    interactions.selections = ["handoff", "rename", "exit"];
+    interactions.selections = [
+      "handoff",
+      new PromptBackError(),
+      "rename",
+      new PromptBackError(),
+      "exit",
+    ];
 
     await runMainMenu(new Command().name("ygg"), createContext(current, [current, linked]));
 
@@ -184,10 +201,10 @@ describe("interactive main menu", () => {
     expect(labels).not.toContain("Rename worktree");
   });
 
-  it("refreshes workspace state and returns to the menu after an action", async () => {
+  it("keeps action output visible until Escape refreshes the menu", async () => {
     const workspace = { root: "/tmp/ygg-project" } as Workspace;
     interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
-    interactions.selections = ["create", "exit"];
+    interactions.selections = ["create", new PromptBackError(), "exit"];
     interactions.createWorktree.mockResolvedValue({ name: "feature" });
     const context = createContext(null, []);
 
@@ -195,6 +212,63 @@ describe("interactive main menu", () => {
 
     expect(interactions.createWorktree).toHaveBeenCalledOnce();
     expect(interactions.findWorkspaceOrNull).toHaveBeenCalledTimes(2);
+    expect(interactions.events.filter((event) => event === "prompt")).toHaveLength(3);
+    expect(interactions.selectCalls[1]).toMatchObject({
+      navigation: "back",
+      options: [
+        {
+          label: "Exit",
+          description: "Close the interactive Ygg session.",
+        },
+      ],
+    });
+  });
+
+  it("keeps the worktree list visible until Escape returns to the menu", async () => {
+    const workspace = { root: "/tmp/ygg-project" } as Workspace;
+    interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
+    interactions.selections = ["list", new PromptBackError(), "exit"];
+    const context = createContext(null, []);
+
+    await runMainMenu(new Command().name("ygg"), context);
+
+    expect(interactions.listWorktrees).toHaveBeenCalledWith({ json: false }, context);
+    expect(interactions.findWorkspaceOrNull).toHaveBeenCalledTimes(2);
+    expect(interactions.events.filter((event) => event === "prompt")).toHaveLength(3);
+    expect(interactions.selectCalls[1]).toMatchObject({
+      navigation: "back",
+      options: [
+        {
+          label: "Exit",
+          description: "Close the interactive Ygg session.",
+        },
+      ],
+    });
+  });
+
+  it("exits from the worktree list without reopening the main menu", async () => {
+    const workspace = { root: "/tmp/ygg-project" } as Workspace;
+    interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
+    interactions.selections = ["list", "exit"];
+    const context = createContext(null, []);
+
+    await runMainMenu(new Command().name("ygg"), context);
+
+    expect(interactions.listWorktrees).toHaveBeenCalledOnce();
+    expect(interactions.findWorkspaceOrNull).toHaveBeenCalledOnce();
+    expect(interactions.events.filter((event) => event === "prompt")).toHaveLength(2);
+  });
+
+  it("keeps an expected action error visible until the result view is closed", async () => {
+    const workspace = { root: "/tmp/ygg-project" } as Workspace;
+    interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
+    interactions.selections = ["create", "exit"];
+    interactions.createWorktree.mockRejectedValue(new YggError("Creation failed."));
+
+    await runMainMenu(new Command().name("ygg"), createContext(null, []));
+
+    expect(interactions.events.join("\n")).toContain("Error: Creation failed.");
+    expect(interactions.findWorkspaceOrNull).toHaveBeenCalledOnce();
     expect(interactions.events.filter((event) => event === "prompt")).toHaveLength(2);
   });
 

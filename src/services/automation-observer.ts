@@ -24,10 +24,14 @@ export type AutomationPresentationContext = {
   path: string;
 };
 
+export type AutomationRunOutcome = "success" | "failed" | "interrupted";
+
 export interface AutomationObserver {
   start(): void;
   row(row: AutomationRow): void;
   separateStep(): void;
+  commandOutput(step: number): NodeJS.WritableStream | undefined;
+  finish(outcome: AutomationRunOutcome): void;
 }
 
 export type AutomationObserverFactory = (
@@ -39,4 +43,6 @@ export const silentAutomationObserverFactory: AutomationObserverFactory = () => 
   start: () => undefined,
   row: () => undefined,
   separateStep: () => undefined,
+  commandOutput: () => undefined,
+  finish: () => undefined,
 });
