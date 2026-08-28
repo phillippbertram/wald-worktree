@@ -204,13 +204,20 @@ describe("managed Git workspace", () => {
     );
     expect(upstream.stdout).toBe("origin/remote-only");
 
+    await new GitClient().run(["config", "branch.autoSetupMerge", "always"], {
+      gitDir: workspace.gitDir,
+    });
     const feature = await worktrees.add(workspace, {
       branch: "feature/payment",
-      from: "origin/main",
       fetch: false,
     });
     expect(feature.name).toBe("feature-payment");
     expect(feature.branch).toBe("feature/payment");
+    const featureUpstream = await new GitClient().run(
+      ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"],
+      { cwd: feature.path, reject: false },
+    );
+    expect(featureUpstream.exitCode).not.toBe(0);
 
     await expect(
       worktrees.add(workspace, { branch: "feature/payment", fetch: false }),
@@ -280,6 +287,36 @@ describe("managed Git workspace", () => {
     expect(inspection.dirty).toBe(true);
     expect(inspection.merged).toBe(false);
     expect(inspection.blockers).toHaveLength(2);
+    expect(inspection.branchDeletion).toEqual({
+      eligible: false,
+      branch: "feature/unmerged",
+      reason: "the branch is not merged into main",
+    });
+  });
+
+  it("refuses to delete a branch while another worktree still checks it out", async () => {
+    const workspace = await workspaces.initialize(
+      repository.remote,
+      path.join(temporaryRoot, "checked-out-branch-workspace"),
+    );
+    const feature = await worktrees.add(workspace, {
+      branch: "feature/checked-out",
+      fetch: false,
+    });
+    const inspection = await worktrees.inspectRemoval(workspace, feature.name);
+    if (!inspection.branchDeletion.eligible) {
+      throw new Error(`Expected eligible branch deletion: ${inspection.branchDeletion.reason}`);
+    }
+
+    await expect(worktrees.deleteBranch(workspace, inspection.branchDeletion)).rejects.toThrow(
+      /checked out at/u,
+    );
+    expect(
+      await new GitClient().succeeds(
+        ["show-ref", "--verify", "--quiet", "refs/heads/feature/checked-out"],
+        { gitDir: workspace.gitDir },
+      ),
+    ).toBe(true);
   });
 
   it("renames a dirty linked worktree while preserving its Git identity and files", async () => {

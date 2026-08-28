@@ -98,7 +98,7 @@ Until Ygg is published to npm, install it directly from this repository:
 git clone git@github.com:phillippbertram/ygg-worktree.git
 cd ygg-worktree
 pnpm install
-pnpm run link:global
+pnpm run install:global
 ygg --help
 ```
 
@@ -169,10 +169,11 @@ ygg remove feature-payment
 states without fetching or changing anything. Think of it as reading the local runes: it never
 consults the remote or changes the repository. `ygg run verify` is available when the effective
 project configuration defines that task. Removal checks for local changes, a branch not merged
-into the configured default branch, and locks before deleting the linked checkout. It never
-deletes the branch. If project setup failed
-during creation, fix the cause and retry it with `ygg setup feature-payment`. To test any lifecycle
-hook after editing `.ygg/project.yml`, run it explicitly without creating or removing a worktree:
+into the configured default branch, and locks before deleting the linked checkout. Branches are
+kept by default; an interactive prompt or `--delete-branch` can also delete an eligible merged
+local branch, but never its remote branch. If project setup failed during creation, fix the cause
+and retry it with `ygg setup feature-payment`. To test any lifecycle hook after editing
+`.ygg/project.yml`, run it explicitly without creating or removing a worktree:
 
 ```sh
 ygg hook run post_create feature-payment
@@ -196,7 +197,9 @@ Ygg reuses a local branch, tracks a matching branch from the configured remote, 
 branch from the default branch. Use `--from HEAD` only when new work should start from the current
 worktree's exact commit. Use `--carry` instead when the new branch should also receive the current
 staged, unstaged, and non-ignored untracked files. `ygg handoff` is the guided code-only form of the
-same operation; it does not transfer a running editor, process, or agent session.
+same operation; it does not transfer a running editor, process, or agent session. A new local branch
+has no upstream even when it starts at `origin/main`; publish it explicitly with the command Ygg
+prints after creation.
 
 Rename a linked worktree directory without changing its branch:
 
@@ -248,14 +251,15 @@ locally before running it.
 
 ## Clean up with confidence
 
-| Goal                                                  | Command                      | Result                                                                      |
-| ----------------------------------------------------- | ---------------------------- | --------------------------------------------------------------------------- |
-| Finish with an existing worktree                      | `ygg remove feature-payment` | Removes the checkout directory, never the branch.                           |
-| Inspect metadata for a directory deleted outside Git  | `ygg prune`                  | Preview only; changes nothing.                                              |
-| Apply that metadata cleanup                           | `ygg prune --apply`          | Removes only stale Git worktree registrations.                              |
-| Restore a deleted worktree container or metadata link | `ygg init`                   | Repairs the existing workspace without replacing its configuration.         |
-| Inspect removal of Ygg from the repository            | `ygg uninit`                 | Previews Ygg-owned metadata; keeps Git, branches, and worktree directories. |
-| Remove Ygg from the repository                        | `ygg uninit --apply`         | Removes only Ygg workspace metadata after safety checks.                    |
+| Goal                                                  | Command                                        | Result                                                                      |
+| ----------------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------- |
+| Finish with an existing worktree                      | `ygg remove feature-payment`                   | Removes the checkout directory and keeps the branch by default.             |
+| Remove its merged local branch too                    | `ygg remove feature-payment --delete-branch`   | Removes the checkout and eligible local branch; keeps the remote branch.    |
+| Inspect metadata for a directory deleted outside Git  | `ygg prune`                                    | Preview only; changes nothing.                                              |
+| Apply that metadata cleanup                           | `ygg prune --apply`                            | Removes only stale Git worktree registrations.                              |
+| Restore a deleted worktree container or metadata link | `ygg init`                                     | Repairs the existing workspace without replacing its configuration.         |
+| Inspect removal of Ygg from the repository            | `ygg uninit`                                   | Previews Ygg-owned metadata; keeps Git, branches, and worktree directories. |
+| Remove Ygg from the repository                        | `ygg uninit --apply`                           | Removes only Ygg workspace metadata after safety checks.                    |
 
 Let Ygg do the tidying instead of moving or deleting linked worktree folders manually. `ygg remove`
 checks their state first; `ygg prune` is the recovery path for administrative metadata after a
@@ -292,8 +296,8 @@ pnpm test
 pnpm build
 ```
 
-Remove the global source link with `pnpm run unlink:global`. To explore the CLI without installing
-it globally, use `pnpm dev -- --help`.
+Remove the global installation with `pnpm run uninstall:global`. To explore the CLI without
+installing it globally, use `pnpm dev -- --help`.
 
 ## License
 

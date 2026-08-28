@@ -22,7 +22,10 @@ ygg handoff <new-branch>
 Use `--cd` to enter the new worktree through shell integration, or `--tool <profile>` to open an
 editor or agent. These destinations cannot be combined. When run inside a worktree, an explicit
 `--from HEAD` uses that worktree's current commit; without `--from`, new branches use the configured
-default branch.
+default branch. This start point defines history, not tracking: a new local branch has no upstream.
+Do not publish it unless the user explicitly requests that external change; Ygg prints the matching
+`git push -u <remote> HEAD` command for an authorized first push. Existing remote branches continue
+to track their same-named remote ref.
 
 Fetching follows the effective project-configuration default. Override it only when the task
 requires it with `--fetch` or `--no-fetch`. Use `--tool <profile>` to open an editor or agent after
@@ -64,6 +67,12 @@ state:
 ```sh
 ygg remove <worktree> --yes
 ```
+
+This default removes only the checkout and preserves its branch. In a terminal, Ygg offers eligible
+merged local branches for deletion with no preselection. In automation, use `--delete-branch --yes`
+only when the user explicitly authorizes deleting the corresponding local branch. The configured
+default branch, unmerged branches, detached checkouts, and remote branches are never deleted;
+`--force` alone grants no branch-deletion permission.
 
 `ygg prune` is different from removal: it previews stale Git registrations for worktree directories
 that are already missing. To apply that metadata-only cleanup non-interactively, use:

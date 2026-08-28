@@ -139,7 +139,11 @@ keeps the fully transferred worktree and reports
 
 Resolution order is local branch, matching configured remote branch, then a new branch from
 `--from` or the default branch. Creation runs trusted `pre_create`, Git checkout creation, then
-`post_create`. A failed `post_create` keeps the checkout and reports `ygg setup <worktree>`.
+`post_create`. A matching remote branch tracks its same-named remote ref. A new branch has no
+upstream: its start point determines history only and never implies tracking, including when the
+start point is `origin/<default-branch>`. With a configured remote, Ygg prints
+`git push -u <remote> HEAD` as the explicit publish command. A failed `post_create` keeps the
+checkout and reports `ygg setup <worktree>`.
 
 Built-in tools are `claude`, `code`, `codex`, `codex-app`, `cursor`, and `zed`.
 
@@ -321,15 +325,18 @@ ygg rename feature-payment payment-review
 ## `ygg remove`
 
 ```text
-ygg remove [worktrees...] [--force] [--yes]
+ygg remove [worktrees...] [--delete-branch] [--force] [--yes]
 ```
 
 Without identifiers, a terminal offers removable linked worktrees. Non-interactive use requires
-explicit identifiers and `--yes`.
+explicit identifiers and `--yes`. Before final confirmation, an interactive terminal offers each
+eligible merged local branch for deletion; the safe default keeps every branch. Multiple eligible
+branches use an unselected checkbox list. `--yes` without `--delete-branch` keeps every branch.
 
 | Option | Meaning |
 | --- | --- |
 | `--force` | Bypass dirty, unmerged, and lock safeguards. |
+| `--delete-branch` | Delete each removed worktree's eligible merged local branch. |
 | `--yes` | Confirm removal without prompting. |
 
 The three bypassable safeguards are staged, unstaged, or untracked changes; a branch not merged
@@ -337,8 +344,13 @@ into the configured default branch; and a Git worktree lock. With `--force`, Ygg
 path, and every bypassed safeguard before confirmation, including with `--yes`.
 
 The retained primary checkout and a worktree whose state is unavailable are hard blockers and
-cannot be bypassed. Duplicate identifiers resolving to the same worktree are removed once.
-Branches are never deleted. Trusted `pre_remove` and `post_remove` hooks run around Git removal.
+cannot be bypassed. Duplicate identifiers resolving to the same worktree are removed once. Branches
+are kept unless selected interactively or requested with `--delete-branch`. Only a local branch that
+is merged into the configured default branch is eligible; the default branch, detached checkouts,
+unmerged branches, and remote branches are never deleted. `--force` alone never selects a branch
+for deletion, and `--delete-branch` rejects the entire plan before mutation if any selected worktree
+has an ineligible branch. Trusted `pre_remove` and `post_remove` hooks run around Git removal; an
+eligible branch is deleted only after `post_remove` succeeds and its identity is revalidated.
 
 ## `ygg prune`
 

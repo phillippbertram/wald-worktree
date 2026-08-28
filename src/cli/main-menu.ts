@@ -133,7 +133,7 @@ export async function runMainMenu(program: Command, context: CliContext): Promis
             {
               label: "🍂 Remove worktree",
               value: "remove",
-              description: "Safely remove checkouts while keeping branches.",
+              description: "Safely remove checkouts with optional merged-branch cleanup.",
               group: "Maintenance",
             },
           ].filter((action) => action.value !== "rename" || canRename)
@@ -201,7 +201,10 @@ export async function runMainMenu(program: Command, context: CliContext): Promis
           break;
         }
         case "remove":
-          await removeWorktrees({ worktrees: [], force: false, yes: false }, context);
+          await removeWorktrees(
+            { worktrees: [], force: false, deleteBranch: false, yes: false },
+            context,
+          );
           break;
         case "rename":
           await renameWorktree({}, context);

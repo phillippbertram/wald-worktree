@@ -130,7 +130,9 @@ ygg remove contributor-payment-fix
 ```
 
 Ygg fetches according to project configuration and prefers an existing local branch, then a matching
-remote branch, before creating a new branch.
+remote branch, before creating a new branch. A matching remote branch is tracked. A newly created
+local branch has no upstream even when its history starts at the configured remote default branch;
+Ygg prints the explicit `git push -u <remote> HEAD` command needed to publish it.
 
 ### 3. Keep coding while a long test runs
 
@@ -377,8 +379,12 @@ repairs the roots without touching surviving worlds or branches.
 
 ### Does removing a worktree delete its branch?
 
-No. `ygg remove` removes the linked checkout after safety checks and preserves the branch. `ygg
-prune` removes only stale administrative metadata and never deletes an existing directory or branch.
+Not by default. `ygg remove` removes the linked checkout after safety checks and keeps its branch.
+In a terminal, Ygg also offers eligible merged local branches for deletion before final
+confirmation; no branch is preselected. Scripts can request the same behavior explicitly with
+`--delete-branch --yes`. The configured default branch, unmerged branches, detached checkouts, and
+remote branches are never deleted. `ygg prune` removes only stale administrative metadata and never
+deletes an existing directory or branch.
 
 ### How do I remove Ygg from an existing repository?
 

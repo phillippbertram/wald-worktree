@@ -61,8 +61,10 @@ ygg run verify feature-ui
 ygg remove feature-ui
 ```
 
-Removal preserves each branch. If another person or agent still needs a worktree, do not remove it
-without an explicit handoff.
+Removal preserves each branch by default. Interactive users may select eligible merged local
+branches for deletion; automation must request that explicitly with `--delete-branch --yes`. If
+another person or agent still needs a worktree or branch, do not remove it without an explicit
+handoff.
 
 ## Hand off unfinished code
 

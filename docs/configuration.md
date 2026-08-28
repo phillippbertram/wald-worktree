@@ -485,7 +485,7 @@ resolve branch/config -> trust -> pre_create -> git worktree add -> post_create
 Removal runs:
 
 ```text
-safety inspection -> trust -> pre_remove -> git worktree remove -> post_remove
+safety inspection -> trust -> pre_remove -> git worktree remove -> post_remove -> optional local branch deletion
 ```
 
 ```mermaid
@@ -504,13 +504,16 @@ flowchart LR
       R2 --> R3[pre_remove]
       R3 --> R4[git worktree remove]
       R4 --> R5[post_remove]
+      R5 --> R8[Optional merged local branch deletion]
       R3 -- Failure --> R6[Worktree preserved]
-      R5 -- Failure --> R7[Removal kept and failure reported]
+      R5 -- Failure --> R7[Removal kept, branch preserved, failure reported]
     end
 ```
 
 `pre_create` failure leaves no new worktree. `post_create` failure keeps the worktree and reports
 `ygg setup <worktree>` for recovery. A `pre_remove` failure preserves the worktree.
+Branch deletion happens only after a successful `post_remove`; a changed or newly checked-out
+branch is preserved and reported instead.
 
 ### Run hooks manually
 

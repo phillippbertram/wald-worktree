@@ -42,7 +42,18 @@ export type RemovalInspection = {
   merged: boolean;
   blockers: string[];
   hardBlockers: string[];
+  branchDeletion: BranchDeletionInspection;
 };
+
+export type BranchDeletionPlan = {
+  branch: string;
+  branchRef: string;
+  expectedHead: string;
+};
+
+export type BranchDeletionInspection =
+  | ({ eligible: true } & BranchDeletionPlan)
+  | { eligible: false; branch: string | null; reason: string };
 
 export type MoveWorktreePlan = {
   worktree: Worktree;
@@ -188,7 +199,15 @@ export class WorktreeService {
       );
     } else {
       await this.git.run(
-        ["worktree", "add", "-b", prepared.branch, prepared.target, prepared.strategy.base],
+        [
+          "worktree",
+          "add",
+          "--no-track",
+          "-b",
+          prepared.branch,
+          prepared.target,
+          prepared.strategy.base,
+        ],
         { gitDir: workspace.gitDir },
       );
     }
@@ -301,7 +320,14 @@ export class WorktreeService {
       blockers.push("the worktree is locked");
     }
 
-    return { worktree, dirty, merged, blockers, hardBlockers };
+    return {
+      worktree,
+      dirty,
+      merged,
+      blockers,
+      hardBlockers,
+      branchDeletion: this.inspectBranchDeletion(workspace, worktree, merged),
+    };
   }
 
   async remove(workspace: Workspace, worktree: Worktree, force: boolean): Promise<void> {
@@ -314,6 +340,46 @@ export class WorktreeService {
     }
     args.push(worktree.path);
     await this.git.run(args, { gitDir: workspace.gitDir });
+  }
+
+  async deleteBranch(workspace: Workspace, plan: BranchDeletionPlan): Promise<void> {
+    if (plan.branch === workspace.config.defaultBranch) {
+      throw new YggError(`Refusing to delete the configured default branch: ${plan.branch}`);
+    }
+    if (plan.branchRef !== `refs/heads/${plan.branch}`) {
+      throw new YggError(`Refusing to delete an unexpected branch reference: ${plan.branchRef}`);
+    }
+
+    const existingCheckout = (await this.list(workspace)).find(
+      (worktree) => worktree.branchRef === plan.branchRef,
+    );
+    if (existingCheckout) {
+      throw new YggError(
+        `Refusing to delete branch ${plan.branch}; it is checked out at ${existingCheckout.path}`,
+      );
+    }
+
+    const current = await this.git.run(["rev-parse", "--verify", "--quiet", plan.branchRef], {
+      gitDir: workspace.gitDir,
+      reject: false,
+    });
+    if (current.exitCode !== 0) {
+      return;
+    }
+    if (current.stdout !== plan.expectedHead) {
+      throw new YggError(
+        `Refusing to delete branch ${plan.branch}; its HEAD changed after review.`,
+      );
+    }
+    if (!(await this.isBranchMergedIntoDefault(workspace, plan.branchRef))) {
+      throw new YggError(
+        `Refusing to delete branch ${plan.branch}; it is no longer merged into ${workspace.config.defaultBranch}.`,
+      );
+    }
+
+    await this.git.run(["branch", "--delete", "--force", "--", plan.branch], {
+      gitDir: workspace.gitDir,
+    });
   }
 
   async listMoveCandidates(workspace: Workspace, cwd = process.cwd()): Promise<Worktree[]> {
@@ -515,6 +581,54 @@ export class WorktreeService {
       return false;
     }
 
+    return await this.isBranchMergedIntoDefault(workspace, worktree.branchRef);
+  }
+
+  private inspectBranchDeletion(
+    workspace: Workspace,
+    worktree: Worktree,
+    merged: boolean,
+  ): BranchDeletionInspection {
+    if (!worktree.branch || !worktree.branchRef) {
+      return {
+        eligible: false,
+        branch: null,
+        reason: "the worktree is not on a local branch",
+      };
+    }
+    if (worktree.branch === workspace.config.defaultBranch) {
+      return {
+        eligible: false,
+        branch: worktree.branch,
+        reason: "the configured default branch is never deleted",
+      };
+    }
+    if (!worktree.head) {
+      return {
+        eligible: false,
+        branch: worktree.branch,
+        reason: "the branch HEAD could not be determined",
+      };
+    }
+    if (!merged) {
+      return {
+        eligible: false,
+        branch: worktree.branch,
+        reason: `the branch is not merged into ${workspace.config.defaultBranch}`,
+      };
+    }
+    return {
+      eligible: true,
+      branch: worktree.branch,
+      branchRef: worktree.branchRef,
+      expectedHead: worktree.head,
+    };
+  }
+
+  private async isBranchMergedIntoDefault(
+    workspace: Workspace,
+    branchRef: string,
+  ): Promise<boolean> {
     const remote = workspace.config.remote;
     const remoteDefault = remote
       ? `${remote.name}/${workspace.config.defaultBranch}`
@@ -523,10 +637,9 @@ export class WorktreeService {
       remote && (await this.commitExists(workspace, remoteDefault))
         ? remoteDefault
         : workspace.config.defaultBranch;
-    return await this.git.succeeds(
-      ["merge-base", "--is-ancestor", worktree.branchRef, defaultReference],
-      { gitDir: workspace.gitDir },
-    );
+    return await this.git.succeeds(["merge-base", "--is-ancestor", branchRef, defaultReference], {
+      gitDir: workspace.gitDir,
+    });
   }
 }
 

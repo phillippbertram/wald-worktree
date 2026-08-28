@@ -154,6 +154,77 @@ tasks:
     expect(await worktrees.list(workspace)).toEqual([]);
   });
 
+  it("deletes an explicitly selected merged local branch after its worktree", async () => {
+    const workspace = await workspaces.initialize(
+      repository.remote,
+      path.join(temporaryRoot, "branch-cleanup-workspace"),
+    );
+    const workflow = createWorkflow(git, worktrees, configs);
+    await workflow.executeCreate(
+      await workflow.planCreate(workspace, { branch: "main", fetch: false }),
+    );
+    const feature = await workflow.executeCreate(
+      await workflow.planCreate(workspace, { branch: "feature/cleanup", fetch: false }),
+    );
+
+    const removal = await workflow.planRemove(workspace, feature.name);
+    expect(removal.inspection.branchDeletion).toMatchObject({
+      eligible: true,
+      branch: "feature/cleanup",
+      branchRef: "refs/heads/feature/cleanup",
+      expectedHead: feature.head,
+    });
+    await workflow.executeRemove(removal, { deleteBranch: true });
+
+    await expect(fs.stat(feature.path)).rejects.toMatchObject({ code: "ENOENT" });
+    expect(
+      await git.succeeds(["show-ref", "--verify", "--quiet", "refs/heads/feature/cleanup"], {
+        gitDir: workspace.gitDir,
+      }),
+    ).toBe(false);
+    expect(
+      await git.succeeds(["show-ref", "--verify", "--quiet", "refs/heads/main"], {
+        gitDir: workspace.gitDir,
+      }),
+    ).toBe(true);
+  });
+
+  it("refuses explicit deletion of an unmerged branch before removing its worktree", async () => {
+    const workspace = await workspaces.initialize(
+      repository.remote,
+      path.join(temporaryRoot, "unmerged-cleanup-workspace"),
+    );
+    const workflow = createWorkflow(git, worktrees, configs);
+    await workflow.executeCreate(
+      await workflow.planCreate(workspace, { branch: "main", fetch: false }),
+    );
+    const feature = await workflow.executeCreate(
+      await workflow.planCreate(workspace, { branch: "feature/unmerged-cleanup", fetch: false }),
+    );
+    await git.run(["config", "user.email", "tests@example.invalid"], { cwd: feature.path });
+    await git.run(["config", "user.name", "ygg tests"], { cwd: feature.path });
+    await fs.writeFile(path.join(feature.path, "feature.txt"), "unmerged\n", "utf8");
+    await git.run(["add", "feature.txt"], { cwd: feature.path });
+    await git.run(["commit", "-m", "unmerged feature"], { cwd: feature.path });
+
+    const removal = await workflow.planRemove(workspace, feature.name);
+    expect(removal.inspection.branchDeletion).toMatchObject({
+      eligible: false,
+      reason: "the branch is not merged into main",
+    });
+    await expect(
+      workflow.executeRemove(removal, { deleteBranch: true, force: true }),
+    ).rejects.toThrow(/Cannot delete the local branch[\s\S]*not merged into main/u);
+
+    await expect(fs.stat(feature.path)).resolves.toSatisfy((stat) => stat.isDirectory());
+    expect(
+      await git.succeeds(
+        ["show-ref", "--verify", "--quiet", "refs/heads/feature/unmerged-cleanup"],
+        { gitDir: workspace.gitDir },
+      ),
+    ).toBe(true);
+  });
+
   it("applies one workspace-local overlay to repository behavior during creation and tasks", async () => {
     await commitProjectConfig(
       repository,

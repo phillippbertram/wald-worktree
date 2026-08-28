@@ -231,8 +231,19 @@ export class WorktreeWorkflowService {
 
   async executeRemove(
     plan: RemovePlan,
-    options: { force?: boolean; trustProjectConfig?: boolean; output?: NodeJS.WritableStream } = {},
+    options: {
+      force?: boolean;
+      deleteBranch?: boolean;
+      trustProjectConfig?: boolean;
+      output?: NodeJS.WritableStream;
+    } = {},
   ): Promise<void> {
+    const branchDeletion = options.deleteBranch ? plan.inspection.branchDeletion : null;
+    if (branchDeletion && !branchDeletion.eligible) {
+      throw new YggError(
+        `Cannot delete the local branch for ${plan.inspection.worktree.name}: ${branchDeletion.reason}.`,
+      );
+    }
     await this.ensureTrusted(plan.workspace, plan.project, options.trustProjectConfig);
     const context = this.automationContext(
       plan,
@@ -249,10 +260,23 @@ export class WorktreeWorkflowService {
         event: "post_remove",
       });
     } catch (error) {
+      const branchKept = branchDeletion?.eligible
+        ? `\nLocal branch ${branchDeletion.branch} was kept.`
+        : "";
       throw new YggError(
-        `Worktree ${plan.inspection.worktree.name} was removed, but its post-remove hook failed: ${toErrorMessage(error)}`,
+        `Worktree ${plan.inspection.worktree.name} was removed, but its post-remove hook failed: ${toErrorMessage(error)}${branchKept}`,
         { cause: error },
       );
+    }
+    if (branchDeletion?.eligible) {
+      try {
+        await this.worktrees.deleteBranch(plan.workspace, branchDeletion);
+      } catch (error) {
+        throw new YggError(
+          `Worktree ${plan.inspection.worktree.name} was removed, but local branch ${branchDeletion.branch} was kept because it could not be deleted: ${toErrorMessage(error)}`,
+          { cause: error },
+        );
+      }
     }
   }
 

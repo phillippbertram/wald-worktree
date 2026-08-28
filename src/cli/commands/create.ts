@@ -167,6 +167,15 @@ export async function createWorktree(input: CreateInput, context: CliContext): P
         `${style.label("Source kept unchanged:")} ${style.path(created.carry.sourcePath)}`,
       );
     }
+    if (plan.prepared.strategy.type === "new") {
+      writeLine(context.output.stdout, `${style.label("Upstream:")} ${style.value("none")}`);
+      if (workspace.config.remote) {
+        writeLine(
+          context.output.stdout,
+          `${style.label("Publish with:")} ${style.command(`git push -u ${shellQuote(workspace.config.remote.name)} HEAD`)}`,
+        );
+      }
+    }
     if (input.cd) {
       writeLine(
         context.output.stdout,

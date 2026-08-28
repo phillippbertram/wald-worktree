@@ -143,6 +143,14 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     expect(directCd.exitCode, directCd.stderr).toBe(0);
     expect(directCd.stdout).toContain("Shell integration is not active");
     expect(directCd.stdout).toContain("Enter with: cd");
+    expect(directCd.stdout).toContain("Upstream: none");
+    expect(directCd.stdout).toContain("Publish with: git push -u 'origin' HEAD");
+    const directCdUpstream = await execa(
+      "git",
+      ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"],
+      { cwd: path.join(workspace, "feature-direct-cd"), reject: false },
+    );
+    expect(directCdUpstream.exitCode).not.toBe(0);
 
     const listed = await execa(process.execPath, cliArguments("list", "--json"), {
       cwd: workspace,
@@ -155,6 +163,30 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
         expect.objectContaining({ branch: "feature/direct-cd", name: "feature-direct-cd" }),
       ]),
     );
+
+    const removedFeature = await execa(
+      process.execPath,
+      cliArguments("remove", "feature-direct-cd", "--delete-branch", "--yes"),
+      { cwd: workspace, reject: false },
+    );
+    expect(removedFeature.exitCode, removedFeature.stderr).toBe(0);
+    expect(removedFeature.stdout).toContain("Removed worktree feature-direct-cd");
+    expect(removedFeature.stdout).toContain("Deleted local branch feature/direct-cd");
+    await expect(fs.stat(path.join(workspace, "feature-direct-cd"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    const deletedFeatureBranch = await execa(
+      "git",
+      [
+        `--git-dir=${path.join(workspace, "repo.git")}`,
+        "show-ref",
+        "--verify",
+        "--quiet",
+        "refs/heads/feature/direct-cd",
+      ],
+      { reject: false },
+    );
+    expect(deletedFeatureBranch.exitCode).toBe(1);
 
     const configured = await execa(
       process.execPath,
@@ -193,6 +225,19 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     expect(refused.exitCode).toBe(1);
     expect(refused.stderr).toContain("use --force only if this data can be discarded");
 
+    const refusedDefaultBranchDeletion = await execa(
+      process.execPath,
+      cliArguments("remove", "main", "--delete-branch", "--force", "--yes"),
+      { cwd: workspace, reject: false },
+    );
+    expect(refusedDefaultBranchDeletion.exitCode).toBe(1);
+    expect(refusedDefaultBranchDeletion.stderr).toContain(
+      "the configured default branch is never deleted",
+    );
+    await expect(fs.stat(path.join(workspace, "main"))).resolves.toSatisfy((stat) =>
+      stat.isDirectory(),
+    );
+
     const removed = await execa(
       process.execPath,
       cliArguments("remove", "main", "--force", "--yes"),
@@ -202,7 +247,20 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
       },
     );
     expect(removed.exitCode, removed.stderr).toBe(0);
-    expect(removed.stdout).toContain("Removed main");
+    expect(removed.stdout).toContain("Removed worktree main");
+    expect(removed.stdout).toContain("Branch kept: main");
+    const retainedDefaultBranch = await execa(
+      "git",
+      [
+        `--git-dir=${path.join(workspace, "repo.git")}`,
+        "show-ref",
+        "--verify",
+        "--quiet",
+        "refs/heads/main",
+      ],
+      { reject: false },
+    );
+    expect(retainedDefaultBranch.exitCode).toBe(0);
   });
 
   it("previews and explicitly prunes only stale worktree metadata", async () => {

@@ -10,7 +10,11 @@ import { PromptBackError } from "../src/ui/terminal.js";
 
 const prompts = vi.hoisted(() => ({
   confirmations: [] as Array<boolean | Error>,
+  confirmationDefaults: [] as boolean[],
+  confirmationQuestions: [] as string[],
   manySelections: [] as Worktree[][],
+  manyValueSelections: [] as string[][],
+  manyValueOptions: [] as Array<{ initialValues?: string[] }>,
   promptTexts: [] as Array<string | Error>,
   searchSelections: [] as Array<string | Error>,
   searchOptions: [] as Array<Array<{ label: string; value: string }>>,
@@ -25,7 +29,9 @@ vi.mock("../src/ui/terminal.js", async (importOriginal) => {
     isInteractiveTerminal: () => true,
     printStatus: async () => undefined,
     runTask: async <T>(_label: string, task: () => Promise<T>) => await task(),
-    confirm: async () => {
+    confirm: async (question: string, defaultValue: boolean) => {
+      prompts.confirmationQuestions.push(question);
+      prompts.confirmationDefaults.push(defaultValue);
       const result = prompts.confirmations.shift() ?? false;
       if (result instanceof Error) throw result;
       return result;
@@ -54,6 +60,14 @@ vi.mock("../src/ui/terminal.js", async (importOriginal) => {
       prompts.manyOptions.push(options);
       return prompts.manySelections.shift() ?? [];
     },
+    selectManyValues: async (
+      _question: string,
+      _choices: Array<{ label: string; value: string }>,
+      options: { initialValues?: string[] },
+    ) => {
+      prompts.manyValueOptions.push(options);
+      return prompts.manyValueSelections.shift() ?? [];
+    },
   };
 });
 
@@ -65,7 +79,11 @@ describe("interactive command navigation", () => {
 
   beforeEach(() => {
     prompts.confirmations = [];
+    prompts.confirmationDefaults = [];
+    prompts.confirmationQuestions = [];
     prompts.manySelections = [];
+    prompts.manyValueSelections = [];
+    prompts.manyValueOptions = [];
     prompts.promptTexts = [];
     prompts.searchSelections = [];
     prompts.searchOptions = [];
@@ -174,6 +192,11 @@ describe("interactive command navigation", () => {
             worktree: name === feature.name ? feature : review,
             hardBlockers: [],
             blockers: [],
+            branchDeletion: {
+              eligible: false,
+              branch: name,
+              reason: "not eligible in this test",
+            },
           },
           project: null,
         })),
@@ -181,7 +204,10 @@ describe("interactive command navigation", () => {
       },
     });
 
-    await removeWorktrees({ worktrees: [], force: false, yes: false }, context);
+    await removeWorktrees(
+      { worktrees: [], force: false, deleteBranch: false, yes: false },
+      context,
+    );
 
     expect(prompts.manyOptions[1]).toEqual({ initialValues: [feature.path], navigation: "cancel" });
     expect(executeRemove).toHaveBeenCalledWith(
@@ -202,6 +228,11 @@ describe("interactive command navigation", () => {
           "the worktree contains staged, unstaged, or untracked changes",
           "the branch is not merged into main",
         ],
+        branchDeletion: {
+          eligible: false,
+          branch: feature.branch,
+          reason: "the branch is not merged into main",
+        },
       },
       project: null,
     };
@@ -219,7 +250,12 @@ describe("interactive command navigation", () => {
     });
 
     await removeWorktrees(
-      { worktrees: [feature.name, feature.path], force: true, yes: true },
+      {
+        worktrees: [feature.name, feature.path],
+        force: true,
+        deleteBranch: false,
+        yes: true,
+      },
       context,
     );
 
@@ -228,6 +264,98 @@ describe("interactive command navigation", () => {
     expect(stderr).toContain(feature.path);
     expect(stderr).toContain("staged, unstaged, or untracked changes");
     expect(stderr).toContain("not merged into main");
+  });
+
+  it("offers eligible local branch deletion with a safe default before confirmation", async () => {
+    prompts.confirmations.push(true, true);
+    const executeRemove = vi.fn();
+    const context = commandContext(workspace, primary, [primary, feature], {
+      workflow: {
+        planRemove: vi.fn().mockResolvedValue({
+          inspection: {
+            worktree: feature,
+            hardBlockers: [],
+            blockers: [],
+            branchDeletion: {
+              eligible: true,
+              branch: feature.branch,
+              branchRef: "refs/heads/feature",
+              expectedHead: "abc123",
+            },
+          },
+          project: null,
+        }),
+        executeRemove,
+      },
+    });
+
+    await removeWorktrees(
+      {
+        worktrees: [feature.name],
+        force: false,
+        deleteBranch: false,
+        yes: false,
+      },
+      context,
+    );
+
+    expect(prompts.confirmationQuestions[0]).toContain("Delete merged local branch feature too?");
+    expect(prompts.confirmationDefaults[0]).toBe(false);
+    expect(prompts.confirmationQuestions[1]).toContain("Delete local branch: feature.");
+    expect(executeRemove).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ deleteBranch: true }),
+    );
+  });
+
+  it("offers multiple eligible branches as an unselected checkbox list", async () => {
+    prompts.manyValueSelections.push(["refs/heads/review"]);
+    prompts.confirmations.push(true);
+    const executeRemove = vi.fn();
+    const context = commandContext(workspace, primary, [primary, feature, review], {
+      workflow: {
+        planRemove: vi.fn(async (_workspace: Workspace, name: string) => {
+          const worktree = name === feature.name ? feature : review;
+          return {
+            inspection: {
+              worktree,
+              hardBlockers: [],
+              blockers: [],
+              branchDeletion: {
+                eligible: true,
+                branch: worktree.branch,
+                branchRef: `refs/heads/${worktree.branch}`,
+                expectedHead: "abc123",
+              },
+            },
+            project: null,
+          };
+        }),
+        executeRemove,
+      },
+    });
+
+    await removeWorktrees(
+      {
+        worktrees: [feature.name, review.name],
+        force: false,
+        deleteBranch: false,
+        yes: false,
+      },
+      context,
+    );
+
+    expect(prompts.manyValueOptions).toEqual([{ initialValues: [], navigation: "cancel" }]);
+    expect(executeRemove).toHaveBeenNthCalledWith(
+      1,
+      expect.any(Object),
+      expect.objectContaining({ deleteBranch: false }),
+    );
+    expect(executeRemove).toHaveBeenNthCalledWith(
+      2,
+      expect.any(Object),
+      expect.objectContaining({ deleteBranch: true }),
+    );
   });
 });
 

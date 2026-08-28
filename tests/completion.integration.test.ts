@@ -119,6 +119,7 @@ tools:
   it("completes static commands and options without workspace data", async () => {
     const commands = await runCli(temporaryRoot, "complete", "--", "");
     const options = await runCli(temporaryRoot, "complete", "--", "create", "--");
+    const removeOptions = await runCli(temporaryRoot, "complete", "--", "remove", "--");
     const shells = await runCli(temporaryRoot, "complete", "--", "completion", "");
     const configScopes = await runCli(
       temporaryRoot,
@@ -146,6 +147,9 @@ tools:
     expect(suggestionValues(commands.stdout)).not.toContain("shell-init");
     expect(suggestionValues(options.stdout)).toEqual(
       expect.arrayContaining(["--from", "--name", "--carry", "--tool", "--help"]),
+    );
+    expect(suggestionValues(removeOptions.stdout)).toEqual(
+      expect.arrayContaining(["--delete-branch", "--force", "--yes", "--help"]),
     );
     expect(suggestionValues(shells.stdout)).toEqual(["zsh", "bash", "fish"]);
     expect(suggestionValues(configScopes.stdout)).toEqual(["workspace", "project"]);

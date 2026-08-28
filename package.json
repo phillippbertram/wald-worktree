@@ -1,6 +1,6 @@
 {
   "name": "ygg-worktree",
-  "version": "1.0.0",
+  "version": "0.10.0",
   "description": "Ygg is a configurable Git worktree and agent workflow CLI.",
   "private": true,
   "type": "module",
@@ -19,14 +19,14 @@
     "build": "tsc -p tsconfig.build.json",
     "ci": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "dev": "tsx src/cli.ts",
-    "link:global": "pnpm build && pnpm add --global .",
+    "install:global": "pnpm build && pnpm add -g .",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "start": "node dist/cli.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "unlink:global": "pnpm remove --global ygg-worktree"
+    "uninstall:global": "pnpm remove -g ygg-worktree"
   },
   "dependencies": {
     "@bomb.sh/tab": "0.0.22",

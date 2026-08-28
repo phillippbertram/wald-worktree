@@ -35,8 +35,9 @@ the source; they do not move a running process or agent session. Use `ygg rename
 
 Do not use `--force` for removal without verifying that local changes, an unmerged branch, or a
 worktree lock can be discarded or bypassed. Ygg prints these bypassed safeguards before removal.
-Never infer permission to delete branches or the primary checkout; `ygg` does not perform those
-actions as part of normal removal.
+Never infer permission to delete branches or the primary checkout. Normal removal preserves every
+branch. Use `--delete-branch` only when the user explicitly authorizes deletion of the eligible
+merged local branch; Ygg never deletes the configured default branch or its remote counterpart.
 
 Use `ygg prune` as a read-only preview of stale Git metadata. Apply it non-interactively only with
 `ygg prune --apply --yes`; this does not remove directories or branches and preserves locked entries.

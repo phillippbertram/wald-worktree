@@ -26,7 +26,7 @@ export function createProgram(
   const program = new Command()
     .name("ygg")
     .description("🌳 Create and work in isolated Git checkouts safely.")
-    .version("1.0.0")
+    .version("0.10.0")
     .showSuggestionAfterError()
     .showHelpAfterError();
 
