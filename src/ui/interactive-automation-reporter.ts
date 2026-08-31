@@ -1,6 +1,7 @@
 import { Writable } from "node:stream";
 import { StringDecoder } from "node:string_decoder";
-import { intro, log, outro, taskLog } from "@clack/prompts";
+import { stripVTControlCharacters } from "node:util";
+import { intro, log, outro, spinner, taskLog } from "@clack/prompts";
 import pc from "picocolors";
 import type {
   AutomationObserver,
@@ -12,12 +13,17 @@ import type {
 import { style } from "./style.js";
 
 type CommandTaskLog = ReturnType<typeof taskLog>;
+type StepSpinner = ReturnType<typeof spinner>;
+type TaskLogTarget = Pick<CommandTaskLog, "message">;
 
 type ActiveStep = {
   row: AutomationRow;
+  title: string;
   startedAt: number;
   results: AutomationRow[];
-  commandLog?: CommandTaskLog;
+  spinner: StepSpinner;
+  commandBuffer?: CommandOutputBuffer;
+  commandContext?: string;
   commandStream?: TaskLogWritable;
 };
 
@@ -109,37 +115,48 @@ export class InteractiveAutomationReporter implements AutomationObserver {
     this.separateBeforeNextStep = false;
     this.steps.add(row.step);
     const title = formatStepTitle(row);
+    const stepSpinner = spinner({
+      output: this.output,
+      withGuide: false,
+    });
     const active: ActiveStep = {
       row,
+      title,
       startedAt: this.now(),
       results: [],
+      spinner: stepSpinner,
     };
     if (row.type === "command") {
-      active.commandLog = taskLog({
-        title,
-        limit: 10,
-        retainLog: true,
-        spacing: 0,
-        output: this.output,
-      });
-      active.commandStream = new TaskLogWritable(active.commandLog);
       if (row.target !== this.context.path) {
-        active.commandLog.message(`${style.label("CWD")}  ${style.path(row.target)}`);
+        active.commandContext = `${style.label("CWD")}  ${style.path(row.target)}`;
       }
-    } else {
-      log.step(title, { output: this.output, spacing: 0 });
+      active.commandBuffer = new CommandOutputBuffer((lines) => {
+        stepSpinner.message(formatActiveStep(title, active.commandContext, lines));
+      });
+      active.commandStream = new TaskLogWritable(active.commandBuffer);
     }
+    stepSpinner.start(formatActiveStep(title, active.commandContext));
     this.activeStep = active;
   }
 
   private finishCommand(row: AutomationRow): void {
     const active = this.activeStep;
-    if (!active?.commandLog) return;
+    if (!active?.commandBuffer) return;
     active.commandStream?.close();
+    active.spinner.clear();
+    const commandLog = taskLog({
+      title: active.title,
+      limit: 10,
+      retainLog: true,
+      spacing: 0,
+      output: this.output,
+    });
+    if (active.commandContext) commandLog.message(active.commandContext);
+    active.commandBuffer.replay(commandLog);
     const duration = formatDuration(this.now() - active.startedAt);
     const message = `${styleAutomationStatus(row.status, row.status)} · ${duration}${row.note ? ` · ${styleAutomationNote(row.note, row.status)}` : ""}`;
-    if (row.status === "FAILED") active.commandLog.error(message);
-    else active.commandLog.success(message, { showLog: true });
+    if (row.status === "FAILED") commandLog.error(message);
+    else commandLog.success(message, { showLog: true });
     this.activeStep = undefined;
   }
 
@@ -147,7 +164,11 @@ export class InteractiveAutomationReporter implements AutomationObserver {
     const active = this.activeStep;
     if (!active) return;
     active.commandStream?.close();
-    if (active.row.type !== "command") this.writeFileResults(active);
+    active.spinner.clear();
+    if (active.row.type !== "command") {
+      log.step(active.title, { output: this.output, spacing: 0 });
+      this.writeFileResults(active);
+    }
     this.activeStep = undefined;
   }
 
@@ -186,12 +207,35 @@ export class InteractiveAutomationReporter implements AutomationObserver {
   }
 }
 
+class CommandOutputBuffer implements TaskLogTarget {
+  private value = "";
+
+  constructor(private readonly onChange: (lines: string[]) => void) {}
+
+  message(message: string): void {
+    this.value += message;
+    this.onChange(this.previewLines());
+  }
+
+  replay(target: TaskLogTarget): void {
+    if (this.value) target.message(this.value, { raw: true });
+  }
+
+  private previewLines(): string[] {
+    return stripVTControlCharacters(this.value)
+      .replace(/\r\n/gu, "\n")
+      .replace(/\r/gu, "\n")
+      .split("\n")
+      .slice(-10);
+  }
+}
+
 class TaskLogWritable extends Writable {
   private readonly decoder = new StringDecoder("utf8");
   private flushed = false;
   private pendingNewlines = "";
 
-  constructor(private readonly target: CommandTaskLog) {
+  constructor(private readonly target: TaskLogTarget) {
     super();
   }
 
@@ -233,6 +277,13 @@ class TaskLogWritable extends Writable {
     this.pendingNewlines = trailingNewlines;
     if (content) this.target.message(content, { raw: true });
   }
+}
+
+function formatActiveStep(title: string, context?: string, output: string[] = []): string {
+  const details = [context, ...output.map((line) => pc.dim(line))].filter(
+    (line): line is string => line !== undefined,
+  );
+  return [title, ...details.map((line) => `${pc.gray("│")}  ${line}`)].join("\n");
 }
 
 function formatStepTitle(row: AutomationRow): string {

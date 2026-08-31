@@ -278,12 +278,13 @@ run uses an existing selected worktree as `YGG_WORKTREE_PATH`. Consequently, man
 and `post_remove` runs are useful for testing behavior but do not reproduce the absent-target state
 of their automatic lifecycle phase; Ygg prints a warning for these events.
 
-In a terminal, automation output groups each configured step, nests concrete copy/symlink results,
-and summarizes their outcomes. Command steps keep the latest ten lines visible while running and
-retain their complete output afterward. Redirected output preserves the append-only `RUNNING` and
-result rows with raw child output. An already correct symlink is `UNCHANGED`; a configured
-`on_existing: skip` conflict is `SKIPPED` and does not fail the hook. Each hook has its own labeled
-block, and consecutive lifecycle hooks remain separated. See
+In a terminal, automation output shows an animated spinner for the active configured step, groups
+each step, nests concrete copy/symlink results, and summarizes their outcomes. Command steps keep
+the latest ten lines visible beneath the spinner and retain their complete output afterward.
+Redirected output preserves the append-only `RUNNING` and result rows with raw child output. An
+already correct symlink is `UNCHANGED`; a configured `on_existing: skip` conflict is `SKIPPED` and
+does not fail the hook. Each hook has its own labeled block, and consecutive lifecycle hooks remain
+separated. See
 [configuration](configuration.md#file-steps) for conflict policies and status meanings.
 
 ```sh

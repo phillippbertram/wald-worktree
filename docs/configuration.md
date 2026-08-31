@@ -461,10 +461,11 @@ with an outcome count when they produce multiple results.
 
 Command argument arrays retain visible argument boundaries; shell expressions show the actual
 `/bin/sh -c` invocation. A working directory is shown only when it differs from the selected
-worktree. While a command runs, the terminal keeps the latest ten output lines in view; after it
-finishes, the complete output remains in the scrollback. Cursor and erase sequences may be
-normalized so progress-oriented child output does not corrupt the surrounding layout. Environment
-values are never printed or expanded.
+worktree. While a configured step runs, its title shows an animated spinner. Command steps keep the
+latest ten output lines in view beneath that spinner; after the step finishes, its title, result,
+and complete output remain in the scrollback. Cursor and erase sequences may be normalized so
+progress-oriented child output does not corrupt the surrounding layout. Environment values are
+never printed or expanded.
 
 Redirected and other non-TTY output keeps the append-only row format. It prints `RUNNING` before
 each configured step, streams command output without presentation changes, and then prints the
