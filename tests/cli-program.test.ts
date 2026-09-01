@@ -37,6 +37,9 @@ describe("CLI contract", () => {
     ]);
     const completion = program.commands.find((command) => command.name() === "completion");
     const complete = program.commands.find((command) => command.name() === "complete");
+    expect(program.commands.find((command) => command.name() === "list")?.aliases()).toEqual([
+      "ls",
+    ]);
     expect(completion?.registeredArguments[0]?.argChoices).toEqual(["zsh", "bash", "fish"]);
     expect(complete?.helpInformation()).toContain("Generate completion suggestions");
     expect(program.helpInformation()).not.toContain("complete --");

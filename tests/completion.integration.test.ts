@@ -138,6 +138,7 @@ tools:
         "create",
         "handoff",
         "status",
+        "ls",
         "rename",
         "config",
         "completion",
@@ -145,6 +146,8 @@ tools:
     );
     expect(suggestionValues(commands.stdout)).not.toContain("complete");
     expect(suggestionValues(commands.stdout)).not.toContain("shell-init");
+    const aliasOptions = await runCli(temporaryRoot, "complete", "--", "ls", "--");
+    expect(suggestionValues(aliasOptions.stdout)).toEqual(expect.arrayContaining(["--json"]));
     expect(suggestionValues(options.stdout)).toEqual(
       expect.arrayContaining(["--from", "--name", "--carry", "--tool", "--help"]),
     );

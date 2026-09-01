@@ -14,6 +14,7 @@ type CompletionCandidates = Record<CompletionKind, CompletionCandidate[]>;
 
 export function registerCompletionCommand(program: Command, context: CliContext): void {
   const completion = tab(program, { completionCommandName: "completion" });
+  registerCompletionAlias(completion, "list", "ls");
   const publicCommand = findRegisteredCommand(program, "completion");
   const runtimeCommand = findRegisteredCommand(program, "complete");
 
@@ -55,6 +56,25 @@ export function registerCompletionCommand(program: Command, context: CliContext)
     const candidates = await loadCompletionCandidates(kinds, context);
     applyDynamicHandlers(completion, candidates);
   });
+}
+
+function registerCompletionAlias(
+  completion: RootCommand,
+  commandPath: string,
+  alias: string,
+): void {
+  const source = requiredTabCommand(completion, commandPath);
+  const target = completion.command(alias, source.description);
+  for (const option of source.options.values()) {
+    if (option.handler) {
+      target.option(option.value, option.description, option.handler, option.alias);
+    } else {
+      target.option(option.value, option.description, option.alias);
+    }
+  }
+  for (const argument of source.arguments.values()) {
+    target.argument(argument.name, argument.handler, argument.variadic);
+  }
 }
 
 function findRegisteredCommand(program: Command, name: string): Command {

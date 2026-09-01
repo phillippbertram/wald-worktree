@@ -197,13 +197,13 @@ exit successfully. Use `ygg list --json` for complete individual worktree record
 ## `ygg list`
 
 ```text
-ygg list [--json]
+ygg list|ls [--json]
 ```
 
 Lists each worktree's name, branch, role, state, and path. `--json` emits the complete
-machine-readable worktree records. States are `clean`, `modified`, `locked`, `missing`, or
-`unavailable`; roles are `primary` or `linked`. `unavailable` means the directory exists but Ygg
-could not safely read its Git status; removal and rename remain blocked.
+machine-readable worktree records. `ls` is an alias for `list`. States are `clean`, `modified`,
+`locked`, `missing`, or `unavailable`; roles are `primary` or `linked`. `unavailable` means the
+directory exists but Ygg could not safely read its Git status; removal and rename remain blocked.
 
 ```json
 [{"name":"main","role":"primary","path":"/dev/project/main","head":"abc123","branch":"main","branchRef":"refs/heads/main","locked":false,"lockReason":null,"prunable":false,"state":"clean"}]
