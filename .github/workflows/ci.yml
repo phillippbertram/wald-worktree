@@ -18,7 +18,7 @@ jobs:
           - macos-latest
           - ubuntu-latest
         node:
-          - 22
+          - 22.13.0
           - 24
     runs-on: ${{ matrix.os }}
     steps:
@@ -29,5 +29,90 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: git --version
       - run: pnpm run ci
       - run: node dist/cli.js --help
+
+  minimum-git:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+      - name: Build Git 2.31.0 from the official release archive
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes build-essential zlib1g-dev
+          curl --fail --location --output "$RUNNER_TEMP/git-2.31.0.tar.xz" \
+            https://www.kernel.org/pub/software/scm/git/git-2.31.0.tar.xz
+          tar --extract --file "$RUNNER_TEMP/git-2.31.0.tar.xz" --directory "$RUNNER_TEMP"
+          make -C "$RUNNER_TEMP/git-2.31.0" -j2 \
+            prefix="$RUNNER_TEMP/git-2.31" \
+            NO_GETTEXT=YesPlease NO_TCLTK=YesPlease NO_CURL=YesPlease install
+          echo "$RUNNER_TEMP/git-2.31/bin" >> "$GITHUB_PATH"
+      - run: git --version | grep 'git version 2.31.0'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run ci
+
+  shell-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+      - run: sudo apt-get update && sudo apt-get install --yes zsh fish
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Prepare built CLI and smoke workspace
+        run: |
+          chmod +x dist/cli.js
+          mkdir -p "$RUNNER_TEMP/ygg-bin"
+          ln -s "$GITHUB_WORKSPACE/dist/cli.js" "$RUNNER_TEMP/ygg-bin/ygg"
+          echo "$RUNNER_TEMP/ygg-bin" >> "$GITHUB_PATH"
+          git init --bare "$RUNNER_TEMP/remote.git"
+          git init "$RUNNER_TEMP/source"
+          git -C "$RUNNER_TEMP/source" config user.name "Ygg CI"
+          git -C "$RUNNER_TEMP/source" config user.email "ygg@example.invalid"
+          echo smoke > "$RUNNER_TEMP/source/README.md"
+          git -C "$RUNNER_TEMP/source" add README.md
+          git -C "$RUNNER_TEMP/source" commit -m "test: seed repository"
+          git -C "$RUNNER_TEMP/source" branch -M main
+          git -C "$RUNNER_TEMP/source" remote add origin "$RUNNER_TEMP/remote.git"
+          git -C "$RUNNER_TEMP/source" push -u origin main
+          "$RUNNER_TEMP/ygg-bin/ygg" init "$RUNNER_TEMP/remote.git" "$RUNNER_TEMP/workspace"
+          cd "$RUNNER_TEMP/workspace"
+          "$RUNNER_TEMP/ygg-bin/ygg" create main --no-fetch
+          "$RUNNER_TEMP/ygg-bin/ygg" complete -- doctor "" | grep -- "--json"
+      - name: Load Bash completion and cd wrapper
+        run: |
+          eval "$(command ygg completion bash)"
+          complete -p ygg >/dev/null
+          cd "$RUNNER_TEMP/workspace"
+          ygg cd main
+          test "$PWD" = "$RUNNER_TEMP/workspace/main"
+        shell: bash
+      - name: Load Zsh completion and cd wrapper
+        run: |
+          autoload -Uz compinit
+          compinit -d "$RUNNER_TEMP/zcompdump"
+          eval "$(command ygg completion zsh)"
+          whence -w _ygg >/dev/null
+          cd "$RUNNER_TEMP/workspace"
+          ygg cd main
+          test "$PWD" = "$RUNNER_TEMP/workspace/main"
+        shell: zsh {0}
+      - name: Load Fish completion and cd wrapper
+        run: |
+          command ygg completion fish | source
+          functions -q ygg
+          complete -C "ygg doctor --" | string match --quiet -- "--json*"
+          cd "$RUNNER_TEMP/workspace"
+          ygg cd main
+          test "$PWD" = "$RUNNER_TEMP/workspace/main"
+        shell: fish {0}
