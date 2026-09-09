@@ -13,6 +13,7 @@ Start with read-only discovery:
 ygg status --json
 ygg list --json
 ygg config --json
+ygg doctor --json
 ygg prune
 ```
 
@@ -20,6 +21,9 @@ Use `status` for the current context and local tracking comparison, then `list` 
 worktree records and paths. Resolve locations with `ygg cd`; do not derive directory names from
 branches. Prefer direct commands in non-interactive agent sessions and include required
 confirmation flags explicitly.
+Use `doctor` when discovery, configuration, runtime versions, paths, worktree registrations, trust,
+file sources, or configured executables may be inconsistent. Treat its suggestions as proposals;
+do not run repairs or trust commands without the authority required for that mutation.
 
 - For creating or selecting a worktree, read [references/worktrees.md](references/worktrees.md).
 - For hooks, tasks, trust, or failures during setup, read
@@ -32,12 +36,16 @@ Use `ygg create <new-branch> --carry` or `ygg handoff <new-branch>` only from th
 Both copy its staged, unstaged, and non-ignored untracked code into a fresh worktree while preserving
 the source; they do not move a running process or agent session. Use `ygg rename <worktree>
 <new-name>` to rename an eligible linked worktree directory without renaming its branch.
+For machine-readable mutations, use `--json` with explicit arguments. It still performs the action,
+never prompts, and never grants confirmation: removal additionally requires `--yes`. Do not combine
+create or handoff JSON mode with `--cd`, `--open`, or `--tool`.
 
 Do not use `--force` for removal without verifying that local changes, an unmerged branch, or a
 worktree lock can be discarded or bypassed. Ygg prints these bypassed safeguards before removal.
 Never infer permission to delete branches or the primary checkout. Normal removal preserves every
 branch. Use `--delete-branch` only when the user explicitly authorizes deletion of the eligible
-merged local branch; Ygg never deletes the configured default branch or its remote counterpart.
+local branch. Deleting an unmerged branch also requires explicit permission to discard it and
+`--force`; Ygg never deletes the configured default branch or its remote counterpart.
 
 Use `ygg prune` as a read-only preview of stale Git metadata. Apply it non-interactively only with
 `ygg prune --apply --yes`; this does not remove directories or branches and preserves locked entries.

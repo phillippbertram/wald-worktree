@@ -61,10 +61,11 @@ ygg run verify feature-ui
 ygg remove feature-ui
 ```
 
-Removal preserves each branch by default. Interactive users may select eligible merged local
-branches for deletion; automation must request that explicitly with `--delete-branch --yes`. If
-another person or agent still needs a worktree or branch, do not remove it without an explicit
-handoff.
+Removal preserves each branch by default. Interactive users may select eligible local branches for
+deletion; an unmerged branch additionally requires `--force`. Automation must request deletion
+explicitly with `--delete-branch --yes` and must not add `--force` without permission to discard the
+unmerged work. If another person or agent still needs a worktree or branch, do not remove it without
+an explicit handoff.
 
 ## Hand off unfinished code
 
@@ -83,8 +84,11 @@ not move between worktrees.
 
 ## Operating rules for agents
 
-- Start with `ygg status --json` to understand the current context and local tracking state.
+- Start with `ygg doctor --json` when runtime or workspace consistency is uncertain.
+- Use `ygg status --json` to understand the current context and local tracking state.
 - Use `ygg list --json` for complete worktree records; do not guess paths from branch names.
+- For mutations, use the command's `--json` contract with explicit branches, worktrees, and `--yes`
+  where required. JSON mode performs the mutation; it is not a dry run or additional consent.
 - Resolve a path with `ygg cd <worktree>`.
 - Prefer direct commands in non-interactive sessions.
 - Run shared project actions through `ygg run` so configured order, environment, timeouts, and trust

@@ -90,7 +90,9 @@ flowchart TB
 
 ## Get started
 
-Requirements: Node.js 22.13 or newer, pnpm 11, and Git.
+Supported platforms are macOS and Linux with Node.js 22.13.0 or newer, pnpm 11, and Git 2.31.0 or
+newer. Git 2.31 is required because Ygg uses absolute common-directory resolution introduced with
+`git rev-parse --path-format` ([Git 2.31 release notes](https://github.com/git/git/blob/master/Documentation/RelNotes/2.31.0.adoc)).
 
 Until Ygg is published to npm, install it directly from this repository:
 
@@ -154,6 +156,9 @@ project/
 
 Branch separators become hyphens in default directory names. Use `ygg status` for the current
 workspace context and `ygg list` to see the exact branch, state, and path of every worktree.
+Use `ygg doctor` for a deeper read-only diagnosis of the runtime, configuration, paths, Git
+registrations, trust state, configured file sources, and executables. It also works outside a Ygg
+workspace and suggests safe follow-up commands without fetching or repairing anything.
 
 ### 3. Work, verify, and tidy up
 
@@ -169,9 +174,10 @@ states without fetching or changing anything. Think of it as reading the local r
 consults the remote or changes the repository. `ygg run verify` is available when the effective
 project configuration defines that task. Removal checks for local changes, a branch not merged
 into the configured default branch, and locks before deleting the linked checkout. Branches are
-kept by default; an interactive prompt or `--delete-branch` can also delete an eligible merged
-local branch, but never its remote branch. If project setup failed during creation, fix the cause
-and retry it with `ygg setup feature-payment`. To test any lifecycle hook after editing
+kept by default; an interactive prompt or `--delete-branch` can also delete an eligible local
+branch, but never its remote branch. Deleting an unmerged branch additionally requires `--force`.
+If project setup failed during creation, fix the cause and retry it with
+`ygg setup feature-payment`. To test any lifecycle hook after editing
 `.ygg/project.yml`, run it explicitly without creating or removing a worktree:
 
 ```sh
@@ -199,6 +205,16 @@ staged, unstaged, and non-ignored untracked files. `ygg handoff` is the guided c
 same operation; it does not transfer a running editor, process, or agent session. A new local branch
 has no upstream even when it starts at `origin/main`; publish it explicitly with the command Ygg
 prints after creation.
+
+When the branch or handoff target was selected interactively, Ygg shows the resolved strategy,
+starting ref, target path, carry source, trust state, lifecycle-step counts, and destination before
+asking `Create this worktree?`. Declining performs no branch, worktree, trust, or hook mutation. A
+fully explicit `ygg create <branch>` or `ygg handoff <branch>` remains prompt-free.
+
+For automation, `init`, `create`, `handoff`, `rename`, `remove`, and `doctor` accept `--json` in
+addition to the existing JSON-capable read and cleanup commands. JSON mode never prompts: provide
+all required identifiers and confirmation flags explicitly. Successful lifecycle commands emit one
+JSON document on stdout; errors leave stdout empty and emit a redacted JSON error on stderr.
 
 Rename a linked worktree directory without changing its branch:
 
@@ -253,9 +269,10 @@ locally before running it.
 | Goal                                                  | Command                                        | Result                                                                      |
 | ----------------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------- |
 | Finish with an existing worktree                      | `ygg remove feature-payment`                   | Removes the checkout directory and keeps the branch by default.             |
-| Remove its merged local branch too                    | `ygg remove feature-payment --delete-branch`   | Removes the checkout and eligible local branch; keeps the remote branch.    |
+| Remove its local branch too                           | `ygg remove feature-payment --delete-branch`   | Removes the checkout and eligible local branch; keeps the remote branch.    |
 | Inspect metadata for a directory deleted outside Git  | `ygg prune`                                    | Preview only; changes nothing.                                              |
 | Apply that metadata cleanup                           | `ygg prune --apply`                            | Removes only stale Git worktree registrations.                              |
+| Diagnose runtime and workspace consistency            | `ygg doctor`                                   | Reports only; suggests safe repair commands without applying them.           |
 | Restore a deleted worktree container or metadata link | `ygg init`                                     | Repairs the existing workspace without replacing its configuration.         |
 | Inspect removal of Ygg from the repository            | `ygg uninit`                                   | Previews Ygg-owned metadata; keeps Git, branches, and worktree directories. |
 | Remove Ygg from the repository                        | `ygg uninit --apply`                           | Removes only Ygg workspace metadata after safety checks.                    |

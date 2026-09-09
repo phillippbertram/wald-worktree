@@ -519,7 +519,7 @@ flowchart LR
       R2 --> R3[pre_remove]
       R3 --> R4[git worktree remove]
       R4 --> R5[post_remove]
-      R5 --> R8[Optional merged local branch deletion]
+      R5 --> R8[Optional local branch deletion]
       R3 -- Failure --> R6[Worktree preserved]
       R5 -- Failure --> R7[Removal kept, branch preserved, failure reported]
     end

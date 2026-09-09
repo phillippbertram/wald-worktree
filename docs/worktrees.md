@@ -223,6 +223,9 @@ transfer failure before `post_create` rolls back the fresh worktree and branch w
 `post_create` failure keeps the verified target for `ygg setup`. After success, the changes exist in
 both worktrees. `handoff` does not move an editor, process, or agent session.
 
+When the branch was chosen interactively, Ygg shows the complete create plan and confirms it before
+trust, hooks, branch creation, or checkout creation. Explicit branch commands remain prompt-free.
+
 ## The worktree lifecycle
 
 This lifecycle works in every supported workspace layout. **Ygg Flow** names the recommended flat
@@ -380,11 +383,12 @@ repairs the roots without touching surviving worlds or branches.
 ### Does removing a worktree delete its branch?
 
 Not by default. `ygg remove` removes the linked checkout after safety checks and keeps its branch.
-In a terminal, Ygg also offers eligible merged local branches for deletion before final
-confirmation; no branch is preselected. Scripts can request the same behavior explicitly with
-`--delete-branch --yes`. The configured default branch, unmerged branches, detached checkouts, and
-remote branches are never deleted. `ygg prune` removes only stale administrative metadata and never
-deletes an existing directory or branch.
+In a terminal, Ygg also offers eligible local branches for deletion before final confirmation; no
+branch is preselected. An unmerged branch is offered only with `--force` and is clearly labeled.
+Scripts can request the same behavior explicitly with `--delete-branch --yes`, adding `--force`
+when the branch is unmerged. The configured default branch, detached checkouts, and remote branches
+are never deleted. `ygg prune` removes only stale administrative metadata and never deletes an
+existing directory or branch.
 
 ### How do I remove Ygg from an existing repository?
 

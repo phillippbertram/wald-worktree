@@ -6,6 +6,10 @@ same signatures and concise inline examples.
 For the underlying mental model and visual workflows, start with
 [Worktrees explained](worktrees.md).
 
+Supported platforms are macOS and Linux with Node.js 22.13.0 or newer and Git 2.31.0 or newer.
+Git 2.31 introduced the `rev-parse --path-format` behavior used for canonical common-directory
+resolution ([release notes](https://github.com/git/git/blob/master/Documentation/RelNotes/2.31.0.adoc)).
+
 ## General behavior
 
 ```text
@@ -34,6 +38,12 @@ terminal, ambiguous selection is an error.
 
 Commands discover the workspace from its root, a linked worktree, or a retained primary checkout.
 Failures use a non-zero exit status. Interrupted foreground tasks exit with status 130.
+
+`--json` changes representation only: it is not a dry run and never grants confirmation or trust.
+JSON mode never prompts. Successful commands write exactly one JSON document to stdout. Hook and
+child-process output stays on stderr. Operational failures keep stdout empty and write a redacted
+JSON error with `message` and `exitCode` to stderr. `doctor` is the exception for diagnosed state:
+it always returns its report on stdout and exits 1 when that report contains a failing check.
 
 Human-readable tables, previews, selections, and status messages highlight worktree names,
 branches, paths, commands, states, warnings, and destructive actions when color is supported. Set
@@ -83,12 +93,15 @@ the visual comparison.
 | `--config` | Create detected workspace-local project configuration in `.ygg/project.yml`. |
 | `--config-scope <scope>` | With `--config`, write to `workspace` (default) or `project` (`.ygg.yml`). |
 | `--yes` | Accept resolved settings without prompting. |
+| `--json` | Emit the initialization action, normalized workspace, and restored entries without prompting. |
 
 Non-interactive adoption requires `--adopt` and `--yes`. Clone mode cannot be combined with adoption
 options. Initialization never moves or deletes an existing checkout and never commits `.ygg.yml`.
 It also never copies or removes repository configuration unless an explicit config command requests
 the copy.
 Direct and non-interactive invocations do not show the guided preview.
+JSON clone mode requires both `repository` and `directory`. JSON adoption requires `--adopt` and
+`--yes`. The result action is `initialized`, `repaired`, or `unchanged`.
 
 When the repository already has a valid Ygg configuration, `init` verifies its local infrastructure.
 It recreates a missing worktree container, adopted-workspace `.ygg` link, or `shared` directory and
@@ -116,9 +129,19 @@ ygg create [branch] [options]
 | `--cd` | Enter through shell integration after setup. |
 | `--open` | Open with the configured or interactively selected tool. |
 | `--tool <profile>` | Open with a specific built-in or project profile; implies `--open`. |
+| `--json` | Create the worktree and emit its strategy, worktree record, and optional carry report. |
 
 `--cd` cannot be combined with `--open` or `--tool`. Without a branch, a terminal offers local and
 remote candidates plus new-branch creation; non-interactive use requires a branch.
+
+After an interactive branch selection, Ygg prints one shared create plan and asks
+`Create this worktree?` with `Yes` selected by default. `Esc` returns to branch selection while
+retaining the previous value. `No` performs no branch, worktree, trust, or hook mutation; if plan
+preparation already ran the configured fetch, Ygg states that only remote refs were updated.
+Explicit branch invocations do not add this prompt.
+
+JSON mode requires a branch and cannot be combined with `--cd`, `--open`, `--tool`, or the internal
+shell-integration option `--print-path`.
 
 `--carry` must run inside a concrete worktree and cannot be combined with `--from`. Its target must
 be a new local branch with no matching local or configured-remote ref. Ygg starts at the source's
@@ -163,6 +186,9 @@ ygg handoff [branch] [options]
 available. Without a branch, a terminal asks only for a new branch name. Without a navigation
 option, the result includes the matching `ygg cd` command.
 
+The interactive handoff uses the same create-plan confirmation and back navigation as `create`.
+`--json` requires a branch and has the same destination-option conflicts as create.
+
 This is a code handoff only. It copies local Git and file state while keeping the source unchanged;
 it does not transfer a running editor, process, or agent session.
 
@@ -170,6 +196,23 @@ it does not transfer a running editor, process, or agent session.
 ygg handoff feature/review --cd
 ygg handoff feature/review --tool codex
 ```
+
+## `ygg doctor`
+
+```text
+ygg doctor [--json]
+```
+
+Runs a read-only diagnosis even outside a Ygg workspace or when workspace configuration is invalid.
+Checks are `pass`, `warning`, `fail`, or `skipped` and cover Node.js 22.13.0, Git 2.31.0, workspace
+discovery, YAML syntax and schema, canonical path boundaries, Git common-directory and marker
+identity, remote/default-branch refs, worktree registrations and intentional locks, project trust,
+file-step sources, and configured argv/tool executables.
+
+Doctor never fetches, repairs, changes trust, or runs hooks. It does not print remote URLs or
+environment contents. Suggested commands such as `ygg init`, `ygg prune`, `git worktree repair`, or
+`git worktree lock` remain explicit follow-up actions. No workspace is a warning with exit 0;
+runtime, configuration, and consistency failures exit 1. `--json` emits `{status, checks}`.
 
 ## `ygg status`
 
@@ -306,7 +349,7 @@ as the general hook command.
 ## `ygg rename`
 
 ```text
-ygg rename [worktree] [new-name]
+ygg rename [worktree] [new-name] [--json]
 ```
 
 Renames only a linked worktree directory through Git; the branch, upstream, `HEAD`, index, and files
@@ -318,6 +361,7 @@ current checkout, external, missing, or locked worktrees, and worktrees whose in
 submodule. The destination uses the normal worktree-name and path validation and must not already
 exist, including as a dangling symlink. Dirty worktrees are allowed. There is no `--force` option
 and rename runs no project hooks or trusted executable configuration.
+JSON mode requires both arguments and emits the previous name/path plus the resulting worktree.
 
 ```sh
 ygg rename feature-payment payment-review
@@ -326,21 +370,23 @@ ygg rename feature-payment payment-review
 ## `ygg remove`
 
 ```text
-ygg remove [worktrees...] [--delete-branch] [--force] [--yes]
+ygg remove [worktrees...] [--delete-branch] [--force] [--yes] [--json]
 ```
 
 Without identifiers, a terminal offers removable linked worktrees. Non-interactive use requires
-explicit identifiers and `--yes`. An interactive terminal offers each eligible merged local branch
-for deletion; the safe default keeps every branch. That branch choice also confirms the removal, so
-Ygg does not ask the same question again. Multiple eligible branches use an unselected checkbox
-list. When no branch choice is available, Ygg retains a separate removal confirmation. `--yes`
-without `--delete-branch` keeps every branch.
+explicit identifiers and `--yes`. An interactive terminal offers each eligible local branch for
+deletion; the safe default keeps every branch. With `--force`, this choice also includes unmerged
+local branches and labels them accordingly. That branch choice confirms the removal, so Ygg does
+not ask the same question again. Multiple eligible branches use an unselected checkbox list. When
+no branch choice is available, Ygg retains a separate removal confirmation. `--yes` without
+`--delete-branch` keeps every branch.
 
 | Option | Meaning |
 | --- | --- |
 | `--force` | Bypass dirty, unmerged, and lock safeguards. |
-| `--delete-branch` | Delete each removed worktree's eligible merged local branch. |
+| `--delete-branch` | Delete each removed worktree's eligible local branch. |
 | `--yes` | Confirm removal without prompting. |
+| `--json` | Emit removed worktrees plus deleted and retained local branches. |
 
 The three bypassable safeguards are staged, unstaged, or untracked changes; a branch not merged
 into the configured default branch; and a Git worktree lock. With `--force`, Ygg prints the branch,
@@ -348,12 +394,14 @@ path, and every bypassed safeguard before confirmation, including with `--yes`.
 
 The retained primary checkout and a worktree whose state is unavailable are hard blockers and
 cannot be bypassed. Duplicate identifiers resolving to the same worktree are removed once. Branches
-are kept unless selected interactively or requested with `--delete-branch`. Only a local branch that
-is merged into the configured default branch is eligible; the default branch, detached checkouts,
-unmerged branches, and remote branches are never deleted. `--force` alone never selects a branch
-for deletion, and `--delete-branch` rejects the entire plan before mutation if any selected worktree
-has an ineligible branch. Trusted `pre_remove` and `post_remove` hooks run around Git removal; an
-eligible branch is deleted only after `post_remove` succeeds and its identity is revalidated.
+are kept unless selected interactively or requested with `--delete-branch`. A local branch with a
+known HEAD is eligible unless it is the configured default branch. Deleting an unmerged branch
+additionally requires `--force`; `--force` alone never selects a branch for deletion. Detached
+checkouts and remote branches are never deleted, and `--delete-branch` rejects the entire plan
+before mutation if any selected worktree has an ineligible branch. Trusted `pre_remove` and
+`post_remove` hooks run around Git removal; an eligible branch is deleted only after `post_remove`
+succeeds and its identity is revalidated.
+JSON mode requires explicit worktrees and `--yes`; it never prompts or implies branch deletion.
 
 ## `ygg prune`
 

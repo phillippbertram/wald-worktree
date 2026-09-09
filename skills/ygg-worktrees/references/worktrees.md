@@ -9,6 +9,8 @@ the same commands and safety rules.
 Use `ygg status --json` for the current context and local tracking comparison. Use `ygg list --json`
 for complete worktree records and `ygg cd <name-or-branch>` for the canonical path. `ygg cd` only
 changes the parent shell when shell integration is installed.
+Use `ygg doctor --json` for a read-only runtime, configuration, path, Git-registration, trust, file
+source, and executable diagnosis. Review its suggestions before applying any repair.
 
 ## Create
 
@@ -26,6 +28,11 @@ default branch. This start point defines history, not tracking: a new local bran
 Do not publish it unless the user explicitly requests that external change; Ygg prints the matching
 `git push -u <remote> HEAD` command for an authorized first push. Existing remote branches continue
 to track their same-named remote ref.
+
+An interactive branch or handoff choice is followed by a create-plan confirmation before trust,
+hooks, or Git mutation. `Esc` retains the previous branch input; `No` cancels the mutation. Explicit
+branch commands do not prompt. In automation, `create` and `handoff --json` require a branch and
+cannot be combined with navigation or tool-opening options.
 
 Fetching follows the effective project-configuration default. Override it only when the task
 requires it with `--fetch` or `--no-fetch`. Use `--tool <profile>` to open an editor or agent after
@@ -68,11 +75,15 @@ state:
 ygg remove <worktree> --yes
 ```
 
+Add `--json` for one machine-readable result. It does not preview or confirm the removal, so both
+the explicit worktree identifiers and `--yes` remain required.
+
 This default removes only the checkout and preserves its branch. In a terminal, Ygg offers eligible
-merged local branches for deletion with no preselection. In automation, use `--delete-branch --yes`
-only when the user explicitly authorizes deleting the corresponding local branch. The configured
-default branch, unmerged branches, detached checkouts, and remote branches are never deleted;
-`--force` alone grants no branch-deletion permission.
+local branches for deletion with no preselection. With `--force`, unmerged local branches are also
+offered and clearly labeled. In automation, use `--delete-branch --yes` only when the user explicitly
+authorizes deleting the corresponding local branch, and add `--force` only with permission to
+discard unmerged work. The configured default branch, detached checkouts, and remote branches are
+never deleted; `--force` alone grants no branch-deletion permission.
 
 `ygg prune` is different from removal: it previews stale Git registrations for worktree directories
 that are already missing. To apply that metadata-only cleanup non-interactively, use:
