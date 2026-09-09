@@ -49,6 +49,7 @@ export type BranchDeletionPlan = {
   branch: string;
   branchRef: string;
   expectedHead: string;
+  mergedIntoDefault: boolean;
 };
 
 export type BranchDeletionInspection =
@@ -140,6 +141,12 @@ export class WorktreeService {
     if (await pathEntryExists(target)) {
       throw new YggError(
         `Worktree directory already exists: ${target}. Choose another directory with --name <directory>.`,
+      );
+    }
+    const portableCollision = await findPortableNameCollision(workspace.worktreeDir, directoryName);
+    if (portableCollision) {
+      throw new YggError(
+        `Worktree directory name conflicts with existing entry ${portableCollision} when compared case-insensitively: ${directoryName}. Choose another directory with --name <directory>.`,
       );
     }
 
@@ -342,7 +349,11 @@ export class WorktreeService {
     await this.git.run(args, { gitDir: workspace.gitDir });
   }
 
-  async deleteBranch(workspace: Workspace, plan: BranchDeletionPlan): Promise<void> {
+  async deleteBranch(
+    workspace: Workspace,
+    plan: BranchDeletionPlan,
+    options: { force?: boolean } = {},
+  ): Promise<void> {
     if (plan.branch === workspace.config.defaultBranch) {
       throw new YggError(`Refusing to delete the configured default branch: ${plan.branch}`);
     }
@@ -371,7 +382,7 @@ export class WorktreeService {
         `Refusing to delete branch ${plan.branch}; its HEAD changed after review.`,
       );
     }
-    if (!(await this.isBranchMergedIntoDefault(workspace, plan.branchRef))) {
+    if (!(await this.isBranchMergedIntoDefault(workspace, plan.branchRef)) && !options.force) {
       throw new YggError(
         `Refusing to delete branch ${plan.branch}; it is no longer merged into ${workspace.config.defaultBranch}.`,
       );
@@ -610,18 +621,12 @@ export class WorktreeService {
         reason: "the branch HEAD could not be determined",
       };
     }
-    if (!merged) {
-      return {
-        eligible: false,
-        branch: worktree.branch,
-        reason: `the branch is not merged into ${workspace.config.defaultBranch}`,
-      };
-    }
     return {
       eligible: true,
       branch: worktree.branch,
       branchRef: worktree.branchRef,
       expectedHead: worktree.head,
+      mergedIntoDefault: merged,
     };
   }
 
@@ -757,6 +762,26 @@ async function pathEntryExists(target: string): Promise<boolean> {
     }
     throw error;
   }
+}
+
+async function findPortableNameCollision(
+  parent: string,
+  requestedName: string,
+): Promise<string | null> {
+  let entries: string[];
+  try {
+    entries = await fs.readdir(parent);
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return null;
+    throw error;
+  }
+  const normalized = requestedName.normalize("NFC").toLocaleLowerCase("en-US");
+  return (
+    entries.find(
+      (entry) =>
+        entry !== requestedName && entry.normalize("NFC").toLocaleLowerCase("en-US") === normalized,
+    ) ?? null
+  );
 }
 
 async function canonicalPath(target: string): Promise<string> {

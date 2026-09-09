@@ -4,6 +4,7 @@ import { registerCdCommand } from "./commands/cd.js";
 import { registerCompletionCommand } from "./commands/completion.js";
 import { registerConfigCommand } from "./commands/config.js";
 import { registerCreateCommand } from "./commands/create.js";
+import { registerDoctorCommand } from "./commands/doctor.js";
 import { registerExecCommand } from "./commands/exec.js";
 import { registerHandoffCommand } from "./commands/handoff.js";
 import { registerHookCommand } from "./commands/hook.js";
@@ -17,13 +18,19 @@ import { registerRunCommand } from "./commands/run.js";
 import { registerSetupCommand } from "./commands/setup.js";
 import { registerStatusCommand } from "./commands/status.js";
 import { registerUninitCommand } from "./commands/uninit.js";
-import { type CliOutput, createCliContext } from "./context.js";
+import {
+  type CliExecutionState,
+  type CliOutput,
+  createCliContext,
+  createCliExecutionState,
+} from "./context.js";
 import { runMainMenu } from "./main-menu.js";
 
 export function createProgram(
   output: CliOutput = { stdout: process.stdout, stderr: process.stderr },
+  execution: CliExecutionState = createCliExecutionState(),
 ): Command {
-  const context = createCliContext(output);
+  const context = createCliContext(output, execution);
   const program = new Command()
     .name("ygg")
     .description("🌳 Create and work in isolated Git checkouts safely.")
@@ -47,11 +54,15 @@ export function createProgram(
     writeOut: (text) => output.stdout.write(text),
     writeErr: (text) => output.stderr.write(text),
   });
+  program.hook("preAction", (_thisCommand, actionCommand) => {
+    execution.json = actionCommand.optsWithGlobals().json === true;
+  });
   program.action(async () => runMainMenu(program, context));
 
   registerInitCommand(program, context);
   registerCreateCommand(program, context);
   registerHandoffCommand(program, context);
+  registerDoctorCommand(program, context);
   registerStatusCommand(program, context);
   registerListCommand(program, context);
   registerCdCommand(program, context);

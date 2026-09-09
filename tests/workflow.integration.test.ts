@@ -173,6 +173,7 @@ tasks:
       branch: "feature/cleanup",
       branchRef: "refs/heads/feature/cleanup",
       expectedHead: feature.head,
+      mergedIntoDefault: true,
     });
     await workflow.executeRemove(removal, { deleteBranch: true });
 
@@ -189,7 +190,7 @@ tasks:
     ).toBe(true);
   });
 
-  it("refuses explicit deletion of an unmerged branch before removing its worktree", async () => {
+  it("deletes an explicitly selected unmerged branch only with force", async () => {
     const workspace = await workspaces.initialize(
       repository.remote,
       path.join(temporaryRoot, "unmerged-cleanup-workspace"),
@@ -209,12 +210,13 @@ tasks:
 
     const removal = await workflow.planRemove(workspace, feature.name);
     expect(removal.inspection.branchDeletion).toMatchObject({
-      eligible: false,
-      reason: "the branch is not merged into main",
+      eligible: true,
+      branch: "feature/unmerged-cleanup",
+      mergedIntoDefault: false,
     });
-    await expect(
-      workflow.executeRemove(removal, { deleteBranch: true, force: true }),
-    ).rejects.toThrow(/Cannot delete the local branch[\s\S]*not merged into main/u);
+    await expect(workflow.executeRemove(removal, { deleteBranch: true })).rejects.toThrow(
+      /Cannot delete the unmerged local branch[\s\S]*without --force/u,
+    );
 
     await expect(fs.stat(feature.path)).resolves.toSatisfy((stat) => stat.isDirectory());
     expect(
@@ -223,6 +225,16 @@ tasks:
         { gitDir: workspace.gitDir },
       ),
     ).toBe(true);
+
+    await workflow.executeRemove(removal, { deleteBranch: true, force: true });
+
+    await expect(fs.stat(feature.path)).rejects.toMatchObject({ code: "ENOENT" });
+    expect(
+      await git.succeeds(
+        ["show-ref", "--verify", "--quiet", "refs/heads/feature/unmerged-cleanup"],
+        { gitDir: workspace.gitDir },
+      ),
+    ).toBe(false);
   });
 
   it("applies one workspace-local overlay to repository behavior during creation and tasks", async () => {

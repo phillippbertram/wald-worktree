@@ -15,6 +15,7 @@ const handoffInputSchema = z
     open: z.boolean().default(false),
     tool: nonEmptyCliString.optional(),
     printPath: z.boolean().default(false),
+    json: z.boolean().default(false),
   })
   .strict()
   .superRefine((input, context) => {
@@ -25,9 +26,23 @@ const handoffInputSchema = z
         message: "Cannot be combined with --open or --tool; choose one destination.",
       });
     }
+    if (input.json && !input.branch) {
+      context.addIssue({
+        code: "custom",
+        path: ["branch"],
+        message: "JSON mode requires a branch.",
+      });
+    }
+    if (input.json && (input.cd || input.open || input.tool || input.printPath)) {
+      context.addIssue({
+        code: "custom",
+        path: ["json"],
+        message: "Cannot be combined with --cd, --open, --tool, or --print-path.",
+      });
+    }
   });
 
-export type HandoffInput = z.output<typeof handoffInputSchema>;
+export type HandoffInput = Omit<z.output<typeof handoffInputSchema>, "json"> & { json?: boolean };
 
 export function registerHandoffCommand(program: Command, context: CliContext): void {
   program
@@ -40,6 +55,7 @@ export function registerHandoffCommand(program: Command, context: CliContext): v
     .option("--cd", "Enter after handoff; requires shell integration")
     .option("--open", "Open after handoff with the configured or selected tool")
     .option("--tool <profile>", "Tool profile to open; implies --open")
+    .option("--json", "Emit machine-readable JSON without prompting")
     .addOption(new Option("--print-path").hideHelp())
     .addHelpText(
       "after",
@@ -55,6 +71,7 @@ export function registerHandoffCommand(program: Command, context: CliContext): v
           open?: unknown;
           tool?: unknown;
           printPath?: unknown;
+          json?: unknown;
         },
         command: Command,
       ) => {

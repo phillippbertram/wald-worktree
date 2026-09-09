@@ -31,6 +31,7 @@ export type ProjectConfigInitializationOptions = {
   yes: boolean;
   scope: ProjectConfigScope;
   fromProject: boolean;
+  quiet?: boolean;
 };
 
 export async function initializeProjectConfiguration(
@@ -94,9 +95,8 @@ export async function initializeProjectConfiguration(
     );
   }
 
-  const inspection = await runTask("Inspecting project", () =>
-    context.projectConfigs.inspect(root),
-  );
+  const inspect = () => context.projectConfigs.inspect(root);
+  const inspection = options.quiet ? await inspect() : await runTask("Inspecting project", inspect);
   let templateOptions = options.yes ? detectedDefaults(inspection) : undefined;
   let promptState: TemplatePromptState | undefined;
   let resumeAtLastStep = false;
@@ -166,7 +166,7 @@ async function writeConfiguration(
       throw new YggError("Configuration migration was cancelled.", { exitCode: 130 });
     }
   }
-  await runTask(`Writing ${configFileName}`, async () => {
+  const write = async () => {
     if (options.scope === "workspace") {
       await context.configs.writeWorkspaceProjectConfig(workspace, config, { overwrite });
     } else {
@@ -176,11 +176,14 @@ async function writeConfiguration(
         { overwrite },
       );
     }
-  });
+  };
+  if (options.quiet) await write();
+  else await runTask(`Writing ${configFileName}`, write);
   const document = await context.configs.resolveProjectConfig(workspace, root);
   if (!document) {
     throw new YggError(`Could not resolve project configuration after writing ${configPath}.`);
   }
+  if (options.quiet) return document;
   await success(`Created ${style.path(configPath)}`, context.output);
   if (options.scope === "project") {
     writeLine(

@@ -137,6 +137,7 @@ tools:
         "init",
         "create",
         "handoff",
+        "doctor",
         "status",
         "ls",
         "rename",
@@ -149,10 +150,10 @@ tools:
     const aliasOptions = await runCli(temporaryRoot, "complete", "--", "ls", "--");
     expect(suggestionValues(aliasOptions.stdout)).toEqual(expect.arrayContaining(["--json"]));
     expect(suggestionValues(options.stdout)).toEqual(
-      expect.arrayContaining(["--from", "--name", "--carry", "--tool", "--help"]),
+      expect.arrayContaining(["--from", "--name", "--carry", "--tool", "--json", "--help"]),
     );
     expect(suggestionValues(removeOptions.stdout)).toEqual(
-      expect.arrayContaining(["--delete-branch", "--force", "--yes", "--help"]),
+      expect.arrayContaining(["--delete-branch", "--force", "--yes", "--json", "--help"]),
     );
     expect(suggestionValues(shells.stdout)).toEqual(["zsh", "bash", "fish"]);
     expect(suggestionValues(configScopes.stdout)).toEqual(["workspace", "project"]);

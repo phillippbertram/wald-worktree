@@ -288,9 +288,11 @@ describe("managed Git workspace", () => {
     expect(inspection.merged).toBe(false);
     expect(inspection.blockers).toHaveLength(2);
     expect(inspection.branchDeletion).toEqual({
-      eligible: false,
+      eligible: true,
       branch: "feature/unmerged",
-      reason: "the branch is not merged into main",
+      branchRef: "refs/heads/feature/unmerged",
+      expectedHead: inspection.worktree.head,
+      mergedIntoDefault: false,
     });
   });
 

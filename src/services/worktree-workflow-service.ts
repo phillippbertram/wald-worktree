@@ -28,6 +28,7 @@ export type CreatePlan = WorktreeContext & {
   project: ProjectConfigDocument | null;
   trusted: boolean;
   carrySource: Worktree | null;
+  fetchedRemote: string | null;
 };
 
 export type CreatedWorktree = Worktree & {
@@ -72,11 +73,12 @@ export class WorktreeWorkflowService {
       options.carry ? "HEAD" : options.from,
       context.current,
     );
+    const fetch = options.fetch ?? sourceDocument?.config.defaults.fetch ?? true;
     const prepared = await this.worktrees.prepareAdd(workspace, {
       ...options,
       from,
       newBranchOnly: options.carry,
-      fetch: options.fetch ?? sourceDocument?.config.defaults.fetch ?? true,
+      fetch,
     });
     const project = options.carry
       ? sourceDocument
@@ -91,6 +93,7 @@ export class WorktreeWorkflowService {
       project,
       trusted: this.configs.isTrusted(workspace, project),
       carrySource: options.carry ? context.current : null,
+      fetchedRemote: fetch && workspace.config.remote ? workspace.config.remote.name : null,
       ...context,
     };
   }
@@ -244,6 +247,11 @@ export class WorktreeWorkflowService {
         `Cannot delete the local branch for ${plan.inspection.worktree.name}: ${branchDeletion.reason}.`,
       );
     }
+    if (branchDeletion?.eligible && !branchDeletion.mergedIntoDefault && !options.force) {
+      throw new YggError(
+        `Cannot delete the unmerged local branch for ${plan.inspection.worktree.name} without --force.`,
+      );
+    }
     await this.ensureTrusted(plan.workspace, plan.project, options.trustProjectConfig);
     const context = this.automationContext(
       plan,
@@ -265,16 +273,24 @@ export class WorktreeWorkflowService {
         : "";
       throw new YggError(
         `Worktree ${plan.inspection.worktree.name} was removed, but its post-remove hook failed: ${toErrorMessage(error)}${branchKept}`,
-        { cause: error },
+        {
+          cause: error,
+          effects: removalEffects(plan.inspection.worktree, null),
+        },
       );
     }
     if (branchDeletion?.eligible) {
       try {
-        await this.worktrees.deleteBranch(plan.workspace, branchDeletion);
+        await this.worktrees.deleteBranch(plan.workspace, branchDeletion, {
+          force: options.force,
+        });
       } catch (error) {
         throw new YggError(
           `Worktree ${plan.inspection.worktree.name} was removed, but local branch ${branchDeletion.branch} was kept because it could not be deleted: ${toErrorMessage(error)}`,
-          { cause: error },
+          {
+            cause: error,
+            effects: removalEffects(plan.inspection.worktree, null),
+          },
         );
       }
     }
@@ -411,6 +427,14 @@ export class WorktreeWorkflowService {
       output,
     };
   }
+}
+
+function removalEffects(worktree: Worktree, deletedBranch: string | null): unknown {
+  return {
+    removedWorktrees: [{ name: worktree.name, branch: worktree.branch, path: worktree.path }],
+    deletedBranches: deletedBranch ? [deletedBranch] : [],
+    keptBranches: !deletedBranch && worktree.branch ? [worktree.branch] : [],
+  };
 }
 
 function shellQuote(value: string): string {

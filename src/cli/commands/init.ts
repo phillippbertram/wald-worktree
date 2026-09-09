@@ -6,6 +6,7 @@ import { YggError } from "../../domain/errors.js";
 import type { ProjectConfigDocument, Workspace } from "../../domain/types.js";
 import { humanizeRepositoryName } from "../../infrastructure/path-utils.js";
 import type { AdoptionInspection, AdoptionOptions } from "../../services/workspace-service.js";
+import { printCreatePlan } from "../../ui/create-plan.js";
 import { style } from "../../ui/style.js";
 import {
   confirm,
@@ -18,7 +19,7 @@ import {
   selectValue,
 } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
-import { ensureTrusted, shellQuote, success, writeLine } from "../helpers.js";
+import { ensureTrusted, shellQuote, success, writeJson, writeLine } from "../helpers.js";
 import {
   initializationPreviewSummary,
   renderInitializationPreview,
@@ -41,6 +42,7 @@ const initInputSchema = z
     config: z.boolean().optional(),
     configScope: z.enum(["workspace", "project"]).optional(),
     yes: z.boolean().optional(),
+    json: z.boolean().default(false),
   })
   .strict()
   .superRefine((value, context) => {
@@ -51,9 +53,23 @@ const initInputSchema = z
         message: "Requires --config.",
       });
     }
+    if (value.json && value.repository && !value.directory) {
+      context.addIssue({
+        code: "custom",
+        path: ["directory"],
+        message: "JSON clone mode requires a repository and directory.",
+      });
+    }
+    if (value.json && !value.repository && (value.adopt === undefined || !value.yes)) {
+      context.addIssue({
+        code: "custom",
+        path: ["json"],
+        message: "JSON adoption mode requires --adopt and --yes.",
+      });
+    }
   });
 
-export type InitInput = z.output<typeof initInputSchema>;
+export type InitInput = Omit<z.output<typeof initInputSchema>, "json"> & { json?: boolean };
 
 export function registerInitCommand(program: Command, context: CliContext): void {
   program
@@ -72,6 +88,7 @@ export function registerInitCommand(program: Command, context: CliContext): void
     .option("--config", "Create detected workspace-local project configuration")
     .option("--config-scope <scope>", "Write configuration to workspace or project")
     .option("--yes", "Accept detected settings without prompting")
+    .option("--json", "Emit machine-readable JSON without prompting")
     .addHelpText(
       "after",
       "\nExamples:\n  cd ~/dev/project && ygg init\n  ygg init git@github.com:example/project.git ~/dev/project\n  ygg init git@github.com:example/project.git ~/dev/project --worktrees-dir worktrees\n  ygg init --adopt . --yes --config\n  ygg init --adopt . --yes --config --config-scope project\n",
@@ -101,11 +118,17 @@ export async function initializeWorkspace(
       "Existing-checkout options cannot be combined with clone mode. Use ygg init --adopt.",
     );
   }
-  const workspace = await runTask("Initializing workspace", () =>
+  const initialize = () =>
     context.workspaces.initialize(input.repository as string, input.directory, process.cwd(), {
       worktreeDir: input.worktreesDir,
-    }),
-  );
+    });
+  const workspace = input.json
+    ? await initialize()
+    : await runTask("Initializing workspace", initialize);
+  if (input.json) {
+    writeInitJson(context.output.stdout, "initialized", workspace, []);
+    return workspace;
+  }
   await success(`Initialized workspace at ${style.path(workspace.root)}`, context.output);
   writeLine(
     context.output.stdout,
@@ -504,10 +527,7 @@ async function completeNewWorkspace(
       fetch: false,
     }),
   );
-  await printKeyValueTable([
-    ["Default branch", plan.prepared.branch],
-    ["New worktree", plan.prepared.target],
-  ]);
+  printCreatePlan(plan, { type: "stay" }, context.output, "First worktree plan");
   let createFirstWorktree = false;
   try {
     createFirstWorktree = await confirm("Create this first worktree now?", true, {
@@ -561,15 +581,29 @@ async function initializeAdoptedWorkspace(
     remote: input.remote === false ? null : input.remote,
     defaultBranch: input.defaultBranch,
   };
-  let inspection = await inspectAdoption(source, requested, explicit, context);
+  let inspection = input.json
+    ? await context.workspaces.inspectAdoption(source, requested)
+    : await inspectAdoption(source, requested, explicit, context);
   if (inspection.existingWorkspace) {
-    await repairOrReportExistingWorkspace(inspection.existingWorkspace, context);
+    const repaired = await repairOrReportExistingWorkspace(
+      inspection.existingWorkspace,
+      context,
+      Boolean(input.json),
+    );
     if (input.config) {
       await maybeInitializeProjectConfig(
         inspection.existingWorkspace,
         inspection.existingWorkspace.primaryWorktree,
         input,
         context,
+      );
+    }
+    if (input.json) {
+      writeInitJson(
+        context.output.stdout,
+        repaired.restored.length > 0 ? "repaired" : "unchanged",
+        inspection.existingWorkspace,
+        repaired.restored,
       );
     }
     return inspection.existingWorkspace;
@@ -607,30 +641,38 @@ async function initializeAdoptedWorkspace(
       return null;
     }
   }
-  const workspace = await runTask("Adopting repository", () =>
-    context.workspaces.adopt(inspection),
-  );
-  await success(
-    `Connected existing checkout to ygg at ${style.path(workspace.root)}`,
-    context.output,
-  );
-  writeLine(
-    context.output.stdout,
-    `${style.label("Worktrees:")} ${style.path(workspace.worktreeDir)}`,
-  );
+  const adopt = () => context.workspaces.adopt(inspection);
+  const workspace = input.json ? await adopt() : await runTask("Adopting repository", adopt);
+  if (!input.json) {
+    await success(
+      `Connected existing checkout to ygg at ${style.path(workspace.root)}`,
+      context.output,
+    );
+    writeLine(
+      context.output.stdout,
+      `${style.label("Worktrees:")} ${style.path(workspace.worktreeDir)}`,
+    );
+  }
   await maybeInitializeProjectConfig(workspace, workspace.primaryWorktree, input, context);
-  writeLine(
-    context.output.stdout,
-    `${style.label("Create another worktree:")} ${style.command("ygg create <branch> --cd")}`,
-  );
+  if (input.json) {
+    writeInitJson(context.output.stdout, "initialized", workspace, []);
+  } else {
+    writeLine(
+      context.output.stdout,
+      `${style.label("Create another worktree:")} ${style.command("ygg create <branch> --cd")}`,
+    );
+  }
   return workspace;
 }
 
 async function repairOrReportExistingWorkspace(
   workspace: Workspace,
   context: CliContext,
-): Promise<void> {
-  const repair = await runTask("Checking workspace", () => context.workspaces.repair(workspace));
+  quiet = false,
+): Promise<{ restored: string[] }> {
+  const repair = quiet
+    ? await context.workspaces.repair(workspace)
+    : await runTask("Checking workspace", () => context.workspaces.repair(workspace));
   const restored = [
     repair.worktreeDirCreated ? `worktree directory ${workspace.worktreeDir}` : null,
     repair.markerCreated ? `metadata link ${path.join(workspace.worktreeDir, ".ygg")}` : null,
@@ -638,14 +680,22 @@ async function repairOrReportExistingWorkspace(
   ].filter((entry): entry is string => Boolean(entry));
 
   if (restored.length === 0) {
-    await success(`Workspace already initialized at ${style.path(workspace.root)}`, context.output);
-    return;
+    if (!quiet) {
+      await success(
+        `Workspace already initialized at ${style.path(workspace.root)}`,
+        context.output,
+      );
+    }
+    return { restored };
   }
 
-  await success(`Repaired workspace at ${style.path(workspace.root)}`, context.output);
-  for (const entry of restored) {
-    writeLine(context.output.stdout, `${style.label("Restored")} ${style.value(entry)}`);
+  if (!quiet) {
+    await success(`Repaired workspace at ${style.path(workspace.root)}`, context.output);
+    for (const entry of restored) {
+      writeLine(context.output.stdout, `${style.label("Restored")} ${style.value(entry)}`);
+    }
   }
+  return { restored };
 }
 
 async function maybeInitializeProjectConfig(
@@ -688,14 +738,16 @@ async function maybeInitializeProjectConfig(
     }
   }
   if (!shouldCreate) {
-    writeLine(
-      context.output.stdout,
-      "Workspace remains initialized; no project config was written.",
-    );
-    writeLine(
-      context.output.stdout,
-      `${style.label("Later:")} ${style.command("ygg config init")}`,
-    );
+    if (!input.json) {
+      writeLine(
+        context.output.stdout,
+        "Workspace remains initialized; no project config was written.",
+      );
+      writeLine(
+        context.output.stdout,
+        `${style.label("Later:")} ${style.command("ygg config init")}`,
+      );
+    }
     return;
   }
   if (!requested) {
@@ -742,6 +794,7 @@ async function maybeInitializeProjectConfig(
         yes: Boolean(input.yes),
         scope,
         fromProject: false,
+        quiet: Boolean(input.json),
       },
       context,
     );
@@ -758,11 +811,34 @@ async function maybeInitializeProjectConfig(
     return;
   }
   if (!document) {
-    writeLine(
-      context.output.stdout,
-      "Workspace remains initialized; no project config was written.",
-    );
+    if (!input.json) {
+      writeLine(
+        context.output.stdout,
+        "Workspace remains initialized; no project config was written.",
+      );
+    }
   }
+}
+
+function writeInitJson(
+  stream: NodeJS.WritableStream,
+  action: "initialized" | "repaired" | "unchanged",
+  workspace: Workspace,
+  restored: string[],
+): void {
+  writeJson(stream, {
+    action,
+    workspace: {
+      root: workspace.root,
+      mode: workspace.config.mode,
+      gitDir: workspace.gitDir,
+      worktreeDir: workspace.worktreeDir,
+      primaryWorktree: workspace.primaryWorktree,
+      defaultBranch: workspace.config.defaultBranch,
+      remote: workspace.config.remote?.name ?? null,
+    },
+    restored,
+  });
 }
 
 async function inspectAdoption(

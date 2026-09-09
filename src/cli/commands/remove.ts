@@ -12,7 +12,7 @@ import {
   selectManyWorktrees,
 } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
-import { ensureTrusted, removalError, success, writeLine } from "../helpers.js";
+import { ensureTrusted, removalError, success, writeJson, writeLine } from "../helpers.js";
 import { nonEmptyCliString, parseCliInput } from "../input.js";
 
 const removeInputSchema = z
@@ -21,19 +21,33 @@ const removeInputSchema = z
     force: z.boolean().default(false),
     deleteBranch: z.boolean().default(false),
     yes: z.boolean().default(false),
+    json: z.boolean().default(false),
   })
-  .strict();
+  .strict()
+  .superRefine((input, context) => {
+    if (input.json && (input.worktrees.length === 0 || !input.yes)) {
+      context.addIssue({
+        code: "custom",
+        path: ["json"],
+        message: "JSON mode requires worktree names and --yes.",
+      });
+    }
+  });
 
-export type RemoveInput = z.output<typeof removeInputSchema>;
+export type RemoveInput = Omit<z.output<typeof removeInputSchema>, "json"> & { json?: boolean };
 
 export function registerRemoveCommand(program: Command, context: CliContext): void {
   program
     .command("remove")
-    .description("Safely remove worktrees and optionally their merged local branches")
+    .description("Safely remove worktrees and optionally their local branches")
     .argument("[worktrees...]", "Worktree names, branches, or paths")
     .option("--force", "Bypass dirty, unmerged, and lock safeguards")
-    .option("--delete-branch", "Delete each removed worktree's merged local branch")
+    .option(
+      "--delete-branch",
+      "Delete each removed worktree's eligible local branch; unmerged branches require --force",
+    )
     .option("--yes", "Confirm removal without prompting")
+    .option("--json", "Emit machine-readable JSON without prompting")
     .action(async (worktrees: unknown, options: unknown) => {
       const input = parseCliInput(removeInputSchema, {
         worktrees,
@@ -180,8 +194,13 @@ export async function removeWorktrees(input: RemoveInput, context: CliContext): 
       }
     }
 
-    for (const plan of plans) await ensureTrusted(workspace, plan.project, context);
+    for (const plan of plans) {
+      await ensureTrusted(workspace, plan.project, context, { nonInteractive: input.json });
+    }
     const selectedBranchRefs = new Set(branchesToDelete.map((branch) => branch.branchRef));
+    const removedWorktrees: Array<{ name: string; branch: string | null; path: string }> = [];
+    const deletedBranches: string[] = [];
+    const keptBranches: string[] = [];
     for (const plan of plans) {
       const deletion = plan.inspection.branchDeletion;
       const deleteBranch = deletion.eligible && selectedBranchRefs.has(deletion.branchRef);
@@ -190,18 +209,32 @@ export async function removeWorktrees(input: RemoveInput, context: CliContext): 
         deleteBranch,
         output: context.output.stderr,
       });
-      await success(
-        `Removed worktree ${style.worktree(plan.inspection.worktree.name)}`,
-        context.output,
-      );
+      const removed = plan.inspection.worktree;
+      removedWorktrees.push({ name: removed.name, branch: removed.branch, path: removed.path });
       if (deleteBranch && deletion.eligible) {
-        await success(`Deleted local branch ${style.branch(deletion.branch)}`, context.output);
-      } else if (plan.inspection.worktree.branch) {
-        writeLine(
-          context.output.stdout,
-          `${style.label("Branch kept:")} ${style.branch(plan.inspection.worktree.branch)}`,
-        );
+        deletedBranches.push(deletion.branch);
+      } else if (removed.branch) {
+        keptBranches.push(removed.branch);
       }
+      if (!input.json) {
+        await success(`Removed worktree ${style.worktree(removed.name)}`, context.output);
+        if (deleteBranch && deletion.eligible) {
+          await success(`Deleted local branch ${style.branch(deletion.branch)}`, context.output);
+        } else if (removed.branch) {
+          writeLine(
+            context.output.stdout,
+            `${style.label("Branch kept:")} ${style.branch(removed.branch)}`,
+          );
+        }
+      }
+    }
+    if (input.json) {
+      writeJson(context.output.stdout, {
+        action: "removed",
+        worktrees: removedWorktrees,
+        deletedBranches,
+        keptBranches,
+      });
     }
     return;
   }
@@ -223,7 +256,7 @@ async function chooseBranchesToDelete(
     const candidate = candidates[0];
     if (!candidate) return [];
     const selected = await confirm(
-      `Remove › Branch · Delete merged local branch ${style.branch(candidate.deletion.branch)} too?`,
+      `Remove › Branch · Delete ${candidate.deletion.mergedIntoDefault ? "local" : "unmerged local"} branch ${style.branch(candidate.deletion.branch)} too?`,
       initialBranchRefs.includes(candidate.deletion.branchRef),
       { navigation },
     );
@@ -231,11 +264,13 @@ async function chooseBranchesToDelete(
   }
 
   const selectedRefs = await selectManyValues(
-    "Remove › Branches · Select merged local branches to delete:",
+    "Remove › Branches · Select local branches to delete:",
     candidates.map((candidate) => ({
       label: style.branch(candidate.deletion.branch),
       value: candidate.deletion.branchRef,
-      description: `worktree ${candidate.worktreeName}`,
+      description: candidate.deletion.mergedIntoDefault
+        ? `worktree ${candidate.worktreeName}`
+        : `worktree ${candidate.worktreeName}, unmerged`,
     })),
     { navigation, initialValues: initialBranchRefs },
   );

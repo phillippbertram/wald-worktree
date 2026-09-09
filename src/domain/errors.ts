@@ -1,10 +1,15 @@
 export class YggError extends Error {
   readonly exitCode: number;
+  readonly effects: unknown;
 
-  constructor(message: string, options?: { cause?: unknown; exitCode?: number }) {
+  constructor(
+    message: string,
+    options?: { cause?: unknown; exitCode?: number; effects?: unknown },
+  ) {
     super(message, { cause: options?.cause });
     this.name = "YggError";
     this.exitCode = options?.exitCode ?? 1;
+    this.effects = options?.effects;
   }
 }
 

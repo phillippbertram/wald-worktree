@@ -3,8 +3,10 @@ import { z } from "zod";
 import { toErrorMessage, YggError } from "../../domain/errors.js";
 import type { Worktree } from "../../domain/types.js";
 import { builtInToolNames } from "../../services/tool-service.js";
+import type { CreatedWorktree, CreatePlan } from "../../services/worktree-workflow-service.js";
+import { type CreateDestination, printCreatePlan } from "../../ui/create-plan.js";
 import { style } from "../../ui/style.js";
-import { isPromptBackError, runTask } from "../../ui/terminal.js";
+import { confirm, isPromptBackError, runTask } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
 import {
   chooseBranch,
@@ -13,6 +15,7 @@ import {
   optionValueIfExplicit,
   shellQuote,
   success,
+  writeJson,
   writeLine,
 } from "../helpers.js";
 import { nonEmptyCliString, parseCliInput } from "../input.js";
@@ -29,6 +32,7 @@ const createInputSchema = z
     open: z.boolean().default(false),
     tool: nonEmptyCliString.optional(),
     printPath: z.boolean().default(false),
+    json: z.boolean().default(false),
   })
   .strict()
   .superRefine((input, context) => {
@@ -46,9 +50,23 @@ const createInputSchema = z
         message: "Cannot be combined with --from; carry always starts at the current HEAD.",
       });
     }
+    if (input.json && !input.branch) {
+      context.addIssue({
+        code: "custom",
+        path: ["branch"],
+        message: "JSON mode requires a branch.",
+      });
+    }
+    if (input.json && (input.cd || input.open || input.tool || input.printPath)) {
+      context.addIssue({
+        code: "custom",
+        path: ["json"],
+        message: "Cannot be combined with --cd, --open, --tool, or --print-path.",
+      });
+    }
   });
 
-export type CreateInput = z.output<typeof createInputSchema>;
+export type CreateInput = Omit<z.output<typeof createInputSchema>, "json"> & { json?: boolean };
 
 export function registerCreateCommand(program: Command, context: CliContext): void {
   program
@@ -63,6 +81,7 @@ export function registerCreateCommand(program: Command, context: CliContext): vo
     .option("--cd", "Enter after creation; requires shell integration")
     .option("--open", "Open after creation with the configured or selected tool")
     .option("--tool <profile>", "Tool profile to open; implies --open")
+    .option("--json", "Emit machine-readable JSON without prompting")
     .addOption(new Option("--print-path").hideHelp())
     .addHelpText(
       "after",
@@ -80,6 +99,7 @@ export function registerCreateCommand(program: Command, context: CliContext): vo
           open?: unknown;
           tool?: unknown;
           printPath?: unknown;
+          json?: unknown;
         },
         command: Command,
       ) => {
@@ -93,26 +113,41 @@ export function registerCreateCommand(program: Command, context: CliContext): vo
     );
 }
 
-export async function createWorktree(input: CreateInput, context: CliContext): Promise<Worktree> {
+export async function createWorktree(
+  input: CreateInput,
+  context: CliContext,
+): Promise<Worktree | null> {
   const workspace = await context.workspaces.find();
-  const branch =
-    input.branch ??
-    (input.carry
-      ? await chooseNewBranch("Carry › New branch · Branch name:")
-      : await chooseBranch(workspace, context.worktrees));
-  const plan = await runTask("Preparing worktree", () =>
-    context.workflow.planCreate(workspace, {
-      branch,
-      from: input.from,
-      name: input.name,
-      fetch: input.fetch,
-      carry: input.carry,
-    }),
-  );
-  await ensureTrusted(workspace, plan.project, context);
+  const promptedForBranch = input.branch === undefined;
+  const branchState: { selectedValue?: string; branchValue?: string } = {};
+  let plan: CreatePlan;
+  while (true) {
+    const branch =
+      input.branch ??
+      (input.carry
+        ? await chooseNewBranch("Carry › New branch · Branch name:", branchState)
+        : await chooseBranch(workspace, context.worktrees, branchState));
+    plan = await prepareCreatePlan(workspace, branch, input, context);
+    if (!promptedForBranch) break;
+    printCreatePlan(plan, createDestination(input), context.output);
+    try {
+      if (await confirm("Create this worktree?", true, { navigation: "back" })) break;
+      writeLine(context.output.stdout, createCancellationMessage(plan));
+      return null;
+    } catch (error) {
+      if (isPromptBackError(error)) continue;
+      throw error;
+    }
+  }
+  await ensureTrusted(workspace, plan.project, context, { nonInteractive: input.json });
   const created = await context.workflow.executeCreate(plan, {
     output: context.output.stderr,
   });
+
+  if (input.json) {
+    writeJson(context.output.stdout, createJsonResult(created, plan));
+    return created;
+  }
 
   if (input.open || input.tool) {
     try {
@@ -193,4 +228,48 @@ export async function createWorktree(input: CreateInput, context: CliContext): P
     }
   }
   return created;
+}
+
+async function prepareCreatePlan(
+  workspace: Awaited<ReturnType<CliContext["workspaces"]["find"]>>,
+  branch: string,
+  input: CreateInput,
+  context: CliContext,
+): Promise<CreatePlan> {
+  const prepare = () =>
+    context.workflow.planCreate(workspace, {
+      branch,
+      from: input.from,
+      name: input.name,
+      fetch: input.fetch,
+      carry: input.carry,
+    });
+  return input.json ? await prepare() : await runTask("Preparing worktree", prepare);
+}
+
+function createDestination(input: CreateInput): CreateDestination {
+  if (input.cd) return { type: "cd" };
+  if (input.open || input.tool) return { type: "open", tool: input.tool ?? null };
+  return { type: "stay" };
+}
+
+function createCancellationMessage(plan: CreatePlan): string {
+  if (plan.fetchedRemote) {
+    return `Cancelled. No branch, worktree, or configured action was created or run. Only remote refs from ${plan.fetchedRemote} were updated during preparation.`;
+  }
+  return "Cancelled. No branch, worktree, or configured action was created or run.";
+}
+
+function createJsonResult(created: CreatedWorktree, plan: CreatePlan): unknown {
+  return {
+    action: "created",
+    strategy: plan.prepared.strategy,
+    worktree: serializeWorktree(created),
+    ...(created.carry ? { carry: created.carry } : {}),
+  };
+}
+
+function serializeWorktree(worktree: Worktree): unknown {
+  const { name, branch, path, role, state, head } = worktree;
+  return { name, branch, path, role, state, head };
 }

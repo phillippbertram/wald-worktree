@@ -4,17 +4,27 @@ import { YggError } from "../../domain/errors.js";
 import { style } from "../../ui/style.js";
 import { isInteractiveTerminal, promptText, selectWorktree } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
-import { success, writeLine } from "../helpers.js";
+import { success, writeJson, writeLine } from "../helpers.js";
 import { nonEmptyCliString, parseCliInput } from "../input.js";
 
 const renameInputSchema = z
   .object({
     worktree: nonEmptyCliString.optional(),
     newName: nonEmptyCliString.optional(),
+    json: z.boolean().default(false),
   })
-  .strict();
+  .strict()
+  .superRefine((input, context) => {
+    if (input.json && (!input.worktree || !input.newName)) {
+      context.addIssue({
+        code: "custom",
+        path: ["json"],
+        message: "JSON mode requires a worktree and new name.",
+      });
+    }
+  });
 
-export type RenameInput = z.output<typeof renameInputSchema>;
+export type RenameInput = Omit<z.output<typeof renameInputSchema>, "json"> & { json?: boolean };
 
 export function registerRenameCommand(program: Command, context: CliContext): void {
   program
@@ -22,9 +32,13 @@ export function registerRenameCommand(program: Command, context: CliContext): vo
     .description("Rename a linked worktree directory without renaming its branch")
     .argument("[worktree]", "Worktree name, branch, or path")
     .argument("[new-name]", "New worktree directory name")
+    .option("--json", "Emit machine-readable JSON without prompting")
     .addHelpText("after", "\nExamples:\n  ygg rename feature-payment payment-ui\n  ygg rename\n")
-    .action(async (worktree: unknown, newName: unknown) => {
-      await renameWorktree(parseCliInput(renameInputSchema, { worktree, newName }), context);
+    .action(async (worktree: unknown, newName: unknown, options: unknown) => {
+      await renameWorktree(
+        parseCliInput(renameInputSchema, { worktree, newName, ...(options as object) }),
+        context,
+      );
     });
 }
 
@@ -56,6 +70,21 @@ export async function renameWorktree(input: RenameInput, context: CliContext): P
 
   const plan = await context.worktrees.prepareMove(workspace, identifier, newName);
   const moved = await context.worktrees.move(workspace, plan);
+  if (input.json) {
+    writeJson(context.output.stdout, {
+      action: "renamed",
+      before: { name: plan.worktree.name, path: plan.worktree.path },
+      worktree: {
+        name: moved.name,
+        branch: moved.branch,
+        path: moved.path,
+        role: moved.role,
+        state: moved.state,
+        head: moved.head,
+      },
+    });
+    return;
+  }
   await success(
     `Renamed ${style.worktree(plan.worktree.name)} to ${style.worktree(moved.name)}`,
     context.output,

@@ -164,9 +164,33 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
       ]),
     );
 
-    const removedFeature = await execa(
+    await fs.writeFile(
+      path.join(workspace, "feature-direct-cd", "feature.txt"),
+      "unmerged\n",
+      "utf8",
+    );
+    await execa("git", ["add", "feature.txt"], {
+      cwd: path.join(workspace, "feature-direct-cd"),
+    });
+    await execa("git", ["commit", "-m", "unmerged feature"], {
+      cwd: path.join(workspace, "feature-direct-cd"),
+    });
+    const refusedUnmergedBranchDeletion = await execa(
       process.execPath,
       cliArguments("remove", "feature-direct-cd", "--delete-branch", "--yes"),
+      { cwd: workspace, reject: false },
+    );
+    expect(refusedUnmergedBranchDeletion.exitCode).toBe(1);
+    expect(refusedUnmergedBranchDeletion.stderr).toContain(
+      "use --force only if this data can be discarded",
+    );
+    await expect(fs.stat(path.join(workspace, "feature-direct-cd"))).resolves.toSatisfy((stat) =>
+      stat.isDirectory(),
+    );
+
+    const removedFeature = await execa(
+      process.execPath,
+      cliArguments("remove", "feature-direct-cd", "--delete-branch", "--force", "--yes"),
       { cwd: workspace, reject: false },
     );
     expect(removedFeature.exitCode, removedFeature.stderr).toBe(0);

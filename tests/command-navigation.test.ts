@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createWorktree } from "../src/cli/commands/create.js";
+import { handoffWorktree } from "../src/cli/commands/handoff.js";
 import { runProjectHook } from "../src/cli/commands/hook.js";
 import { openWorktree } from "../src/cli/commands/open.js";
 import { removeWorktrees } from "../src/cli/commands/remove.js";
@@ -16,8 +18,10 @@ const prompts = vi.hoisted(() => ({
   manyValueSelections: [] as string[][],
   manyValueOptions: [] as Array<{ initialValues?: string[] }>,
   promptTexts: [] as Array<string | Error>,
+  promptTextDefaults: [] as Array<string | undefined>,
   searchSelections: [] as Array<string | Error>,
   searchOptions: [] as Array<Array<{ label: string; value: string }>>,
+  searchPromptOptions: [] as Array<{ initialValue?: string }>,
   worktreeSelections: [] as Array<Worktree | Error>,
   manyOptions: [] as Array<{ initialValues?: string[] }>,
 }));
@@ -36,13 +40,19 @@ vi.mock("../src/ui/terminal.js", async (importOriginal) => {
       if (result instanceof Error) throw result;
       return result;
     },
-    promptText: async () => {
+    promptText: async (_question: string, defaultValue?: string) => {
+      prompts.promptTextDefaults.push(defaultValue);
       const result = prompts.promptTexts.shift() ?? "";
       if (result instanceof Error) throw result;
       return result;
     },
-    searchSelect: async (_question: string, options: Array<{ label: string; value: string }>) => {
+    searchSelect: async (
+      _question: string,
+      options: Array<{ label: string; value: string }>,
+      promptOptions: { initialValue?: string } = {},
+    ) => {
       prompts.searchOptions.push(options);
+      prompts.searchPromptOptions.push(promptOptions);
       const result = prompts.searchSelections.shift() ?? "";
       if (result instanceof Error) throw result;
       return result;
@@ -85,8 +95,10 @@ describe("interactive command navigation", () => {
     prompts.manyValueSelections = [];
     prompts.manyValueOptions = [];
     prompts.promptTexts = [];
+    prompts.promptTextDefaults = [];
     prompts.searchSelections = [];
     prompts.searchOptions = [];
+    prompts.searchPromptOptions = [];
     prompts.worktreeSelections = [];
     prompts.manyOptions = [];
   });
@@ -103,6 +115,100 @@ describe("interactive command navigation", () => {
     await expect(
       chooseBranch(workspace, worktrees as unknown as CliContext["worktrees"]),
     ).resolves.toBe("existing");
+  });
+
+  it("confirms an interactively selected create plan with Yes by default", async () => {
+    prompts.searchSelections.push("feature");
+    prompts.confirmations.push(true);
+    const executeCreate = vi.fn().mockResolvedValue(feature);
+    const context = createContextForCreate(workspace, feature, executeCreate);
+
+    await createWorktree({ carry: false, cd: false, open: false, printPath: false }, context);
+
+    expect(prompts.confirmationQuestions).toContain("Create this worktree?");
+    expect(prompts.confirmationDefaults).toContain(true);
+    expect(executeCreate).toHaveBeenCalledOnce();
+  });
+
+  it("cancels an interactive create before trust or mutation", async () => {
+    prompts.searchSelections.push("feature");
+    prompts.confirmations.push(false);
+    const executeCreate = vi.fn();
+    const context = createContextForCreate(workspace, feature, executeCreate);
+
+    await expect(
+      createWorktree({ carry: false, cd: false, open: false, printPath: false }, context),
+    ).resolves.toBeNull();
+
+    expect(executeCreate).not.toHaveBeenCalled();
+    expect(context.configs.isTrusted).not.toHaveBeenCalled();
+  });
+
+  it("states that only remote refs changed when a fetched plan is declined", async () => {
+    prompts.searchSelections.push("feature");
+    prompts.confirmations.push(false);
+    let stdout = "";
+    const context = createContextForCreate(workspace, feature, vi.fn(), null, "origin");
+    context.output.stdout = {
+      write: (value: string) => {
+        stdout += value;
+        return true;
+      },
+    } as NodeJS.WritableStream;
+
+    await createWorktree({ carry: false, cd: false, open: false, printPath: false }, context);
+
+    expect(stdout).toContain("Only remote refs from origin were updated during preparation");
+    expect(context.workflow.executeCreate).not.toHaveBeenCalled();
+  });
+
+  it("returns from create confirmation with the previous branch selection retained", async () => {
+    prompts.searchSelections.push("feature", "feature");
+    prompts.confirmations.push(new PromptBackError(), true);
+    const executeCreate = vi.fn().mockResolvedValue(feature);
+    const context = createContextForCreate(workspace, feature, executeCreate);
+
+    await createWorktree({ carry: false, cd: false, open: false, printPath: false }, context);
+
+    expect(prompts.searchPromptOptions[1]).toMatchObject({ initialValue: "feature" });
+    expect(executeCreate).toHaveBeenCalledOnce();
+  });
+
+  it("does not confirm a fully explicit create command", async () => {
+    const executeCreate = vi.fn().mockResolvedValue(feature);
+    const context = createContextForCreate(workspace, feature, executeCreate);
+
+    await createWorktree(
+      { branch: "feature", carry: false, cd: false, open: false, printPath: false },
+      context,
+    );
+
+    expect(prompts.confirmationQuestions).toEqual([]);
+    expect(executeCreate).toHaveBeenCalledOnce();
+  });
+
+  it("confirms an interactively entered handoff branch before carrying changes", async () => {
+    prompts.promptTexts.push("review");
+    prompts.confirmations.push(true);
+    const executeCreate = vi.fn().mockResolvedValue(review);
+    const context = createContextForCreate(workspace, review, executeCreate, primary);
+
+    await handoffWorktree({ cd: false, open: false, printPath: false }, context);
+
+    expect(prompts.confirmationQuestions).toContain("Create this worktree?");
+    expect(executeCreate).toHaveBeenCalledOnce();
+  });
+
+  it("returns from handoff confirmation with the previous branch text retained", async () => {
+    prompts.promptTexts.push("review", "review");
+    prompts.confirmations.push(new PromptBackError(), true);
+    const executeCreate = vi.fn().mockResolvedValue(review);
+    const context = createContextForCreate(workspace, review, executeCreate, primary);
+
+    await handoffWorktree({ cd: false, open: false, printPath: false }, context);
+
+    expect(prompts.promptTextDefaults).toEqual([undefined, "review"]);
+    expect(executeCreate).toHaveBeenCalledOnce();
   });
 
   it("returns from tool selection to worktree selection", async () => {
@@ -229,9 +335,11 @@ describe("interactive command navigation", () => {
           "the branch is not merged into main",
         ],
         branchDeletion: {
-          eligible: false,
+          eligible: true,
           branch: feature.branch,
-          reason: "the branch is not merged into main",
+          branchRef: "refs/heads/feature",
+          expectedHead: "abc123",
+          mergedIntoDefault: false,
         },
       },
       project: null,
@@ -281,6 +389,7 @@ describe("interactive command navigation", () => {
               branch: feature.branch,
               branchRef: "refs/heads/feature",
               expectedHead: "abc123",
+              mergedIntoDefault: true,
             },
           },
           project: null,
@@ -299,12 +408,54 @@ describe("interactive command navigation", () => {
       context,
     );
 
-    expect(prompts.confirmationQuestions[0]).toContain("Delete merged local branch feature too?");
+    expect(prompts.confirmationQuestions[0]).toContain("Delete local branch feature too?");
     expect(prompts.confirmationDefaults[0]).toBe(false);
     expect(prompts.confirmationQuestions).toHaveLength(1);
     expect(executeRemove).toHaveBeenCalledWith(
       expect.any(Object),
       expect.objectContaining({ deleteBranch: true }),
+    );
+  });
+
+  it("offers an unmerged branch for deletion when removal is forced", async () => {
+    prompts.confirmations.push(true);
+    const executeRemove = vi.fn();
+    const context = commandContext(workspace, primary, [primary, feature], {
+      workflow: {
+        planRemove: vi.fn().mockResolvedValue({
+          inspection: {
+            worktree: feature,
+            hardBlockers: [],
+            blockers: ["the branch is not merged into main"],
+            branchDeletion: {
+              eligible: true,
+              branch: feature.branch,
+              branchRef: "refs/heads/feature",
+              expectedHead: "abc123",
+              mergedIntoDefault: false,
+            },
+          },
+          project: null,
+        }),
+        executeRemove,
+      },
+    });
+
+    await removeWorktrees(
+      {
+        worktrees: [feature.name],
+        force: true,
+        deleteBranch: false,
+        yes: false,
+      },
+      context,
+    );
+
+    expect(prompts.confirmationQuestions[0]).toContain("Delete unmerged local branch feature too?");
+    expect(prompts.confirmationDefaults[0]).toBe(false);
+    expect(executeRemove).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ deleteBranch: true, force: true }),
     );
   });
 
@@ -325,6 +476,7 @@ describe("interactive command navigation", () => {
                 branch: worktree.branch,
                 branchRef: `refs/heads/${worktree.branch}`,
                 expectedHead: "abc123",
+                mergedIntoDefault: true,
               },
             },
             project: null,
@@ -386,4 +538,48 @@ function commandContext(
     configs: { isTrusted: vi.fn().mockReturnValue(true) },
     ...overrides,
   } as unknown as CliContext;
+}
+
+function createContextForCreate(
+  workspace: Workspace,
+  created: Worktree,
+  executeCreate: ReturnType<typeof vi.fn>,
+  carrySource: Worktree | null = null,
+  fetchedRemote: string | null = null,
+): CliContext {
+  const completeWorkspace = {
+    ...workspace,
+    config: { defaultBranch: "main", remote: null },
+  } as Workspace;
+  const plan = {
+    workspace: completeWorkspace,
+    prepared: {
+      branch: created.branch,
+      branchRef: `refs/heads/${created.branch}`,
+      target: created.path,
+      projectRevision: `refs/heads/${created.branch}`,
+      strategy: { type: "local" },
+    },
+    project: null,
+    trusted: true,
+    carrySource,
+    fetchedRemote,
+    current: carrySource,
+    defaultWorktree: null,
+    primary: carrySource,
+  };
+  return commandContext(completeWorkspace, carrySource, carrySource ? [carrySource] : [], {
+    worktrees: {
+      current: vi.fn().mockResolvedValue(carrySource),
+      list: vi.fn().mockResolvedValue(carrySource ? [carrySource] : []),
+      listBranchCandidates: vi
+        .fn()
+        .mockResolvedValue([{ name: created.branch, label: created.branch, source: "local" }]),
+    },
+    configs: { isTrusted: vi.fn().mockReturnValue(true) },
+    workflow: {
+      planCreate: vi.fn().mockResolvedValue(plan),
+      executeCreate,
+    },
+  });
 }

@@ -59,10 +59,10 @@ export async function ensureTrusted(
   workspace: Workspace,
   project: ProjectConfigDocument | null,
   context: CliContext,
-  options: { navigation?: PromptNavigation } = {},
+  options: { navigation?: PromptNavigation; nonInteractive?: boolean } = {},
 ): Promise<void> {
   if (context.configs.isTrusted(workspace, project) || !project) return;
-  if (!isInteractiveTerminal()) {
+  if (options.nonInteractive || !isInteractiveTerminal()) {
     throw new YggError(
       `Project configuration is not trusted: ${project.path}\nReview it, then run: ygg config trust --yes`,
     );
@@ -96,6 +96,7 @@ export function printTrustSummary(project: ProjectConfigDocument, output: CliOut
 export async function chooseBranch(
   workspace: Workspace,
   worktrees: WorktreeService,
+  state: { selectedValue?: string; branchValue?: string } = {},
 ): Promise<string> {
   if (!isInteractiveTerminal()) throw new YggError("Branch is required without a TTY.");
   const unique = new Map<string, { label: string; value: string }>();
@@ -108,21 +109,19 @@ export async function chooseBranch(
     }
   }
   const createValue = "__create_new_branch__";
-  let selectedValue: string | undefined;
-  let branchValue: string | undefined;
   while (true) {
     const selected = await searchSelect(
       "Create › Branch · Select a branch or create a new one:",
       [{ label: "Create a new branch", value: createValue }, ...unique.values()],
-      { navigation: "cancel", initialValue: selectedValue },
+      { navigation: "cancel", initialValue: state.selectedValue },
     );
-    selectedValue = selected;
+    state.selectedValue = selected;
     if (selected !== createValue) return selected;
     try {
-      const branch = await promptText("Create › New branch · Branch name:", branchValue, {
+      const branch = await promptText("Create › New branch · Branch name:", state.branchValue, {
         navigation: "back",
       });
-      branchValue = branch;
+      state.branchValue = branch;
       if (!branch) throw new YggError("Branch cannot be empty.");
       return branch;
     } catch (error) {
@@ -134,9 +133,11 @@ export async function chooseBranch(
 
 export async function chooseNewBranch(
   prompt = "Create › New branch · Branch name:",
+  state: { branchValue?: string } = {},
 ): Promise<string> {
   if (!isInteractiveTerminal()) throw new YggError("Branch is required without a TTY.");
-  const branch = await promptText(prompt, undefined, { navigation: "cancel" });
+  const branch = await promptText(prompt, state.branchValue, { navigation: "cancel" });
+  state.branchValue = branch;
   if (!branch) throw new YggError("Branch cannot be empty.");
   return branch;
 }

@@ -317,7 +317,9 @@ describe("interactive init wizard", () => {
       path: path.join(target, "main"),
     });
     expect(prompts.tables[0]).toContainEqual(["Workspace root", target]);
-    expect(prompts.tables[1]).toContainEqual(["New worktree", path.join(target, "main")]);
+    const rendered = readOutput(output);
+    expect(rendered).toContain("First worktree plan");
+    expect(rendered).toContain(path.join(target, "main"));
   });
 
   it("returns from confirmation to the layout and keeps earlier remote answers", async () => {

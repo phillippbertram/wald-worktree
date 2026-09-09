@@ -94,7 +94,7 @@ function expandToolArgument(argument: string, worktreePath?: string): string {
   return worktreePath ? argument.replaceAll("{path}", worktreePath) : argument;
 }
 
-async function commandExists(command: string, cwd?: string): Promise<boolean> {
+export async function commandExists(command: string, cwd?: string): Promise<boolean> {
   if (command.includes(path.sep)) {
     const executable = path.isAbsolute(command)
       ? command
