@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
-import { YggError } from "../domain/errors.js";
+import { WaldError } from "../domain/errors.js";
 import type { AutomationStep, ProjectConfig, ProjectConfigOverlay } from "../domain/types.js";
 
 const packageJsonSchema = z
@@ -167,18 +167,18 @@ async function readPackageScripts(root: string): Promise<string[]> {
     raw = await fs.readFile(packagePath, "utf8");
   } catch (error) {
     if (isNotFound(error)) return [];
-    throw new YggError(`Cannot read package metadata: ${packagePath}`, { cause: error });
+    throw new WaldError(`Cannot read package metadata: ${packagePath}`, { cause: error });
   }
 
   let value: unknown;
   try {
     value = JSON.parse(raw);
   } catch (error) {
-    throw new YggError(`Package metadata is not valid JSON: ${packagePath}`, { cause: error });
+    throw new WaldError(`Package metadata is not valid JSON: ${packagePath}`, { cause: error });
   }
   const parsed = packageJsonSchema.safeParse(value);
   if (!parsed.success) {
-    throw new YggError(`Package scripts are invalid: ${packagePath}\n${parsed.error.message}`);
+    throw new WaldError(`Package scripts are invalid: ${packagePath}\n${parsed.error.message}`);
   }
   return Object.keys(parsed.data.scripts).sort((left, right) => left.localeCompare(right));
 }
@@ -219,17 +219,17 @@ async function readDeclaredPackageManager(root: string): Promise<PackageManager 
     raw = await fs.readFile(packagePath, "utf8");
   } catch (error) {
     if (isNotFound(error)) return null;
-    throw new YggError(`Cannot read package metadata: ${packagePath}`, { cause: error });
+    throw new WaldError(`Cannot read package metadata: ${packagePath}`, { cause: error });
   }
   let value: unknown;
   try {
     value = JSON.parse(raw);
   } catch (error) {
-    throw new YggError(`Package metadata is not valid JSON: ${packagePath}`, { cause: error });
+    throw new WaldError(`Package metadata is not valid JSON: ${packagePath}`, { cause: error });
   }
   const parsed = packageJsonSchema.safeParse(value);
   if (!parsed.success) {
-    throw new YggError(`Package metadata is invalid: ${packagePath}\n${parsed.error.message}`);
+    throw new WaldError(`Package metadata is invalid: ${packagePath}\n${parsed.error.message}`);
   }
   const declared = parsed.data.packageManager?.split("@", 1)[0];
   return declared === "pnpm" || declared === "npm" || declared === "yarn" || declared === "bun"

@@ -72,47 +72,53 @@ jobs:
       - name: Prepare built CLI and smoke workspace
         run: |
           chmod +x dist/cli.js
-          mkdir -p "$RUNNER_TEMP/ygg-bin"
-          ln -s "$GITHUB_WORKSPACE/dist/cli.js" "$RUNNER_TEMP/ygg-bin/ygg"
-          echo "$RUNNER_TEMP/ygg-bin" >> "$GITHUB_PATH"
+          mkdir -p "$RUNNER_TEMP/wald-bin"
+          ln -s "$GITHUB_WORKSPACE/dist/cli.js" "$RUNNER_TEMP/wald-bin/wald"
+          echo "$RUNNER_TEMP/wald-bin" >> "$GITHUB_PATH"
           git init --bare "$RUNNER_TEMP/remote.git"
           git init "$RUNNER_TEMP/source"
-          git -C "$RUNNER_TEMP/source" config user.name "Ygg CI"
-          git -C "$RUNNER_TEMP/source" config user.email "ygg@example.invalid"
+          git -C "$RUNNER_TEMP/source" config user.name "Wald CI"
+          git -C "$RUNNER_TEMP/source" config user.email "wald@example.invalid"
           echo smoke > "$RUNNER_TEMP/source/README.md"
           git -C "$RUNNER_TEMP/source" add README.md
           git -C "$RUNNER_TEMP/source" commit -m "test: seed repository"
           git -C "$RUNNER_TEMP/source" branch -M main
           git -C "$RUNNER_TEMP/source" remote add origin "$RUNNER_TEMP/remote.git"
           git -C "$RUNNER_TEMP/source" push -u origin main
-          "$RUNNER_TEMP/ygg-bin/ygg" init "$RUNNER_TEMP/remote.git" "$RUNNER_TEMP/workspace"
+          "$RUNNER_TEMP/wald-bin/wald" init "$RUNNER_TEMP/remote.git" "$RUNNER_TEMP/workspace"
           cd "$RUNNER_TEMP/workspace"
-          "$RUNNER_TEMP/ygg-bin/ygg" create main --no-fetch
-          "$RUNNER_TEMP/ygg-bin/ygg" complete -- doctor "" | grep -- "--json"
+          "$RUNNER_TEMP/wald-bin/wald" create main --no-fetch
+          "$RUNNER_TEMP/wald-bin/wald" complete -- doctor "" | grep -- "--json"
       - name: Load Bash completion and cd wrapper
         run: |
-          eval "$(command ygg completion bash)"
-          complete -p ygg >/dev/null
+          eval "$(command wald completion bash)"
+          complete -p wald >/dev/null
           cd "$RUNNER_TEMP/workspace"
-          ygg cd main
+          wald cd main
           test "$PWD" = "$RUNNER_TEMP/workspace/main"
+          wald plant smoke/bash --no-fetch --cd
+          test "$PWD" = "$RUNNER_TEMP/workspace/smoke-bash"
         shell: bash
       - name: Load Zsh completion and cd wrapper
         run: |
           autoload -Uz compinit
           compinit -d "$RUNNER_TEMP/zcompdump"
-          eval "$(command ygg completion zsh)"
-          whence -w _ygg >/dev/null
+          eval "$(command wald completion zsh)"
+          whence -w _wald >/dev/null
           cd "$RUNNER_TEMP/workspace"
-          ygg cd main
+          wald cd main
           test "$PWD" = "$RUNNER_TEMP/workspace/main"
+          wald plant smoke/zsh --no-fetch --cd
+          test "$PWD" = "$RUNNER_TEMP/workspace/smoke-zsh"
         shell: zsh {0}
       - name: Load Fish completion and cd wrapper
         run: |
-          command ygg completion fish | source
-          functions -q ygg
-          complete -C "ygg doctor --" | string match --quiet -- "--json*"
+          command wald completion fish | source
+          functions -q wald
+          complete -C "wald plant --" | string match --quiet -- "--json*"
           cd "$RUNNER_TEMP/workspace"
-          ygg cd main
+          wald cd main
           test "$PWD" = "$RUNNER_TEMP/workspace/main"
+          wald plant smoke/fish --no-fetch --cd
+          test "$PWD" = "$RUNNER_TEMP/workspace/smoke-fish"
         shell: fish {0}

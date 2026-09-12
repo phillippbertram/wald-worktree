@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import { YggError } from "../domain/errors.js";
+import { WaldError } from "../domain/errors.js";
 import type { ProjectConfigDocument, Workspace, Worktree } from "../domain/types.js";
 import { summarizeExecutableConfig } from "../services/config-service.js";
 import type { WorktreeService } from "../services/worktree-service.js";
@@ -30,14 +30,14 @@ export async function resolveWorktree(
   const current = await worktrees.current(workspace);
   if (current && !options.forcePrompt) return current;
   const all = await worktrees.list(workspace);
-  if (all.length === 0) throw new YggError("The workspace has no worktrees. Use ygg create.");
+  if (all.length === 0) throw new WaldError("The workspace has no worktrees. Use wald create.");
   if (all.length === 1) return all[0] as Worktree;
-  if (!isInteractiveTerminal()) throw new YggError("Specify a worktree without a TTY.");
+  if (!isInteractiveTerminal()) throw new WaldError("Specify a worktree without a TTY.");
   const selected = await selectWorktree(all, {
     navigation: options.navigation,
     initialValue: options.initialPath ?? current?.path,
   });
-  if (!selected) throw new YggError("No worktree selected.");
+  if (!selected) throw new WaldError("No worktree selected.");
   return selected;
 }
 
@@ -63,8 +63,8 @@ export async function ensureTrusted(
 ): Promise<void> {
   if (context.configs.isTrusted(workspace, project) || !project) return;
   if (options.nonInteractive || !isInteractiveTerminal()) {
-    throw new YggError(
-      `Project configuration is not trusted: ${project.path}\nReview it, then run: ygg config trust --yes`,
+    throw new WaldError(
+      `Project configuration is not trusted: ${project.path}\nReview it, then run: wald config trust --yes`,
     );
   }
   printTrustSummary(project, context.output);
@@ -73,7 +73,7 @@ export async function ensureTrusted(
       navigation: options.navigation,
     }))
   ) {
-    throw new YggError("Project configuration was not trusted; no configured actions were run.");
+    throw new WaldError("Project configuration was not trusted; no configured actions were run.");
   }
   await context.configs.trust(workspace, project);
 }
@@ -98,7 +98,7 @@ export async function chooseBranch(
   worktrees: WorktreeService,
   state: { selectedValue?: string; branchValue?: string } = {},
 ): Promise<string> {
-  if (!isInteractiveTerminal()) throw new YggError("Branch is required without a TTY.");
+  if (!isInteractiveTerminal()) throw new WaldError("Branch is required without a TTY.");
   const unique = new Map<string, { label: string; value: string }>();
   for (const candidate of await worktrees.listBranchCandidates(workspace)) {
     if (!unique.has(candidate.name) || candidate.source === "local") {
@@ -122,7 +122,7 @@ export async function chooseBranch(
         navigation: "back",
       });
       state.branchValue = branch;
-      if (!branch) throw new YggError("Branch cannot be empty.");
+      if (!branch) throw new WaldError("Branch cannot be empty.");
       return branch;
     } catch (error) {
       if (isPromptBackError(error)) continue;
@@ -135,10 +135,10 @@ export async function chooseNewBranch(
   prompt = "Create › New branch · Branch name:",
   state: { branchValue?: string } = {},
 ): Promise<string> {
-  if (!isInteractiveTerminal()) throw new YggError("Branch is required without a TTY.");
+  if (!isInteractiveTerminal()) throw new WaldError("Branch is required without a TTY.");
   const branch = await promptText(prompt, state.branchValue, { navigation: "cancel" });
   state.branchValue = branch;
-  if (!branch) throw new YggError("Branch cannot be empty.");
+  if (!branch) throw new WaldError("Branch cannot be empty.");
   return branch;
 }
 
@@ -150,14 +150,14 @@ export async function findWorkspaceOrNull(context: CliContext): Promise<Workspac
   try {
     return await context.workspaces.find();
   } catch (error) {
-    if (error instanceof YggError && error.message.startsWith("No ygg workspace found"))
+    if (error instanceof WaldError && error.message.startsWith("No wald workspace found"))
       return null;
     throw error;
   }
 }
 
-export function removalError(worktree: Worktree, blockers: string[]): YggError {
-  return new YggError(
+export function removalError(worktree: Worktree, blockers: string[]): WaldError {
+  return new WaldError(
     `Refusing to remove ${worktree.name}:\n${blockers.map((item) => `- ${item}`).join("\n")}`,
   );
 }

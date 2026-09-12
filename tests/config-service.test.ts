@@ -15,7 +15,7 @@ describe("project YAML configuration", () => {
   const configs = new ConfigService();
 
   it("rejects repository project configuration symlinks", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "ygg-config-link-test-"));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "wald-config-link-test-"));
     try {
       const target = path.join(root, "outside.yml");
       await fs.writeFile(target, "version: 1\n", "utf8");
@@ -28,7 +28,7 @@ describe("project YAML configuration", () => {
   });
 
   it("uses the clean-break .yml filenames", () => {
-    expect(projectConfigFileName).toBe(".ygg.yml");
+    expect(projectConfigFileName).toBe(".wald.yml");
     expect(workspaceConfigFileName).toBe("workspace.yml");
     expect(workspaceProjectConfigFileName).toBe("project.yml");
   });
@@ -46,7 +46,7 @@ tasks:
       - type: command
         argv: [pnpm, test]
 `,
-      ".ygg.yml",
+      ".wald.yml",
     );
     const reformatted = configs.parseProjectConfig(
       `# formatting is not behavior
@@ -63,7 +63,7 @@ hooks:
       type: command
 version: 1
 `,
-      ".ygg.yml",
+      ".wald.yml",
     );
     const changed = configs.parseProjectConfig(
       `version: 1
@@ -77,7 +77,7 @@ tasks:
       - type: command
         argv: [pnpm, test]
 `,
-      ".ygg.yml",
+      ".wald.yml",
     );
 
     expect(first.requiresTrust).toBe(true);
@@ -96,7 +96,7 @@ hooks:
       to: .env
       overwrite: false
 `,
-      ".ygg.yml",
+      ".wald.yml",
     );
     const explicitError = configs.parseProjectConfig(
       `version: 1
@@ -108,7 +108,7 @@ hooks:
       to: .env
       on_existing: error
 `,
-      ".ygg.yml",
+      ".wald.yml",
     );
     const legacyReplace = configs.parseProjectConfig(
       `version: 1
@@ -120,7 +120,7 @@ hooks:
       to: .env
       overwrite: true
 `,
-      ".ygg.yml",
+      ".wald.yml",
     );
     const explicitReplace = configs.parseProjectConfig(
       `version: 1
@@ -132,7 +132,7 @@ hooks:
       to: .env
       on_existing: replace
 `,
-      ".ygg.yml",
+      ".wald.yml",
     );
     const skip = configs.parseProjectConfig(
       `version: 1
@@ -144,7 +144,7 @@ hooks:
       to: .env
       on_existing: skip
 `,
-      ".ygg.yml",
+      ".wald.yml",
     );
 
     expect(explicitError.config.hooks.post_create[0]).toMatchObject({ onExisting: "error" });
@@ -178,7 +178,7 @@ hooks:
       on_existing: skip
       overwrite: true
 `,
-        ".ygg.yml",
+        ".wald.yml",
       ),
     ).toThrow(/cannot define both 'on_existing' and legacy 'overwrite'/u);
   });
@@ -194,7 +194,7 @@ hooks:
       shell: pnpm install
       surprise: true
 `,
-        ".ygg.yml",
+        ".wald.yml",
       ),
     ).toThrow(/Configuration is invalid/u);
   });
@@ -205,7 +205,7 @@ hooks:
 defaults:
   fetch: false
 `,
-      ".ygg.yml",
+      ".wald.yml",
     );
 
     expect(document.requiresTrust).toBe(false);
@@ -221,7 +221,7 @@ tasks:
       - type: command
         argv: [printf, ""]
 `,
-      ".ygg.yml",
+      ".wald.yml",
     );
 
     expect(document.config.tasks["empty-argument"]?.steps[0]).toMatchObject({
@@ -234,7 +234,7 @@ tools:
   broken:
     command: [""]
 `,
-        ".ygg.yml",
+        ".wald.yml",
       ),
     ).toThrow(/first argv entry must name an executable/u);
   });
@@ -249,7 +249,7 @@ hooks:
       from: env/.env
       to: .env
 `,
-      ".ygg.yml",
+      ".wald.yml",
     );
 
     expect(document.config.hooks.post_create[0]).toMatchObject({
@@ -275,7 +275,7 @@ hooks:
       glob: "**/.env*"
       to: .
 `,
-      ".ygg.yml",
+      ".wald.yml",
     );
     const changed = configs.parseProjectConfig(
       `version: 1
@@ -287,7 +287,7 @@ hooks:
       glob: "**/*.json"
       to: .
 `,
-      ".ygg.yml",
+      ".wald.yml",
     );
 
     expect(first.config.hooks.post_create[0]).toMatchObject({
@@ -316,7 +316,7 @@ hooks:
       glob: ${JSON.stringify(glob)}
       to: .
 `,
-          ".ygg.yml",
+          ".wald.yml",
         ),
       ).toThrow(/positive relative pattern/u);
     },
@@ -329,8 +329,8 @@ describe("effective project configuration", () => {
   let workspace: Workspace;
 
   beforeEach(async () => {
-    root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "ygg-config-merge-test-")));
-    await fs.mkdir(path.join(root, ".ygg"));
+    root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "wald-config-merge-test-")));
+    await fs.mkdir(path.join(root, ".wald"));
     workspace = createWorkspace(root);
   });
 
@@ -340,7 +340,7 @@ describe("effective project configuration", () => {
 
   it("merges local defaults and named sections while replacing configured hooks", async () => {
     await fs.writeFile(
-      path.join(root, ".ygg.yml"),
+      path.join(root, ".wald.yml"),
       `version: 1
 defaults:
   fetch: false
@@ -396,10 +396,10 @@ tools:
     expect(Object.keys(effective?.config.tasks ?? {})).toEqual(["inherited", "local"]);
     expect(effective?.config.tools).toEqual({});
     expect(effective?.sources).toEqual({
-      repository: path.join(root, ".ygg.yml"),
-      workspace: path.join(root, ".ygg", "project.yml"),
+      repository: path.join(root, ".wald.yml"),
+      workspace: path.join(root, ".wald", "project.yml"),
     });
-    expect((await fs.stat(path.join(root, ".ygg", "project.yml"))).mode & 0o777).toBe(0o600);
+    expect((await fs.stat(path.join(root, ".wald", "project.yml"))).mode & 0o777).toBe(0o600);
   });
 
   it("keeps the effective trust hash stable when a repository config is copied locally", async () => {
@@ -411,26 +411,26 @@ tasks:
       - type: command
         argv: [pnpm, test]
 `,
-      path.join(root, ".ygg.yml"),
+      path.join(root, ".wald.yml"),
     ).config;
     await configs.writeProjectConfig(root, config);
     const repositoryOnly = await configs.resolveProjectConfig(workspace, root);
 
     await configs.writeWorkspaceProjectConfig(workspace, config);
-    await fs.rm(path.join(root, ".ygg.yml"));
+    await fs.rm(path.join(root, ".wald.yml"));
     const workspaceOnly = await configs.resolveProjectConfig(workspace, root);
 
     expect(workspaceOnly?.hash).toBe(repositoryOnly?.hash);
     expect(workspaceOnly?.sources).toEqual({
       repository: null,
-      workspace: path.join(root, ".ygg", "project.yml"),
+      workspace: path.join(root, ".wald", "project.yml"),
     });
   });
 
   it("rejects a workspace project configuration symlink", async () => {
     const outside = path.join(root, "outside.yml");
     await fs.writeFile(outside, "version: 1\n", "utf8");
-    await fs.symlink(outside, path.join(root, ".ygg", "project.yml"));
+    await fs.symlink(outside, path.join(root, ".wald", "project.yml"));
 
     await expect(configs.resolveProjectConfig(workspace, root)).rejects.toThrow(
       /must be a regular file/u,
@@ -439,7 +439,7 @@ tasks:
 
   it("rejects unknown fields in workspace-local project configuration", async () => {
     await fs.writeFile(
-      path.join(root, ".ygg", "project.yml"),
+      path.join(root, ".wald", "project.yml"),
       "version: 1\nunknown_behavior: true\n",
       "utf8",
     );
@@ -453,8 +453,8 @@ tasks:
 function createWorkspace(root: string): Workspace {
   return {
     root,
-    configPath: path.join(root, ".ygg", "workspace.yml"),
-    sharedDir: path.join(root, ".ygg", "shared"),
+    configPath: path.join(root, ".wald", "workspace.yml"),
+    sharedDir: path.join(root, ".wald", "shared"),
     gitDir: path.join(root, "repo.git"),
     worktreeDir: root,
     primaryWorktree: null,

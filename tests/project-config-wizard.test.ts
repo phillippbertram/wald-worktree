@@ -59,8 +59,8 @@ describe("interactive project configuration wizard", () => {
     prompts.selections = [];
     prompts.manySelections = [];
     prompts.manyCalls = [];
-    root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "ygg-config-wizard-test-")));
-    await fs.mkdir(path.join(root, ".ygg"));
+    root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "wald-config-wizard-test-")));
+    await fs.mkdir(path.join(root, ".wald"));
     workspace = createWorkspace(root);
     await fs.writeFile(path.join(root, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n", "utf8");
     await fs.writeFile(
@@ -170,8 +170,8 @@ function createContext(): CliContext {
 function createWorkspace(root: string): Workspace {
   return {
     root,
-    configPath: path.join(root, ".ygg", "workspace.yml"),
-    sharedDir: path.join(root, ".ygg", "shared"),
+    configPath: path.join(root, ".wald", "workspace.yml"),
+    sharedDir: path.join(root, ".wald", "shared"),
     gitDir: path.join(root, "repo.git"),
     worktreeDir: root,
     primaryWorktree: null,

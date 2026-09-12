@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { YggError } from "../domain/errors.js";
+import { WaldError } from "../domain/errors.js";
 import type { ProjectConfigDocument, ToolProfile, Worktree } from "../domain/types.js";
 import { ProcessRunner } from "../infrastructure/process-runner.js";
 
@@ -76,11 +76,11 @@ export class ToolService {
   ): Promise<void> {
     const profile = this.profiles(project)[toolName];
     if (!profile) {
-      throw new YggError(`Unknown tool profile: ${toolName}`);
+      throw new WaldError(`Unknown tool profile: ${toolName}`);
     }
     const command = profile.command.map((argument) => expandToolArgument(argument, worktree.path));
     if (!(await commandExists(command[0] as string, worktree.path))) {
-      throw new YggError(`Tool is not available in PATH: ${profile.command[0]}`);
+      throw new WaldError(`Tool is not available in PATH: ${profile.command[0]}`);
     }
     if (profile.mode === "detached") {
       await this.processes.launchDetached(command, worktree.path);

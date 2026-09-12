@@ -1,23 +1,22 @@
 # Worktrees explained
 
 Git worktrees let one repository provide several project folders at the same time. This guide builds
-the mental model first, then shows where Ygg fits and how the workflow looks in daily development.
+the mental model first, then shows where Wald fits and how the workflow looks in daily development.
 
-## Yggdrasil as a mental model
+## The forest as a mental model
 
-Ygg uses the world tree as a teaching aid for real Git concepts. The metaphor never replaces the
+Wald uses a forest as a teaching aid for real Git concepts. The metaphor never replaces the
 technical names used by Git, the CLI, or configuration:
 
-| Yggdrasil image | Technical meaning |
+| Forest image | Technical meaning |
 | --- | --- |
-| World tree | The complete Ygg workspace. |
-| Roots | Git's common directory (`repo.git` in a standalone workspace), which keeps shared objects, refs, remotes, and worktree metadata. |
-| Trunk | The configured default branch: the normal creation base and merge-check target. |
-| Worlds | Independent worktree folders with their own files, `HEAD`, index, and processes. |
-| Bifröst | `ygg cd` or `ygg open`, which takes you to a selected worktree without changing another. |
+| Forest | The complete Wald workspace. |
+| Shared ground and root network | Git's common directory (`repo.git` in a standalone workspace), which keeps shared objects, refs, remotes, and worktree metadata. |
+| Tree | An independent worktree folder with its own files, `HEAD`, index, and processes. |
+| New growth | A feature, hotfix, review, experiment, or agent task created in its own worktree. |
 
 The default branch is the preferred base for new work and the comparison target for safe removal;
-Ygg does not enforce one history. An explicit `--from` may start new work from another commit.
+Wald does not enforce one history. An explicit `--from` may start new work from another commit.
 
 ## The four building blocks
 
@@ -33,22 +32,22 @@ folders without cloning the complete repository again.
 
 ```mermaid
 flowchart TB
-    Repo["Roots · shared Git repository"]
+    Repo["Shared ground · Git repository and history"]
     Repo --> History["Commits · branches · tags · remotes"]
-    Repo --> Main["Main world · worktree<br/>HEAD: main · trunk"]
-    Repo --> Feature["Feature world · linked worktree<br/>HEAD: feature/payment"]
-    Repo --> Review["Review world · linked worktree<br/>HEAD: contributor/fix"]
+    Repo --> Main["Main tree · worktree<br/>HEAD: main"]
+    Repo --> Feature["Feature tree · linked worktree<br/>HEAD: feature/payment"]
+    Repo --> Review["Review tree · linked worktree<br/>HEAD: contributor/fix"]
 
     Main --> MainFiles["own files · index · dependencies"]
     Feature --> FeatureFiles["own files · index · dependencies"]
     Review --> ReviewFiles["own files · index · dependencies"]
 ```
 
-In a Ygg standalone workspace, the same relationship is visible on disk:
+In a Wald standalone workspace, the same relationship is visible on disk:
 
 ```text
 project/
-├── .ygg/                    Ygg workspace metadata and shared local files
+├── .wald/                    Wald workspace metadata and shared local files
 ├── repo.git/                shared Git objects, refs, remotes, and worktree metadata
 ├── main/                    files + HEAD + index for main
 ├── feature-payment/         files + HEAD + index for feature/payment
@@ -90,7 +89,7 @@ flowchart TB
 `release/1.x`.
 
 ```sh
-ygg create hotfix/payment --from release/1.x --tool code
+wald create hotfix/payment --from release/1.x --tool code
 ```
 
 ```text
@@ -102,7 +101,7 @@ project/
 Commit and publish the hotfix normally. After it is merged:
 
 ```sh
-ygg remove hotfix-payment
+wald remove hotfix-payment
 ```
 
 The hotfix folder is removed after safety checks. The branch and the feature worktree remain.
@@ -113,8 +112,8 @@ The hotfix folder is removed after safety checks. The branch and the feature wor
 `verify` task, and your current branch must stay open.
 
 ```sh
-ygg create contributor/payment-fix --tool code
-ygg run verify contributor-payment-fix
+wald create contributor/payment-fix --tool code
+wald run verify contributor-payment-fix
 ```
 
 ```text
@@ -126,13 +125,13 @@ project/
 When the review is complete:
 
 ```sh
-ygg remove contributor-payment-fix
+wald remove contributor-payment-fix
 ```
 
-Ygg fetches according to project configuration and prefers an existing local branch, then a matching
+Wald fetches according to project configuration and prefers an existing local branch, then a matching
 remote branch, before creating a new branch. A matching remote branch is tracked. A newly created
 local branch has no upstream even when its history starts at the configured remote default branch;
-Ygg prints the explicit `git push -u <remote> HEAD` command needed to publish it.
+Wald prints the explicit `git push -u <remote> HEAD` command needed to publish it.
 
 ### 3. Keep coding while a long test runs
 
@@ -140,8 +139,8 @@ Ygg prints the explicit `git push -u <remote> HEAD` command needed to publish it
 development.
 
 ```sh
-ygg create experiment/migration
-ygg exec experiment-migration -- pnpm test
+wald create experiment/migration
+wald exec experiment-migration -- pnpm test
 ```
 
 ```text
@@ -154,7 +153,7 @@ Continue in `main/` from another terminal. Inspect and remove the experiment whe
 needed:
 
 ```sh
-ygg remove experiment-migration
+wald remove experiment-migration
 ```
 
 ### 4. Give parallel agents separate files
@@ -162,9 +161,9 @@ ygg remove experiment-migration
 **Starting point:** two coding tasks must not share staged, unstaged, untracked, or generated files.
 
 ```sh
-ygg create feature/api
-ygg create feature/ui
-ygg list
+wald create feature/api
+wald create feature/ui
+wald list
 ```
 
 ```text
@@ -177,23 +176,23 @@ Open the agents from separate terminals so foreground tools can run at the same 
 
 ```sh
 # Terminal A
-ygg open feature-api --tool codex
+wald open feature-api --tool codex
 
 # Terminal B
-ygg open feature-ui --tool codex-app
+wald open feature-ui --tool codex-app
 ```
 
 Each agent owns a real checkout. When the project exposes a `verify` task, verify and remove each
 task independently:
 
 ```sh
-ygg run verify feature-api
-ygg remove feature-api
-ygg run verify feature-ui
-ygg remove feature-ui
+wald run verify feature-api
+wald remove feature-api
+wald run verify feature-ui
+wald remove feature-ui
 ```
 
-Ygg separates filesystem state; it does not coordinate agent decisions, running sessions, ports,
+Wald separates filesystem state; it does not coordinate agent decisions, running sessions, ports,
 databases, or other shared services.
 
 ## Carry unfinished code into another worktree
@@ -202,9 +201,9 @@ databases, or other shared services.
 on a fresh branch without cleaning or changing the source.
 
 ```sh
-ygg create feature/review --carry
+wald create feature/review --carry
 # equivalent code-focused workflow
-ygg handoff feature/review
+wald handoff feature/review
 ```
 
 ```text
@@ -220,56 +219,56 @@ configuration. Empty directories and submodules are not transferred.
 
 Both commands use the current effective project configuration and the normal trusted lifecycle. A
 transfer failure before `post_create` rolls back the fresh worktree and branch when safe; a
-`post_create` failure keeps the verified target for `ygg setup`. After success, the changes exist in
+`post_create` failure keeps the verified target for `wald setup`. After success, the changes exist in
 both worktrees. `handoff` does not move an editor, process, or agent session.
 
-When the branch was chosen interactively, Ygg shows the complete create plan and confirms it before
+When the branch was chosen interactively, Wald shows the complete create plan and confirms it before
 trust, hooks, branch creation, or checkout creation. Explicit branch commands remain prompt-free.
 
 ## The worktree lifecycle
 
-This lifecycle works in every supported workspace layout. **Ygg Flow** names the recommended flat
+This lifecycle works in every supported workspace layout. **Wald Flow** names the recommended flat
 layout, not a branching model or this create-to-remove sequence.
 
 ```mermaid
 flowchart TB
-    Request["ygg create or handoff"] --> Resolve["Resolve branch and trusted configuration"]
+    Request["wald create or handoff"] --> Resolve["Resolve branch and trusted configuration"]
     Resolve --> Pre["Run pre_create"]
     Pre --> Add["Create the Git worktree"]
     Add --> Carry["Optional carry<br/>apply and verify local code"]
     Carry --> Post["Run post_create setup"]
     Carry -- transfer fails --> Rollback["Roll back fresh checkout and branch"]
     Post --> Ready["Edit · commit · run · review"]
-    Post -- setup fails --> Retry["Keep checkout<br/>retry with ygg setup"]
+    Post -- setup fails --> Retry["Keep checkout<br/>retry with wald setup"]
     Retry --> Ready
-    Ready --> Inspect["ygg remove safety checks"]
-    Ready -. optional .-> Verify["ygg run verify"]
+    Ready --> Inspect["wald remove safety checks"]
+    Ready -. optional .-> Verify["wald run verify"]
     Verify --> Inspect
     Inspect --> Remove["Remove linked checkout<br/>keep branch"]
 
-    Missing["Folder was already deleted outside Git"] --> Preview["ygg prune<br/>preview stale metadata"]
-    Preview --> Apply["ygg prune --apply<br/>remove metadata only"]
+    Missing["Folder was already deleted outside Git"] --> Preview["wald prune<br/>preview stale metadata"]
+    Preview --> Apply["wald prune --apply<br/>remove metadata only"]
 
-    Apply --> Repair["ygg init<br/>repair missing workspace container or link"]
-    Apply --> Uninit["ygg uninit<br/>preview removal of Ygg metadata"]
+    Apply --> Repair["wald init<br/>repair missing workspace container or link"]
+    Apply --> Uninit["wald uninit<br/>preview removal of Wald metadata"]
 ```
 
 `remove` is the normal finish path. `prune` is not a faster removal command; it repairs stale Git
 administrative state after a registered directory is already missing. Locked registrations are
 preserved. `init` repairs the workspace infrastructure after stale registrations are gone;
-`uninit` is the explicit path for disconnecting the repository from Ygg. A normal removal retires
-one worktree world while its branch and the shared roots survive—no repository Ragnarök.
+`uninit` is the explicit path for disconnecting the repository from Wald. A normal removal retires
+one worktree while its branch and shared Git history survive.
 
 ## Workspace layouts
 
-### Ygg Flow
+### Wald Flow
 
-**Ygg Flow** is Ygg's recommended flat standalone layout. The shared repository and every worktree
+**Wald Flow** is Wald's recommended flat standalone layout. The shared repository and every worktree
 are siblings directly inside one workspace root:
 
 ```text
 project/
-├── .ygg/
+├── .wald/
 │   ├── workspace.yml
 │   └── shared/
 ├── repo.git/
@@ -280,11 +279,11 @@ project/
 Create it directly from a remote repository:
 
 ```sh
-ygg init git@github.com:example/project.git ~/dev/project
+wald init git@github.com:example/project.git ~/dev/project
 ```
 
 Like git-flow and GitHub Flow, the name describes a preferred way of working. Unlike those branching
-models, Ygg Flow defines only the physical worktree layout. It does not prescribe branch names,
+models, Wald Flow defines only the physical worktree layout. It does not prescribe branch names,
 merge direction, release branches, or deployment policy.
 
 ### Grouped standalone workspace
@@ -293,7 +292,7 @@ Use a dedicated container when the workspace root should not contain checkout fo
 
 ```text
 project/
-├── .ygg/
+├── .wald/
 ├── repo.git/
 └── worktrees/
     ├── main/
@@ -301,7 +300,7 @@ project/
 ```
 
 ```sh
-ygg init git@github.com:example/project.git ~/dev/project --worktrees-dir worktrees
+wald init git@github.com:example/project.git ~/dev/project --worktrees-dir worktrees
 ```
 
 ### Retained existing checkout
@@ -311,47 +310,47 @@ Guided initialization can keep an existing checkout in place and add a separate 
 ```text
 ~/dev/
 ├── project/                         protected existing checkout
-│   └── .git/ygg/
+│   └── .git/wald/
 │       ├── workspace.yml
 │       └── shared/
 └── project-worktrees/
-    ├── .ygg -> ../project/.git/ygg
+    ├── .wald -> ../project/.git/wald
     └── feature-payment/
 ```
 
 ```sh
 cd ~/dev/project
-ygg init
+wald init
 ```
 
 The wizard suggests a safe target, previews absolute paths and the resulting tree, then asks for
-confirmation. The original checkout is never moved or deleted and is protected from `ygg remove`.
+confirmation. The original checkout is never moved or deleted and is protected from `wald remove`.
 
-Creating a separate standalone workspace from a local repository is different: Ygg copies committed
+Creating a separate standalone workspace from a local repository is different: Wald copies committed
 branch history into independent Git object storage without hardlinks. Uncommitted or ignored files,
 stashes, and detached commits without a branch stay in the source repository.
 
 See [Configuration](configuration.md#supported-layouts) for generated paths and layout constraints.
 
-## Ygg and native Git
+## Wald and native Git
 
-Ygg does not replace Git. It applies workspace policy around the native operations:
+Wald does not replace Git. It applies workspace policy around the native operations:
 
-| Intent | Ygg workflow | Native foundation |
+| Intent | Wald workflow | Native foundation |
 | --- | --- | --- |
-| Create a checkout | `ygg create <branch>` | `git worktree add` |
-| Carry current code to a fresh checkout | `ygg create <branch> --carry`, `ygg handoff <branch>` | Binary Git patches plus verified untracked-file copy |
-| Understand the current context | `ygg status` | Local Git status, tracking refs, and Ygg configuration |
-| Find all checkouts | `ygg list` | `git worktree list` plus Ygg state |
-| Enter a checkout | `ygg cd <worktree>` | Resolve and print its canonical path |
-| Rename a checkout directory | `ygg rename <worktree> <new-name>` | Validated `git worktree move` |
-| Run hooks, setup, or tasks | `ygg hook run`, `ygg setup`, `ygg run` | Trusted effective project behavior |
-| Finish with a checkout | `ygg remove <worktree>` | Safety inspection and `git worktree remove` |
-| Clean stale metadata | `ygg prune` | Preview-first `git worktree prune` |
-| Repair workspace infrastructure | `ygg init` | Restore the configured container, metadata link, or shared directory |
-| Stop managing the repository with Ygg | `ygg uninit` | Preview-first removal of Ygg-owned metadata |
+| Create a checkout | `wald create <branch>` | `git worktree add` |
+| Carry current code to a fresh checkout | `wald create <branch> --carry`, `wald handoff <branch>` | Binary Git patches plus verified untracked-file copy |
+| Understand the current context | `wald status` | Local Git status, tracking refs, and Wald configuration |
+| Find all checkouts | `wald list` | `git worktree list` plus Wald state |
+| Enter a checkout | `wald cd <worktree>` | Resolve and print its canonical path |
+| Rename a checkout directory | `wald rename <worktree> <new-name>` | Validated `git worktree move` |
+| Run hooks, setup, or tasks | `wald hook run`, `wald setup`, `wald run` | Trusted effective project behavior |
+| Finish with a checkout | `wald remove <worktree>` | Safety inspection and `git worktree remove` |
+| Clean stale metadata | `wald prune` | Preview-first `git worktree prune` |
+| Repair workspace infrastructure | `wald init` | Restore the configured container, metadata link, or shared directory |
+| Stop managing the repository with Wald | `wald uninit` | Preview-first removal of Wald-owned metadata |
 
-Use Ygg for normal workspace operations so paths, setup, trust, and safety checks stay consistent.
+Use Wald for normal workspace operations so paths, setup, trust, and safety checks stay consistent.
 Regular Git commands inside a selected worktree continue to work normally.
 
 ## Common questions and pitfalls
@@ -376,27 +375,27 @@ conflicting environment at a time.
 ### Can I move or delete a worktree folder manually?
 
 Do not move or delete it manually. Git keeps administrative links between the shared repository and
-each worktree. Use `ygg rename` for an eligible linked worktree directory and `ygg remove` for normal
-cleanup. If a directory is already missing, preview its stale registration with `ygg prune`; that
-repairs the roots without touching surviving worlds or branches.
+each worktree. Use `wald rename` for an eligible linked worktree directory and `wald remove` for normal
+cleanup. If a directory is already missing, preview its stale registration with `wald prune`; that
+repairs Git metadata without touching surviving worktrees or branches.
 
 ### Does removing a worktree delete its branch?
 
-Not by default. `ygg remove` removes the linked checkout after safety checks and keeps its branch.
-In a terminal, Ygg also offers eligible local branches for deletion before final confirmation; no
+Not by default. `wald remove` removes the linked checkout after safety checks and keeps its branch.
+In a terminal, Wald also offers eligible local branches for deletion before final confirmation; no
 branch is preselected. An unmerged branch is offered only with `--force` and is clearly labeled.
 Scripts can request the same behavior explicitly with `--delete-branch --yes`, adding `--force`
 when the branch is unmerged. The configured default branch, detached checkouts, and remote branches
-are never deleted. `ygg prune` removes only stale administrative metadata and never deletes an
+are never deleted. `wald prune` removes only stale administrative metadata and never deletes an
 existing directory or branch.
 
-### How do I remove Ygg from an existing repository?
+### How do I remove Wald from an existing repository?
 
 Remove linked worktrees normally, prune registrations for folders that are already missing, then run
-`ygg uninit`. The command previews its changes. `ygg uninit --apply` removes the workspace
+`wald uninit`. The command previews its changes. `wald uninit --apply` removes the workspace
 configuration and metadata link but keeps the Git repository, branches, primary checkout, worktree
-container, and `.ygg.yml`. Local files below the Ygg metadata directory require `--force`.
-This includes workspace-local `.ygg/project.yml`; preview its removal before granting `--force`.
+container, and `.wald.yml`. Local files below the Wald metadata directory require `--force`.
+This includes workspace-local `.wald/project.yml`; preview its removal before granting `--force`.
 
 ### Do I need a worktree for every branch?
 
@@ -406,7 +405,7 @@ job, or parallel agent. For a quick isolated change, normal branch switching may
 ## Further reading
 
 - [Official Git worktree documentation](https://git-scm.com/docs/git-worktree)
-- [Yggdrasil and the worlds of Norse cosmology](https://www.worldhistory.org/article/1305/nine-realms-of-norse-cosmology/)
 - [DataCamp: Git Worktree Tutorial](https://www.datacamp.com/tutorial/git-worktree-tutorial)
-- [Ygg CLI reference](cli-reference.md)
-- [Ygg configuration](configuration.md)
+- [Wald brand identity](brand.md)
+- [Wald CLI reference](cli-reference.md)
+- [Wald configuration](configuration.md)

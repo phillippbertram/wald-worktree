@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { YggError } from "../domain/errors.js";
+import { WaldError } from "../domain/errors.js";
 import type { GitClient } from "../infrastructure/git-client.js";
 import { isPathInside } from "../infrastructure/path-utils.js";
 
@@ -39,7 +39,7 @@ export type WorktreeTransferSnapshot = {
   fingerprint: string;
 };
 
-export class WorktreeTransferError extends YggError {
+export class WorktreeTransferError extends WaldError {
   readonly rollbackSafe: boolean;
 
   constructor(message: string, options: { cause?: unknown; rollbackSafe: boolean }) {
@@ -93,7 +93,7 @@ export class WorktreeTransferService {
         await this.git.run(["rev-parse", "--verify", "HEAD^{commit}"], { cwd: targetPath })
       ).stdout;
       if (targetHead !== snapshot.head) {
-        throw new YggError(
+        throw new WaldError(
           `Carry target must start at ${snapshot.head}, but ${targetPath} is at ${targetHead}.`,
         );
       }
@@ -102,7 +102,7 @@ export class WorktreeTransferService {
         { cwd: targetPath },
       );
       if (targetStatus.stdout.length > 0) {
-        throw new YggError(`Carry target is not clean: ${targetPath}`);
+        throw new WaldError(`Carry target is not clean: ${targetPath}`);
       }
       rollbackSafe = true;
 
@@ -126,12 +126,12 @@ export class WorktreeTransferService {
         this.capture(targetPath),
       ]);
       if (sourceAfter.fingerprint !== snapshot.fingerprint) {
-        throw new YggError(
+        throw new WaldError(
           `The source worktree changed while its local changes were being carried: ${snapshot.sourcePath}`,
         );
       }
       if (targetAfter.fingerprint !== snapshot.fingerprint) {
-        throw new YggError(`Carried worktree state could not be verified at ${targetPath}`);
+        throw new WaldError(`Carried worktree state could not be verified at ${targetPath}`);
       }
     } catch (error) {
       if (error instanceof WorktreeTransferError) throw error;
@@ -148,12 +148,12 @@ export class WorktreeTransferService {
       reject: false,
     });
     if (sparse.exitCode === 0 && sparse.stdout === "true") {
-      throw new YggError("Carrying changes from a sparse checkout is not supported.");
+      throw new WaldError("Carrying changes from a sparse checkout is not supported.");
     }
 
     const unmerged = await this.git.run(["ls-files", "--unmerged", "-z"], { cwd: sourcePath });
     if (unmerged.stdout.length > 0) {
-      throw new YggError("Resolve unmerged files before carrying worktree changes.");
+      throw new WaldError("Resolve unmerged files before carrying worktree changes.");
     }
     await this.rejectActiveOperation(sourcePath);
 
@@ -172,7 +172,7 @@ export class WorktreeTransferService {
       unstagedRaw.stdout.includes("160000") ||
       status.stdout.split("\0").some((entry) => /^[12] [^ ]+ S/u.test(entry))
     ) {
-      throw new YggError("Commit or discard submodule changes before carrying worktree changes.");
+      throw new WaldError("Commit or discard submodule changes before carrying worktree changes.");
     }
   }
 
@@ -192,7 +192,7 @@ export class WorktreeTransferService {
       });
       const resolved = path.resolve(sourcePath, result.stdout);
       if (await pathEntryExists(resolved)) {
-        throw new YggError(
+        throw new WaldError(
           `Finish the active Git operation (${operationPath}) before carrying worktree changes.`,
         );
       }
@@ -256,7 +256,7 @@ export class WorktreeTransferService {
         hash: createHash("sha256").update(target).digest("hex"),
       };
     }
-    throw new YggError(`Cannot carry non-file untracked entry: ${relativePath}`);
+    throw new WaldError(`Cannot carry non-file untracked entry: ${relativePath}`);
   }
 
   private async applyPatch(
@@ -275,7 +275,7 @@ export class WorktreeTransferService {
   private async restoreUntracked(targetRoot: string, entry: UntrackedEntry): Promise<void> {
     const target = resolveTransferPath(targetRoot, entry.path);
     if (await pathEntryExists(target)) {
-      throw new YggError(`Carry target already exists: ${entry.path}`);
+      throw new WaldError(`Carry target already exists: ${entry.path}`);
     }
     await fs.mkdir(path.dirname(target), { recursive: true });
     if (entry.type === "symlink") {
@@ -311,11 +311,11 @@ function splitNull(output: string): string[] {
 
 function resolveTransferPath(root: string, relativePath: string): string {
   if (!relativePath || path.isAbsolute(relativePath) || relativePath.includes("\0")) {
-    throw new YggError(`Invalid transfer path: ${relativePath}`);
+    throw new WaldError(`Invalid transfer path: ${relativePath}`);
   }
   const resolved = path.resolve(root, relativePath);
   if (!isPathInside(root, resolved)) {
-    throw new YggError(`Transfer path escapes its worktree: ${relativePath}`);
+    throw new WaldError(`Transfer path escapes its worktree: ${relativePath}`);
   }
   return resolved;
 }

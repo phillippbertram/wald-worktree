@@ -3,7 +3,7 @@ import { Command } from "commander";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CliContext } from "../src/cli/context.js";
 import { runMainMenu } from "../src/cli/main-menu.js";
-import { YggError } from "../src/domain/errors.js";
+import { WaldError } from "../src/domain/errors.js";
 import type { Workspace, Worktree } from "../src/domain/types.js";
 import { PromptBackError } from "../src/ui/terminal.js";
 
@@ -128,7 +128,7 @@ describe("interactive main menu", () => {
   });
 
   it("shows workspace context before prompting", async () => {
-    const workspace = { root: "/tmp/ygg-project" } as Workspace;
+    const workspace = { root: "/tmp/wald-project" } as Workspace;
     const current = {
       name: "main",
       branch: "main",
@@ -136,11 +136,11 @@ describe("interactive main menu", () => {
     interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
     const context = createContext(current, [current]);
 
-    await runMainMenu(new Command().name("ygg"), context);
+    await runMainMenu(new Command().name("wald"), context);
 
-    expect(interactions.events[0]).toContain("Git workspaces, rooted together.");
+    expect(interactions.events[0]).toContain("Where Git worktrees grow.");
     expect(interactions.events[0]).toContain(
-      "Workspace ygg-project · Current main (main) · 1 worktree",
+      "Workspace wald-project · Current main (main) · 1 worktree",
     );
     expect(interactions.events[1]).toBe("prompt");
     expect(interactions.selectCalls[0]).toMatchObject({
@@ -169,7 +169,7 @@ describe("interactive main menu", () => {
   });
 
   it("runs guided handoff and rename only when their context is available", async () => {
-    const workspace = { root: "/tmp/ygg-project" } as Workspace;
+    const workspace = { root: "/tmp/wald-project" } as Workspace;
     const current = { name: "main", branch: "main" } as Worktree;
     const linked = { name: "feature", branch: "feature/work", role: "linked" } as Worktree;
     interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
@@ -181,7 +181,7 @@ describe("interactive main menu", () => {
       "exit",
     ];
 
-    await runMainMenu(new Command().name("ygg"), createContext(current, [current, linked]));
+    await runMainMenu(new Command().name("wald"), createContext(current, [current, linked]));
 
     expect(interactions.handoffWorktree).toHaveBeenCalledWith(
       { cd: false, open: false, printPath: false },
@@ -191,10 +191,10 @@ describe("interactive main menu", () => {
   });
 
   it("hides handoff outside a worktree and rename without a valid target", async () => {
-    const workspace = { root: "/tmp/ygg-project" } as Workspace;
+    const workspace = { root: "/tmp/wald-project" } as Workspace;
     interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
 
-    await runMainMenu(new Command().name("ygg"), createContext(null, []));
+    await runMainMenu(new Command().name("wald"), createContext(null, []));
 
     const labels = interactions.selectCalls[0]?.options.map((option) => option.label) ?? [];
     expect(labels).not.toContain("Hand off current work");
@@ -202,13 +202,13 @@ describe("interactive main menu", () => {
   });
 
   it("keeps action output visible until Escape refreshes the menu", async () => {
-    const workspace = { root: "/tmp/ygg-project" } as Workspace;
+    const workspace = { root: "/tmp/wald-project" } as Workspace;
     interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
     interactions.selections = ["create", new PromptBackError(), "exit"];
     interactions.createWorktree.mockResolvedValue({ name: "feature" });
     const context = createContext(null, []);
 
-    await runMainMenu(new Command().name("ygg"), context);
+    await runMainMenu(new Command().name("wald"), context);
 
     expect(interactions.createWorktree).toHaveBeenCalledOnce();
     expect(interactions.findWorkspaceOrNull).toHaveBeenCalledTimes(2);
@@ -218,19 +218,19 @@ describe("interactive main menu", () => {
       options: [
         {
           label: "Exit",
-          description: "Close the interactive Ygg session.",
+          description: "Close the interactive Wald session.",
         },
       ],
     });
   });
 
   it("keeps the worktree list visible until Escape returns to the menu", async () => {
-    const workspace = { root: "/tmp/ygg-project" } as Workspace;
+    const workspace = { root: "/tmp/wald-project" } as Workspace;
     interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
     interactions.selections = ["list", new PromptBackError(), "exit"];
     const context = createContext(null, []);
 
-    await runMainMenu(new Command().name("ygg"), context);
+    await runMainMenu(new Command().name("wald"), context);
 
     expect(interactions.listWorktrees).toHaveBeenCalledWith({ json: false }, context);
     expect(interactions.findWorkspaceOrNull).toHaveBeenCalledTimes(2);
@@ -240,19 +240,19 @@ describe("interactive main menu", () => {
       options: [
         {
           label: "Exit",
-          description: "Close the interactive Ygg session.",
+          description: "Close the interactive Wald session.",
         },
       ],
     });
   });
 
   it("exits from the worktree list without reopening the main menu", async () => {
-    const workspace = { root: "/tmp/ygg-project" } as Workspace;
+    const workspace = { root: "/tmp/wald-project" } as Workspace;
     interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
     interactions.selections = ["list", "exit"];
     const context = createContext(null, []);
 
-    await runMainMenu(new Command().name("ygg"), context);
+    await runMainMenu(new Command().name("wald"), context);
 
     expect(interactions.listWorktrees).toHaveBeenCalledOnce();
     expect(interactions.findWorkspaceOrNull).toHaveBeenCalledOnce();
@@ -260,12 +260,12 @@ describe("interactive main menu", () => {
   });
 
   it("keeps an expected action error visible until the result view is closed", async () => {
-    const workspace = { root: "/tmp/ygg-project" } as Workspace;
+    const workspace = { root: "/tmp/wald-project" } as Workspace;
     interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
     interactions.selections = ["create", "exit"];
-    interactions.createWorktree.mockRejectedValue(new YggError("Creation failed."));
+    interactions.createWorktree.mockRejectedValue(new WaldError("Creation failed."));
 
-    await runMainMenu(new Command().name("ygg"), createContext(null, []));
+    await runMainMenu(new Command().name("wald"), createContext(null, []));
 
     expect(interactions.events.join("\n")).toContain("Error: Creation failed.");
     expect(interactions.findWorkspaceOrNull).toHaveBeenCalledOnce();
@@ -273,35 +273,35 @@ describe("interactive main menu", () => {
   });
 
   it("returns from a nested prompt and exits cleanly from the main menu", async () => {
-    const workspace = { root: "/tmp/ygg-project" } as Workspace;
+    const workspace = { root: "/tmp/wald-project" } as Workspace;
     interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
     interactions.selections = ["create", new PromptBackError()];
     interactions.createWorktree.mockRejectedValue(new PromptBackError());
 
-    await runMainMenu(new Command().name("ygg"), createContext(null, []));
+    await runMainMenu(new Command().name("wald"), createContext(null, []));
 
     expect(interactions.createWorktree).toHaveBeenCalledOnce();
     expect(interactions.events.filter((event) => event === "prompt")).toHaveLength(2);
   });
 
   it("runs the general lifecycle hook flow from the main menu", async () => {
-    const workspace = { root: "/tmp/ygg-project" } as Workspace;
+    const workspace = { root: "/tmp/wald-project" } as Workspace;
     const current = { name: "main", branch: "main" } as Worktree;
     interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
     interactions.selections = ["hook", "exit"];
 
-    await runMainMenu(new Command().name("ygg"), createContext(current, [current]));
+    await runMainMenu(new Command().name("wald"), createContext(current, [current]));
 
     expect(interactions.runProjectHook).toHaveBeenCalledWith({}, expect.anything());
   });
 
   it("closes the menu after the workspace is uninitialized", async () => {
-    const workspace = { root: "/tmp/ygg-project" } as Workspace;
+    const workspace = { root: "/tmp/wald-project" } as Workspace;
     interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
     interactions.selections = ["uninit"];
     interactions.uninitializeWorkspace.mockResolvedValue(true);
 
-    await runMainMenu(new Command().name("ygg"), createContext(null, []));
+    await runMainMenu(new Command().name("wald"), createContext(null, []));
 
     expect(interactions.uninitializeWorkspace).toHaveBeenCalledWith(
       { apply: true, force: false, yes: false, json: false },
@@ -313,9 +313,9 @@ describe("interactive main menu", () => {
   it("shows the welcome page before starting guided initialization", async () => {
     interactions.findWorkspaceOrNull.mockResolvedValue(null);
 
-    await runMainMenu(new Command().name("ygg"), createContext(null, []));
+    await runMainMenu(new Command().name("wald"), createContext(null, []));
 
-    expect(interactions.events[0]).toContain("Git workspaces, rooted together.");
+    expect(interactions.events[0]).toContain("Where Git worktrees grow.");
     expect(interactions.events[0]).not.toContain("Workspace");
     expect(interactions.events[1]).toBe("init");
     expect(interactions.events).not.toContain("prompt");
@@ -323,13 +323,13 @@ describe("interactive main menu", () => {
 
   it("prints only help without a TTY", async () => {
     interactions.interactive = false;
-    const program = new Command().name("ygg").description("Ygg help");
+    const program = new Command().name("wald").description("Wald help");
 
     await runMainMenu(program, createContext(null, []));
 
     const output = interactions.events.join("\n");
-    expect(output).toContain("Usage: ygg");
-    expect(output).not.toContain("Git workspaces, rooted together.");
+    expect(output).toContain("Usage: wald");
+    expect(output).not.toContain("Where Git worktrees grow.");
     expect(interactions.findWorkspaceOrNull).not.toHaveBeenCalled();
   });
 });

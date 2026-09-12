@@ -1,4 +1,4 @@
-import { YggError } from "../domain/errors.js";
+import { WaldError } from "../domain/errors.js";
 import type {
   Workspace,
   WorkspaceStatus,
@@ -89,7 +89,7 @@ export class WorkspaceStatusService {
       !/^\d+$/u.test(behindValue) ||
       !/^\d+$/u.test(aheadValue)
     ) {
-      throw new YggError(`Git returned invalid tracking counts for ${current.branch}.`);
+      throw new WaldError(`Git returned invalid tracking counts for ${current.branch}.`);
     }
 
     return {

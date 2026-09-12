@@ -1,28 +1,28 @@
 # Project automation
 
-Ygg merges optional repository-owned `.ygg.yml` behavior with workspace-local
-`.ygg/project.yml` overrides. Validate both reported sources and the effective behavior before
+Wald merges optional repository-owned `.wald.yml` behavior with workspace-local
+`.wald/project.yml` overrides. Validate both reported sources and the effective behavior before
 granting trust:
 
 ```sh
-ygg config
-ygg config trust --yes
+wald config
+wald config trust --yes
 ```
 
-Create the recommended local starting configuration with `ygg config init`. In non-interactive
-sessions, use `ygg config init <worktree> --yes`; replacing an existing local file also requires
-`--force`. Use `--scope project` only when `.ygg.yml` should be committed and shared. To migrate an
+Create the recommended local starting configuration with `wald config init`. In non-interactive
+sessions, use `wald config init <worktree> --yes`; replacing an existing local file also requires
+`--force`. Use `--scope project` only when `.wald.yml` should be committed and shared. To migrate an
 existing repository file locally without deleting it, use
-`ygg config init <worktree> --scope workspace --from-project --yes`.
+`wald config init <worktree> --scope workspace --from-project --yes`.
 
 Run named tasks in the selected worktree:
 
 ```sh
-ygg run <task> <worktree>
+wald run <task> <worktree>
 ```
 
 An automatically detected package script named exactly `dev` is exposed separately as
-`ygg run dev`; it is not part of the one-shot `verify` task. Interrupting a foreground task with
+`wald run dev`; it is not part of the one-shot `verify` task. Interrupting a foreground task with
 `Ctrl-C` exits with status 130.
 
 Prefer tasks over reimplementing their commands because tasks preserve configured order,
@@ -31,13 +31,13 @@ environment variables, timeouts, working directories, and failure handling.
 Run any configured lifecycle hook manually after changing project configuration:
 
 ```sh
-ygg hook run <pre_create|post_create|pre_remove|post_remove> <worktree>
+wald hook run <pre_create|post_create|pre_remove|post_remove> <worktree>
 ```
 
 The command reloads the effective repository base and workspace-local overrides, requires semantic
 trust, and runs only the selected steps. It never creates or removes a worktree. Manual
 `pre_create` and `post_remove` use an existing target and therefore do not reproduce their automatic
-lifecycle state; Ygg prints a warning. `ygg setup <worktree>` remains the recovery shortcut for
+lifecycle state; Wald prints a warning. `wald setup <worktree>` remains the recovery shortcut for
 `post_create`.
 
 Command steps using `argv` do not invoke a shell. A configured `shell` step explicitly uses

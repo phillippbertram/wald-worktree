@@ -49,12 +49,9 @@ export class InteractiveAutomationReporter implements AutomationObserver {
   ) {}
 
   start(): void {
-    intro(
-      `${style.label(this.context.kind)} ${style.value(this.context.name)}`,
-      {
-        output: this.output,
-      },
-    );
+    intro(`${style.label(this.context.kind)} ${style.value(this.context.name)}`, {
+      output: this.output,
+    });
     log.message(
       [
         `${style.label("Worktree")}  ${style.worktree(this.context.worktree)}`,
@@ -88,9 +85,7 @@ export class InteractiveAutomationReporter implements AutomationObserver {
   }
 
   commandOutput(step: number): NodeJS.WritableStream | undefined {
-    return this.activeStep?.row.step === step
-      ? this.activeStep.commandStream
-      : undefined;
+    return this.activeStep?.row.step === step ? this.activeStep.commandStream : undefined;
   }
 
   finish(outcome: AutomationRunOutcome): void {
@@ -114,10 +109,7 @@ export class InteractiveAutomationReporter implements AutomationObserver {
 
   private beginStep(row: AutomationRow): void {
     this.flushActiveStep();
-    if (
-      (this.steps.size === 0 || this.separateBeforeNextStep) &&
-      row.type !== "command"
-    ) {
+    if ((this.steps.size === 0 || this.separateBeforeNextStep) && row.type !== "command") {
       log.message("", { output: this.output, spacing: 0 });
     }
     this.separateBeforeNextStep = false;
@@ -190,19 +182,14 @@ export class InteractiveAutomationReporter implements AutomationObserver {
       const detail = samePaths
         ? ""
         : `  ${style.path(result.source)} ${pc.dim("→")} ${style.path(result.target)}`;
-      const note = result.note
-        ? ` · ${styleAutomationNote(result.note, result.status)}`
-        : "";
+      const note = result.note ? ` · ${styleAutomationNote(result.note, result.status)}` : "";
       const last = index === active.results.length - 1 && !aggregate;
-      log.message(
-        `${styleAutomationStatus(result.status, result.status)}${detail}${note}`,
-        {
-          output: this.output,
-          spacing: 0,
-          symbol: pc.gray(last ? "└" : "├"),
-          secondarySymbol: pc.gray("│"),
-        },
-      );
+      log.message(`${styleAutomationStatus(result.status, result.status)}${detail}${note}`, {
+        output: this.output,
+        spacing: 0,
+        symbol: pc.gray(last ? "└" : "├"),
+        secondarySymbol: pc.gray("│"),
+      });
     }
     if (aggregate) {
       const counts = countStatuses(active.results);
@@ -258,8 +245,7 @@ class TaskLogWritable extends Writable {
     callback: (error?: Error | null) => void,
   ): void {
     try {
-      const message =
-        typeof chunk === "string" ? chunk : this.decoder.write(chunk);
+      const message = typeof chunk === "string" ? chunk : this.decoder.write(chunk);
       this.writeMessage(message);
       callback();
     } catch (error) {
@@ -273,8 +259,7 @@ class TaskLogWritable extends Writable {
     const remaining = this.decoder.end();
     this.writeMessage(remaining);
     const preservedNewlines = this.pendingNewlines.replace(/\r?\n$/u, "");
-    if (preservedNewlines)
-      this.target.message(preservedNewlines, { raw: true });
+    if (preservedNewlines) this.target.message(preservedNewlines, { raw: true });
     this.pendingNewlines = "";
   }
 
@@ -288,10 +273,7 @@ class TaskLogWritable extends Writable {
     if (!message) return;
     const combined = `${this.pendingNewlines}${message}`;
     const trailingNewlines = combined.match(/(?:\r?\n)+$/u)?.[0] ?? "";
-    const content = combined.slice(
-      0,
-      combined.length - trailingNewlines.length,
-    );
+    const content = combined.slice(0, combined.length - trailingNewlines.length);
     this.pendingNewlines = trailingNewlines;
     if (content) this.target.message(content, { raw: true });
   }
@@ -305,8 +287,7 @@ function formatActiveStep(title: string, context?: string, output: string[] = []
 }
 
 function formatStepTitle(row: AutomationRow): string {
-  const source =
-    row.type === "command" ? style.command(row.source) : style.path(row.source);
+  const source = row.type === "command" ? style.command(row.source) : style.path(row.source);
   if (row.type === "command") {
     return `${style.value(row.step)} ${style.label(row.type)}  ${source}`;
   }
@@ -315,8 +296,7 @@ function formatStepTitle(row: AutomationRow): string {
 
 function countStatuses(rows: AutomationRow[]): Map<AutomationStatus, number> {
   const counts = new Map<AutomationStatus, number>();
-  for (const row of rows)
-    counts.set(row.status, (counts.get(row.status) ?? 0) + 1);
+  for (const row of rows) counts.set(row.status, (counts.get(row.status) ?? 0) + 1);
   return counts;
 }
 
@@ -337,10 +317,7 @@ function formatDuration(milliseconds: number): string {
   return `${(milliseconds / 1_000).toFixed(1)}s`;
 }
 
-function styleAutomationStatus(
-  value: string,
-  status: AutomationStatus,
-): string {
+function styleAutomationStatus(value: string, status: AutomationStatus): string {
   switch (status) {
     case "DONE":
     case "CREATED":
@@ -358,7 +335,6 @@ function styleAutomationStatus(
 
 function styleAutomationNote(value: string, status: AutomationStatus): string {
   if (status === "FAILED") return style.danger(value);
-  if (status === "SKIPPED" || status === "REPLACED")
-    return style.warning(value);
+  if (status === "SKIPPED" || status === "REPLACED") return style.warning(value);
   return value;
 }

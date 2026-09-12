@@ -18,7 +18,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
   let repository: TestRepository;
 
   beforeEach(async () => {
-    temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "ygg-cli-test-"));
+    temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "wald-cli-test-"));
     repository = await createTestRepository(temporaryRoot);
   });
 
@@ -55,7 +55,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     expect(carried.stdout).toContain("with carried local changes");
     expect(carried.stdout).toContain("Carried: 1 staged, 1 unstaged, 1 untracked");
     expect(carried.stdout).toContain(`Source kept unchanged: ${canonicalSource}`);
-    expect(carried.stdout).toContain("Next: ygg cd 'feature-carried'");
+    expect(carried.stdout).toContain("Next: wald cd 'feature-carried'");
     const carriedPath = path.join(workspace, "feature-carried");
     const carriedStatus = await execa(
       "git",
@@ -125,7 +125,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     expect(initialized.exitCode, initialized.stderr).toBe(0);
     expect(initialized.stdout).toContain("Initialized workspace");
     expect(initialized.stdout).toContain(`Next: cd '${await fs.realpath(workspace)}'`);
-    expect(initialized.stdout).toContain("Then: ygg create 'main' --cd");
+    expect(initialized.stdout).toContain("Then: wald create 'main' --cd");
 
     const added = await execa(process.execPath, cliArguments("create", "main", "--no-fetch"), {
       cwd: workspace,
@@ -221,9 +221,9 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     expect(configured.stdout).toContain("Created");
     expect(configured.stdout).toContain("review the local project.yml");
     await expect(
-      fs.readFile(path.join(workspace, ".ygg", "project.yml"), "utf8"),
+      fs.readFile(path.join(workspace, ".wald", "project.yml"), "utf8"),
     ).resolves.toContain("version: 1");
-    await expect(fs.stat(path.join(workspace, "main", ".ygg.yml"))).rejects.toMatchObject({
+    await expect(fs.stat(path.join(workspace, "main", ".wald.yml"))).rejects.toMatchObject({
       code: "ENOENT",
     });
     const refusedOverwrite = await execa(
@@ -406,9 +406,9 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     expect(repaired.exitCode, repaired.stderr).toBe(0);
     expect(repaired.stdout).toContain("Repaired workspace");
     expect(repaired.stdout).toContain(`Restored worktree directory ${worktreeDir}`);
-    expect(repaired.stdout).toContain(`Restored metadata link ${path.join(worktreeDir, ".ygg")}`);
-    await expect(fs.realpath(path.join(worktreeDir, ".ygg"))).resolves.toBe(
-      await fs.realpath(path.join(repository.source, ".git", "ygg")),
+    expect(repaired.stdout).toContain(`Restored metadata link ${path.join(worktreeDir, ".wald")}`);
+    await expect(fs.realpath(path.join(worktreeDir, ".wald"))).resolves.toBe(
+      await fs.realpath(path.join(repository.source, ".git", "wald")),
     );
   });
 
@@ -420,14 +420,14 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
       { cwd: temporaryRoot, reject: false },
     );
     expect(initialized.exitCode, initialized.stderr).toBe(0);
-    await fs.writeFile(path.join(repository.source, ".ygg.yml"), "version: 1\n", "utf8");
+    await fs.writeFile(path.join(repository.source, ".wald.yml"), "version: 1\n", "utf8");
 
     const preview = await execa(process.execPath, cliArguments("uninit"), {
       cwd: repository.source,
       reject: false,
     });
     expect(preview.exitCode, preview.stderr).toBe(0);
-    expect(preview.stdout).toContain("Ygg workspace metadata:");
+    expect(preview.stdout).toContain("Wald workspace metadata:");
     expect(preview.stdout).toContain("Preview only");
     const jsonPreview = await execa(process.execPath, cliArguments("uninit", "--json"), {
       cwd: repository.source,
@@ -438,7 +438,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
       blockingWorktrees: [],
       dataEntries: [],
     });
-    await expect(fs.stat(path.join(repository.source, ".git", "ygg"))).resolves.toSatisfy((stat) =>
+    await expect(fs.stat(path.join(repository.source, ".git", "wald"))).resolves.toSatisfy((stat) =>
       stat.isDirectory(),
     );
 
@@ -469,7 +469,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     });
     expect(removed.exitCode, removed.stderr).toBe(0);
 
-    const sharedFile = path.join(repository.source, ".git", "ygg", "shared", "local.env");
+    const sharedFile = path.join(repository.source, ".git", "wald", "shared", "local.env");
     await fs.writeFile(sharedFile, "SECRET=kept-until-forced\n", "utf8");
     const protectedData = await execa(
       process.execPath,
@@ -486,16 +486,18 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
       { cwd: repository.source, reject: false },
     );
     expect(applied.exitCode, applied.stderr).toBe(0);
-    expect(applied.stdout).toContain("Removed Ygg workspace metadata");
-    await expect(fs.stat(path.join(repository.source, ".git", "ygg"))).rejects.toMatchObject({
+    expect(applied.stdout).toContain("Removed Wald workspace metadata");
+    await expect(fs.stat(path.join(repository.source, ".git", "wald"))).rejects.toMatchObject({
       code: "ENOENT",
     });
-    await expect(fs.stat(path.join(worktreeDir, ".ygg"))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(fs.stat(path.join(worktreeDir, ".wald"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
     await expect(fs.stat(worktreeDir)).resolves.toSatisfy((stat) => stat.isDirectory());
     await expect(fs.stat(path.join(repository.source, ".git"))).resolves.toSatisfy((stat) =>
       stat.isDirectory(),
     );
-    await expect(fs.readFile(path.join(repository.source, ".ygg.yml"), "utf8")).resolves.toBe(
+    await expect(fs.readFile(path.join(repository.source, ".wald.yml"), "utf8")).resolves.toBe(
       "version: 1\n",
     );
   });
@@ -514,7 +516,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
       reject: false,
     });
     expect(applied.exitCode, applied.stderr).toBe(0);
-    await expect(fs.stat(path.join(workspace, ".ygg"))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(fs.stat(path.join(workspace, ".wald"))).rejects.toMatchObject({ code: "ENOENT" });
     await expect(fs.stat(path.join(workspace, "repo.git"))).resolves.toSatisfy((stat) =>
       stat.isDirectory(),
     );
@@ -551,7 +553,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     );
     expect(adopted.exitCode, adopted.stderr).toBe(0);
     expect(adopted.stdout).toContain("Connected existing checkout");
-    await expect(fs.stat(path.join(repository.source, ".ygg.yml"))).rejects.toMatchObject({
+    await expect(fs.stat(path.join(repository.source, ".wald.yml"))).rejects.toMatchObject({
       code: "ENOENT",
     });
     expect(await fs.readFile(configPath, "utf8")).toBe(configBefore);
@@ -576,7 +578,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     expect(refused.exitCode).toBe(1);
     expect(refused.stderr).toContain("primary checkout cannot be removed");
 
-    const sharedDir = path.join(repository.source, ".git", "ygg", "shared");
+    const sharedDir = path.join(repository.source, ".git", "wald", "shared");
     await fs.rm(sharedDir, { recursive: true });
     const repeated = await execa(
       process.execPath,
@@ -591,9 +593,9 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     expect(repeated.stdout).toContain("review the local project.yml");
     await expect(fs.stat(sharedDir)).resolves.toSatisfy((stat) => stat.isDirectory());
     await expect(
-      fs.readFile(path.join(repository.source, ".git", "ygg", "project.yml"), "utf8"),
+      fs.readFile(path.join(repository.source, ".git", "wald", "project.yml"), "utf8"),
     ).resolves.toContain("version: 1");
-    await expect(fs.stat(path.join(repository.source, ".ygg.yml"))).rejects.toMatchObject({
+    await expect(fs.stat(path.join(repository.source, ".wald.yml"))).rejects.toMatchObject({
       code: "ENOENT",
     });
   });
@@ -607,9 +609,9 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     );
     expect(initialized.exitCode, initialized.stderr).toBe(0);
     await expect(
-      fs.readFile(path.join(workspace, ".ygg", "workspace.yml"), "utf8"),
+      fs.readFile(path.join(workspace, ".wald", "workspace.yml"), "utf8"),
     ).resolves.toContain("worktrees: ../worktrees");
-    expect((await fs.stat(path.join(workspace, ".ygg", "shared"))).mode & 0o777).toBe(0o700);
+    expect((await fs.stat(path.join(workspace, ".wald", "shared"))).mode & 0o777).toBe(0o700);
 
     const created = await execa(process.execPath, cliArguments("create", "main", "--no-fetch"), {
       cwd: workspace,
@@ -630,7 +632,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
       `worktrees_path: ${await fs.realpath(path.join(workspace, "worktrees"))}`,
     );
     expect(configured.stdout).toContain(
-      `shared_path: ${await fs.realpath(path.join(workspace, ".ygg", "shared"))}`,
+      `shared_path: ${await fs.realpath(path.join(workspace, ".wald", "shared"))}`,
     );
   });
 
@@ -649,7 +651,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     );
     const basePath = path.join(workspace, "feature-base");
     await execa("git", ["config", "user.email", "tests@example.invalid"], { cwd: basePath });
-    await execa("git", ["config", "user.name", "ygg tests"], { cwd: basePath });
+    await execa("git", ["config", "user.name", "wald tests"], { cwd: basePath });
     await fs.writeFile(path.join(basePath, "stacked.txt"), "base\n", "utf8");
     await execa("git", ["add", "stacked.txt"], { cwd: basePath });
     await execa("git", ["commit", "-m", "add stacked base"], { cwd: basePath });
@@ -669,19 +671,19 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
 
   it("trusts project automation before the first checkout and exposes task and exec commands", async () => {
     await fs.writeFile(
-      path.join(repository.source, ".ygg.yml"),
+      path.join(repository.source, ".wald.yml"),
       `version: 1
 defaults:
   fetch: false
 hooks:
   post_create:
     - type: command
-      argv: [node, -e, "require('node:fs').writeFileSync('hook.log', process.env.YGG_EVENT)"]
+      argv: [node, -e, "require('node:fs').writeFileSync('hook.log', process.env.WALD_EVENT)"]
 tasks:
   verify:
     steps:
       - type: command
-        argv: [node, -e, "require('node:fs').writeFileSync('task.log', process.env.YGG_EVENT)"]
+        argv: [node, -e, "require('node:fs').writeFileSync('task.log', process.env.WALD_EVENT)"]
   interrupt:
     steps:
       - type: command
@@ -694,8 +696,8 @@ tools:
 `,
       "utf8",
     );
-    await execa("git", ["add", ".ygg.yml"], { cwd: repository.source });
-    await execa("git", ["commit", "-m", "add ygg automation"], { cwd: repository.source });
+    await execa("git", ["add", ".wald.yml"], { cwd: repository.source });
+    await execa("git", ["commit", "-m", "add wald automation"], { cwd: repository.source });
     await execa("git", ["push", "origin", "main"], { cwd: repository.source });
 
     const workspace = path.join(temporaryRoot, "configured-workspace");
@@ -711,7 +713,7 @@ tools:
       reject: false,
     });
     expect(validated.exitCode, validated.stderr).toBe(0);
-    expect(validated.stdout).toContain("origin/main:.ygg.yml");
+    expect(validated.stdout).toContain("origin/main:.wald.yml");
 
     const untrusted = await execa(process.execPath, cliArguments("create", "main", "--no-fetch"), {
       cwd: workspace,

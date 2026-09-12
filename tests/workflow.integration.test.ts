@@ -22,7 +22,7 @@ describe("configured worktree workflows", () => {
   let worktrees: WorktreeService;
 
   beforeEach(async () => {
-    temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "ygg-workflow-test-"));
+    temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "wald-workflow-test-"));
     repository = await createTestRepository(temporaryRoot);
     git = new GitClient();
     configs = new ConfigService();
@@ -43,7 +43,7 @@ defaults:
 hooks:
   pre_create:
     - type: command
-      argv: [node, -e, "require('node:fs').writeFileSync(process.env.YGG_WORKSPACE_ROOT + '/pre-create.log', process.env.YGG_BRANCH)"]
+      argv: [node, -e, "require('node:fs').writeFileSync(process.env.WALD_WORKSPACE_ROOT + '/pre-create.log', process.env.WALD_BRANCH)"]
       cwd: workspace
   post_create:
     - type: copy
@@ -55,20 +55,20 @@ hooks:
       from: shared.txt
       to: linked-shared.txt
     - type: command
-      argv: [node, -e, "require('node:fs').writeFileSync('post-create.log', process.env.YGG_EVENT)"]
+      argv: [node, -e, "require('node:fs').writeFileSync('post-create.log', process.env.WALD_EVENT)"]
   pre_remove:
     - type: command
-      argv: [node, -e, "require('node:fs').writeFileSync(process.env.YGG_WORKSPACE_ROOT + '/pre-remove.log', process.env.YGG_BRANCH)"]
+      argv: [node, -e, "require('node:fs').writeFileSync(process.env.WALD_WORKSPACE_ROOT + '/pre-remove.log', process.env.WALD_BRANCH)"]
   post_remove:
     - type: command
-      argv: [node, -e, "require('node:fs').writeFileSync('post-remove.log', process.env.YGG_EVENT)"]
+      argv: [node, -e, "require('node:fs').writeFileSync('post-remove.log', process.env.WALD_EVENT)"]
       cwd: workspace
 tasks:
   verify:
     description: Run the project check
     steps:
       - type: command
-        argv: [node, -e, "require('node:fs').writeFileSync('task.log', process.env.YGG_EVENT); console.log('child-output')"]
+        argv: [node, -e, "require('node:fs').writeFileSync('task.log', process.env.WALD_EVENT); console.log('child-output')"]
         env:
           SECRET_VALUE: do-not-print
   continue:
@@ -203,7 +203,7 @@ tasks:
       await workflow.planCreate(workspace, { branch: "feature/unmerged-cleanup", fetch: false }),
     );
     await git.run(["config", "user.email", "tests@example.invalid"], { cwd: feature.path });
-    await git.run(["config", "user.name", "ygg tests"], { cwd: feature.path });
+    await git.run(["config", "user.name", "wald tests"], { cwd: feature.path });
     await fs.writeFile(path.join(feature.path, "feature.txt"), "unmerged\n", "utf8");
     await git.run(["add", "feature.txt"], { cwd: feature.path });
     await git.run(["commit", "-m", "unmerged feature"], { cwd: feature.path });
@@ -273,14 +273,14 @@ tasks:
       - type: command
         argv: [node, -e, "require('node:fs').writeFileSync('task.log', 'local')"]
 `,
-      path.join(workspace.root, ".ygg", "project.yml"),
+      path.join(workspace.root, ".wald", "project.yml"),
     ).config;
     await configs.writeWorkspaceProjectConfig(workspace, overlay);
     const workflow = createWorkflow(git, worktrees, configs);
     const plan = await workflow.planCreate(workspace, { branch: "main", fetch: false });
 
-    expect(plan.project?.sources.repository).toBe("refs/heads/main:.ygg.yml");
-    expect(plan.project?.sources.workspace).toBe(path.join(workspace.root, ".ygg", "project.yml"));
+    expect(plan.project?.sources.repository).toBe("refs/heads/main:.wald.yml");
+    expect(plan.project?.sources.workspace).toBe(path.join(workspace.root, ".wald", "project.yml"));
     expect(Object.keys(plan.project?.config.tasks ?? {})).toEqual(["inherited", "local"]);
     if (!plan.project) throw new Error("Expected effective project configuration.");
     await configs.trust(workspace, plan.project);
@@ -316,7 +316,7 @@ hooks:
 
     const output = new PassThrough();
     await expect(workflow.executeCreate(plan, { output })).rejects.toThrow(
-      /Worktree was created[\s\S]*Retry with: ygg setup/u,
+      /Worktree was created[\s\S]*Retry with: wald setup/u,
     );
     const rendered = readOutput(output);
     expect(rendered).toContain("Hook        post_create");
@@ -783,12 +783,12 @@ async function commitProjectConfig(
   configuration: string,
   files: Record<string, string> = {},
 ): Promise<void> {
-  await fs.writeFile(path.join(repository.source, ".ygg.yml"), configuration, "utf8");
+  await fs.writeFile(path.join(repository.source, ".wald.yml"), configuration, "utf8");
   for (const [name, content] of Object.entries(files)) {
     await fs.writeFile(path.join(repository.source, name), content, "utf8");
   }
-  await gitRun(repository.source, ["add", ".ygg.yml", ...Object.keys(files)]);
-  await gitRun(repository.source, ["commit", "-m", "add ygg workflow"]);
+  await gitRun(repository.source, ["add", ".wald.yml", ...Object.keys(files)]);
+  await gitRun(repository.source, ["commit", "-m", "add wald workflow"]);
   await gitRun(repository.source, ["push", "origin", "main"]);
 }
 
@@ -797,7 +797,11 @@ async function gitRun(cwd: string, args: string[]): Promise<void> {
 }
 
 function readOutput(output: PassThrough): string {
-  return output.read()?.toString() ?? "";
+  let rendered = "";
+  for (let chunk = output.read(); chunk !== null; chunk = output.read()) {
+    rendered += chunk.toString();
+  }
+  return rendered;
 }
 
 function createWorkflow(

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { YggError } from "../domain/errors.js";
+import { WaldError } from "../domain/errors.js";
 
 export const nonEmptyCliString = z.string().min(1, "Cannot be empty.");
 
@@ -16,7 +16,7 @@ export function parseCliInput<TSchema extends z.ZodType>(
     const field = issue.path.length > 0 ? formatField(issue.path.join(".")) : "command";
     return `- ${field}: ${issue.message}`;
   });
-  throw new YggError(`Invalid command input:\n${details.join("\n")}\nRun with --help for usage.`);
+  throw new WaldError(`Invalid command input:\n${details.join("\n")}\nRun with --help for usage.`);
 }
 
 function formatField(field: string): string {

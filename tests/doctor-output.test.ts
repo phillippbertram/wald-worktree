@@ -9,10 +9,10 @@ describe("doctor presentation", () => {
 
     expect(output).toBe(
       [
-        "Doctor summary (run ygg doctor --verbose for details):",
+        "Doctor summary (run wald doctor --verbose for details):",
         "[✓] Runtime — Node.js 24.19.0 · Git 2.50.1",
-        "[!] Workspace — No Ygg workspace was found from the current directory.",
-        "    → Run ygg init in a Git repository or provide a repository to clone.",
+        "[!] Workspace — No Wald workspace was found from the current directory.",
+        "    → Run wald init in a Git repository or provide a repository to clone.",
         "",
         "1 warning found.",
       ].join("\n"),
@@ -28,7 +28,7 @@ describe("doctor presentation", () => {
     expect(output).toContain("Node.js (runtime.node)");
     expect(output).toContain("Workspace discovery (workspace.discovery)");
     expect(output).toContain("Workspace details (workspace.details)");
-    expect(output).toContain("→ Run ygg init in a Git repository");
+    expect(output).toContain("→ Run wald init in a Git repository");
   });
 
   it("summarizes multiple issues without hiding their suggestions", () => {
@@ -75,8 +75,8 @@ const outsideWorkspaceReport: DoctorReport = {
     {
       id: "workspace.discovery",
       status: "warning",
-      summary: "No Ygg workspace was found from the current directory.",
-      suggestion: "Run ygg init in a Git repository or provide a repository to clone.",
+      summary: "No Wald workspace was found from the current directory.",
+      suggestion: "Run wald init in a Git repository or provide a repository to clone.",
     },
     {
       id: "workspace.details",

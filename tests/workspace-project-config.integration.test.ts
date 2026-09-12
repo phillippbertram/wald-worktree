@@ -23,7 +23,7 @@ describe("workspace-local project configuration", { timeout: 15_000 }, () => {
   let workspace: string;
 
   beforeEach(async () => {
-    temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "ygg-local-config-test-"));
+    temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "wald-local-config-test-"));
     repository = await createTestRepository(temporaryRoot);
     workspace = path.join(temporaryRoot, "workspace");
     const initialized = await runCli(temporaryRoot, "init", repository.remote, workspace);
@@ -49,18 +49,18 @@ describe("workspace-local project configuration", { timeout: 15_000 }, () => {
     );
 
     expect(configured.exitCode, configured.stderr).toBe(0);
-    expect(configured.stdout).toContain("review and commit .ygg.yml");
-    await expect(fs.readFile(path.join(workspace, "main", ".ygg.yml"), "utf8")).resolves.toContain(
+    expect(configured.stdout).toContain("review and commit .wald.yml");
+    await expect(fs.readFile(path.join(workspace, "main", ".wald.yml"), "utf8")).resolves.toContain(
       "version: 1",
     );
-    await expect(fs.stat(path.join(workspace, ".ygg", "project.yml"))).rejects.toMatchObject({
+    await expect(fs.stat(path.join(workspace, ".wald", "project.yml"))).rejects.toMatchObject({
       code: "ENOENT",
     });
   });
 
   it("copies repository behavior locally without deleting it or changing its trust hash", async () => {
-    const repositoryConfigPath = path.join(workspace, "main", ".ygg.yml");
-    const localConfigPath = path.join(workspace, ".ygg", "project.yml");
+    const repositoryConfigPath = path.join(workspace, "main", ".wald.yml");
+    const localConfigPath = path.join(workspace, ".wald", "project.yml");
     await fs.writeFile(
       repositoryConfigPath,
       `version: 1
@@ -90,7 +90,7 @@ tasks:
       "--yes",
     );
     expect(migrated.exitCode, migrated.stderr).toBe(0);
-    expect(migrated.stdout).toContain(".ygg.yml was kept");
+    expect(migrated.stdout).toContain(".wald.yml was kept");
     await expect(fs.readFile(repositoryConfigPath, "utf8")).resolves.toContain("Verify locally");
     await expect(fs.readFile(localConfigPath, "utf8")).resolves.toContain("Verify locally");
     expect((await fs.stat(localConfigPath)).mode & 0o777).toBe(0o600);
@@ -113,7 +113,7 @@ tasks:
 
   it("keeps unmentioned repository behavior when generating local detected settings", async () => {
     await fs.writeFile(
-      path.join(workspace, "main", ".ygg.yml"),
+      path.join(workspace, "main", ".wald.yml"),
       `version: 1
 tasks:
   inherited:
@@ -126,7 +126,7 @@ tasks:
 
     const configured = await runCli(workspace, "config", "init", "main", "--yes");
     expect(configured.exitCode, configured.stderr).toBe(0);
-    const localContent = await fs.readFile(path.join(workspace, ".ygg", "project.yml"), "utf8");
+    const localContent = await fs.readFile(path.join(workspace, ".wald", "project.yml"), "utf8");
     expect(localContent).not.toContain("hooks:");
     expect(localContent).not.toContain("tasks:");
 
@@ -153,11 +153,11 @@ tasks:
     );
 
     expect(adopted.exitCode, adopted.stderr).toBe(0);
-    await expect(fs.readFile(path.join(repository.source, ".ygg.yml"), "utf8")).resolves.toContain(
+    await expect(fs.readFile(path.join(repository.source, ".wald.yml"), "utf8")).resolves.toContain(
       "version: 1",
     );
     await expect(
-      fs.stat(path.join(repository.source, ".git", "ygg", "project.yml")),
+      fs.stat(path.join(repository.source, ".git", "wald", "project.yml")),
     ).rejects.toMatchObject({ code: "ENOENT" });
   });
 
@@ -173,15 +173,15 @@ tasks:
     expect(uninitialized.stdout).toContain("project.yml");
     expect(uninitialized.stderr).toContain("Use --force only if this data can be discarded");
     await expect(
-      fs.readFile(path.join(workspace, ".ygg", "project.yml"), "utf8"),
+      fs.readFile(path.join(workspace, ".wald", "project.yml"), "utf8"),
     ).resolves.toContain("version: 1");
   });
 
   it("manually runs every hook from the latest effective local configuration", async () => {
     const worktree = await fs.realpath(path.join(workspace, "main"));
-    const localConfig = path.join(workspace, ".ygg", "project.yml");
+    const localConfig = path.join(workspace, ".wald", "project.yml");
     const logPath = path.join(workspace, "manual-hooks.log");
-    await fs.writeFile(localConfig, manualHookConfig("process.env.YGG_EVENT"), "utf8");
+    await fs.writeFile(localConfig, manualHookConfig("process.env.WALD_EVENT"), "utf8");
 
     const trusted = await runCli(worktree, "config", "trust", "--yes");
     expect(trusted.exitCode, trusted.stderr).toBe(0);
@@ -216,7 +216,7 @@ tasks:
 
     await fs.writeFile(
       localConfig,
-      manualHookConfig(`"changed:" + process.env.YGG_EVENT`, ["post_create"]),
+      manualHookConfig(`"changed:" + process.env.WALD_EVENT`, ["post_create"]),
       "utf8",
     );
     const untrusted = await runCli(workspace, "hook", "run", "post_create", "main");
@@ -259,7 +259,7 @@ function manualHookConfig(
   eventExpression: string,
   events = ["pre_create", "post_create", "pre_remove", "post_remove"],
 ): string {
-  const script = `require('node:fs').appendFileSync(process.env.YGG_WORKSPACE_ROOT + '/manual-hooks.log', [${eventExpression}, process.cwd(), process.env.YGG_WORKTREE_PATH].join('|') + String.fromCharCode(10))`;
+  const script = `require('node:fs').appendFileSync(process.env.WALD_WORKSPACE_ROOT + '/manual-hooks.log', [${eventExpression}, process.cwd(), process.env.WALD_WORKTREE_PATH].join('|') + String.fromCharCode(10))`;
   const step = `    - type: command\n      argv: [node, -e, ${JSON.stringify(script)}]`;
   return `version: 1
 hooks:

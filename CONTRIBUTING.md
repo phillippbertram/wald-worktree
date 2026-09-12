@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping improve Ygg.
+Thanks for helping improve Wald.
 
 ## Development
 
@@ -25,4 +25,5 @@ pnpm dev -- --help
 
 Keep command handlers thin, keep Git and filesystem behavior outside the UI layer, and add
 integration coverage for changes that affect repository state. Never commit real environment files
-or secrets as fixtures.
+or secrets as fixtures. Keep product copy, visuals, and emoji consistent with the
+[Wald brand identity](docs/brand.md).

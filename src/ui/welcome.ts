@@ -10,15 +10,15 @@ export type WelcomeSummary = {
 };
 
 const wisdoms = [
-  "Every branch grows stronger from shared roots.",
-  "Many working worlds, one shared history.",
-  "Let each idea grow on its own branch.",
-  "Deep roots make fearless experiments.",
-  "Parallel work deserves parallel worlds.",
+  "Every tree grows stronger in shared ground.",
+  "Many working trees, one shared history.",
+  "Give each idea room to grow.",
+  "Stable ground makes fearless experiments.",
+  "Parallel work grows better in separate worktrees.",
   "A worktree is context without the context switch.",
   "Branch freely. Merge deliberately.",
   "Small commits leave a clear trail through the forest.",
-  "Keep the roots stable and the branches moving.",
+  "Keep the repository steady and the worktrees moving.",
   "Review beside your work, not on top of it.",
   "Automate the setup. Save attention for the work.",
   "Grow experiments freely; prune with care.",
@@ -34,13 +34,10 @@ export function renderWelcome(
   random: () => number = Math.random,
 ): string {
   const lines = [
-    pc.green("       \\ | /"),
-    pc.green("        \\|/"),
-    `      ${pc.green("🌳")} ${pc.green(pc.bold("Ygg"))}`,
-    pc.green("        /|\\"),
-    pc.green("       / | \\"),
+    pc.green("      🌲  🌳  🌲"),
+    `          ${pc.green(pc.bold("Wald"))}`,
     "",
-    `  ${pc.dim("Git workspaces, rooted together.")}`,
+    `  ${pc.dim("Where Git worktrees grow.")}`,
   ];
 
   if (summary) {

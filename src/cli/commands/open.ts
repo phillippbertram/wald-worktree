@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { z } from "zod";
-import { toErrorMessage, YggError } from "../../domain/errors.js";
+import { toErrorMessage, WaldError } from "../../domain/errors.js";
 import type { ProjectConfigDocument, Worktree } from "../../domain/types.js";
 import { builtInToolNames } from "../../services/tool-service.js";
 import { style } from "../../ui/style.js";
@@ -29,7 +29,7 @@ export function registerOpenCommand(program: Command, context: CliContext): void
     .option("--tool <profile>", "Tool profile from built-ins or project configuration")
     .addHelpText(
       "after",
-      `\nBuilt-in tools: ${builtInToolNames.join(", ")}\n\nExamples:\n  ygg open feature-payment --tool code\n  ygg open feature-payment --tool codex\n`,
+      `\nBuilt-in tools: ${builtInToolNames.join(", ")}\n\nExamples:\n  wald open feature-payment --tool code\n  wald open feature-payment --tool codex\n`,
     )
     .action(async (worktree: unknown, options: unknown) => {
       const input = parseCliInput(openInputSchema, { worktree, ...(options as object) });
@@ -82,13 +82,14 @@ export async function openSelectedWorktree(
       ? await context.workflow.projectForWorktree(workspace, worktree)
       : options.project;
   const available = await context.tools.availableProfiles(project, worktree);
-  if (available.length === 0) throw new YggError("No supported editor or agent tool is available.");
+  if (available.length === 0)
+    throw new WaldError("No supported editor or agent tool is available.");
   let tool = requestedTool ?? project?.config.defaults.tool;
   const promptForTool = !tool;
   while (true) {
     if (!tool) {
       if (!isInteractiveTerminal()) {
-        throw new YggError("Tool is required without a TTY. Use --tool.");
+        throw new WaldError("Tool is required without a TTY. Use --tool.");
       }
       tool = await searchSelect(
         `Open › Tool · Open ${style.worktree(worktree.name)} with:`,
@@ -110,11 +111,11 @@ export async function openSelectedWorktree(
       tool = undefined;
     }
   }
-  if (!tool) throw new YggError("No tool selected.");
+  if (!tool) throw new WaldError("No tool selected.");
   try {
     await context.tools.open(worktree, tool, project);
   } catch (error) {
-    throw new YggError(`Could not open ${worktree.name} with ${tool}: ${toErrorMessage(error)}`, {
+    throw new WaldError(`Could not open ${worktree.name} with ${tool}: ${toErrorMessage(error)}`, {
       cause: error,
     });
   }

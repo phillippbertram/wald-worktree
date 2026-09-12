@@ -49,7 +49,7 @@ export function initializationPreviewSummary(
       ["Repository type", inspection.bare ? "bare repository" : "working checkout"],
       ["Layout", "Retained existing checkout"],
       ["Primary checkout", inspection.primaryWorktree ?? "none"],
-      ["Ygg metadata", inspection.metadataDir],
+      ["Wald metadata", inspection.metadataDir],
       ["New worktrees", inspection.worktreeDir],
       ["Remote", inspection.remoteName ?? "none (local only)"],
       ["Default branch", inspection.defaultBranch ?? "unresolved"],
@@ -65,11 +65,11 @@ export function initializationPreviewSummary(
     [
       "Layout",
       preview.target.worktreeDir === preview.target.root
-        ? "Ygg Flow — flat standalone workspace"
+        ? "Wald Flow — flat standalone workspace"
         : "Grouped standalone workspace",
     ],
     ["Git database", preview.target.gitDir],
-    ["Ygg metadata", preview.target.metadataDir],
+    ["Wald metadata", preview.target.metadataDir],
     ["New worktrees", preview.target.worktreeDir],
     ["Remote", preview.remoteName ?? "none (local only)"],
     ["Default branch", preview.defaultBranch ?? "detected from the remote during initialization"],
@@ -122,7 +122,7 @@ function renderManagedTree(target: ManagedInitializationPlan): string {
     {
       target: target.metadataDir,
       kind: "directory",
-      annotation: "new: local Ygg metadata",
+      annotation: "new: local Wald metadata",
     },
     { target: target.configPath, kind: "file", annotation: "new: workspace configuration" },
     { target: target.sharedDir, kind: "directory", annotation: "new: local shared files" },
@@ -157,7 +157,7 @@ function renderAdoptedTree(preview: AdoptedWorkspacePreview): string {
     {
       target: inspection.metadataDir,
       kind: "directory",
-      annotation: "new: local Ygg metadata",
+      annotation: "new: local Wald metadata",
     },
     {
       target: path.join(inspection.metadataDir, "workspace.yml"),
@@ -177,9 +177,9 @@ function renderAdoptedTree(preview: AdoptedWorkspacePreview): string {
         : "new: future worktree container",
     },
     {
-      target: path.join(inspection.worktreeDir, ".ygg"),
+      target: path.join(inspection.worktreeDir, ".wald"),
       kind: "symlink",
-      label: `.ygg -> ${inspection.metadataDir}`,
+      label: `.wald -> ${inspection.metadataDir}`,
       annotation: "new: metadata link",
     },
   ];

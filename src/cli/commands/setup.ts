@@ -13,7 +13,7 @@ export function registerSetupCommand(program: Command, context: CliContext): voi
     .command("setup")
     .description("Re-run the effective project configuration's post_create steps")
     .argument("[worktree]", "Worktree name, branch, or path")
-    .addHelpText("after", "\nExample:\n  ygg setup feature-payment\n")
+    .addHelpText("after", "\nExample:\n  wald setup feature-payment\n")
     .action(async (worktree: unknown) => {
       const input = parseCliInput(setupInputSchema, { worktree });
       await setupWorktree(input, context);

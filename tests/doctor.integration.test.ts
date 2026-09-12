@@ -10,7 +10,7 @@ describe("doctor", { timeout: 15_000 }, () => {
   let repository: TestRepository;
 
   beforeEach(async () => {
-    temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "ygg-doctor-test-"));
+    temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "wald-doctor-test-"));
     repository = await createTestRepository(temporaryRoot);
   });
 
@@ -29,7 +29,7 @@ describe("doctor", { timeout: 15_000 }, () => {
   });
 
   it("reports invalid workspace YAML without throwing", async () => {
-    const metadata = path.join(temporaryRoot, ".ygg");
+    const metadata = path.join(temporaryRoot, ".wald");
     await fs.mkdir(metadata);
     await fs.writeFile(
       path.join(metadata, "workspace.yml"),
@@ -57,8 +57,8 @@ describe("doctor", { timeout: 15_000 }, () => {
         gitDir: workspace.gitDir,
       },
     );
-    const previousSecret = process.env.YGG_DOCTOR_TEST_SECRET;
-    process.env.YGG_DOCTOR_TEST_SECRET = "doctor-secret-value";
+    const previousSecret = process.env.WALD_DOCTOR_TEST_SECRET;
+    process.env.WALD_DOCTOR_TEST_SECRET = "doctor-secret-value";
     try {
       const report = await context.doctor.inspect(workspaceRoot);
       const serialized = JSON.stringify(report);
@@ -70,8 +70,8 @@ describe("doctor", { timeout: 15_000 }, () => {
       expect(serialized).not.toContain(repository.remote);
       expect(serialized).not.toContain("doctor-secret-value");
     } finally {
-      if (previousSecret === undefined) delete process.env.YGG_DOCTOR_TEST_SECRET;
-      else process.env.YGG_DOCTOR_TEST_SECRET = previousSecret;
+      if (previousSecret === undefined) delete process.env.WALD_DOCTOR_TEST_SECRET;
+      else process.env.WALD_DOCTOR_TEST_SECRET = previousSecret;
     }
     expect(await fs.readFile(workspace.configPath, "utf8")).toBe(configBefore);
     expect(
@@ -98,7 +98,7 @@ describe("doctor", { timeout: 15_000 }, () => {
       expect.objectContaining({
         id: "git.worktrees",
         status: "warning",
-        suggestion: "Preview safe cleanup with ygg prune.",
+        suggestion: "Preview safe cleanup with wald prune.",
       }),
     );
     expect(
@@ -139,12 +139,12 @@ describe("doctor", { timeout: 15_000 }, () => {
     const workspace = await context.workspaces.initialize(repository.remote, workspaceRoot);
     const main = await context.worktrees.add(workspace, { branch: "main", fetch: false });
     await fs.writeFile(
-      path.join(workspaceRoot, ".ygg", "project.yml"),
+      path.join(workspaceRoot, ".wald", "project.yml"),
       `version: 1
 hooks:
   post_create:
     - type: command
-      argv: [definitely-missing-ygg-command]
+      argv: [definitely-missing-wald-command]
       env:
         API_TOKEN: doctor-secret-value
     - type: copy
@@ -153,7 +153,7 @@ hooks:
       to: .env
 tools:
   unavailable:
-    command: [definitely-missing-ygg-tool]
+    command: [definitely-missing-wald-tool]
 `,
       "utf8",
     );

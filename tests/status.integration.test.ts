@@ -18,14 +18,14 @@ async function runCli(cwd: string, ...args: string[]) {
   return await execa(process.execPath, cliArguments(...args), { cwd, reject: false });
 }
 
-describe("ygg status", { timeout: 30_000 }, () => {
+describe("wald status", { timeout: 30_000 }, () => {
   let temporaryRoot: string;
   let repository: TestRepository;
   let workspace: string;
   let main: string;
 
   beforeEach(async () => {
-    temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "ygg-status-test-"));
+    temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "wald-status-test-"));
     repository = await createTestRepository(temporaryRoot);
     workspace = path.join(temporaryRoot, "workspace");
     main = path.join(workspace, "main");
@@ -84,7 +84,7 @@ describe("ygg status", { timeout: 30_000 }, () => {
   });
 
   it("uses the default worktree configuration from the workspace root and reports trust", async () => {
-    const configPath = path.join(main, ".ygg.yml");
+    const configPath = path.join(main, ".wald.yml");
     await fs.writeFile(configPath, "version: 1\ndefaults:\n  fetch: false\n", "utf8");
     const canonicalConfigPath = await fs.realpath(configPath);
 
@@ -136,7 +136,7 @@ describe("ygg status", { timeout: 30_000 }, () => {
     expect(JSON.parse(behind.stdout).current.tracking).toMatchObject({ ahead: 0, behind: 1 });
 
     await runGit(["config", "user.email", "tests@example.invalid"], main);
-    await runGit(["config", "user.name", "ygg tests"], main);
+    await runGit(["config", "user.name", "wald tests"], main);
     await runGit(["commit", "--allow-empty", "-m", "local change"], main);
     const diverged = await runCli(main, "status", "--json");
     expect(JSON.parse(diverged.stdout).current.tracking).toMatchObject({ ahead: 1, behind: 1 });

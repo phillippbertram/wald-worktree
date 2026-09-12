@@ -1,4 +1,4 @@
-import { YggError } from "../domain/errors.js";
+import { WaldError } from "../domain/errors.js";
 
 export type SupportedShell = "bash" | "zsh" | "fish";
 
@@ -12,67 +12,67 @@ export class ShellService {
       case "fish":
         return fishScript();
       default:
-        throw new YggError(`Unsupported shell: ${shell}. Use bash, zsh, or fish.`);
+        throw new WaldError(`Unsupported shell: ${shell}. Use bash, zsh, or fish.`);
     }
   }
 }
 
 function bashScript(): string {
-  return `# ygg navigation integration for bash
-ygg() {
+  return `# wald navigation integration for bash
+wald() {
   if [ "\${1-}" = "cd" ]; then
     shift
     local target
-    target="$(command ygg cd "$@")" || return $?
+    target="$(command wald cd "$@")" || return $?
     builtin cd "$target" || return $?
     return
   fi
-  if { [ "\${1-}" = "create" ] || [ "\${1-}" = "handoff" ]; } && [[ " $* " == *" --cd "* ]]; then
+  if { [ "\${1-}" = "create" ] || [ "\${1-}" = "plant" ] || [ "\${1-}" = "handoff" ]; } && [[ " $* " == *" --cd "* ]]; then
     local target
-    target="$(command ygg "$@" --print-path)" || return $?
+    target="$(command wald "$@" --print-path)" || return $?
     builtin cd "$target" || return $?
     return
   fi
-  command ygg "$@"
+  command wald "$@"
 }
 `;
 }
 
 function zshScript(): string {
-  return `# ygg navigation integration for zsh
-function ygg() {
+  return `# wald navigation integration for zsh
+function wald() {
   if [[ "\${1-}" == "cd" ]]; then
     shift
     local target
-    target="$(command ygg cd "$@")" || return $?
+    target="$(command wald cd "$@")" || return $?
     builtin cd "$target" || return $?
     return
   fi
-  if [[ ( "\${1-}" == "create" || "\${1-}" == "handoff" ) && " $* " == *" --cd "* ]]; then
+  if [[ ( "\${1-}" == "create" || "\${1-}" == "plant" || "\${1-}" == "handoff" ) && " $* " == *" --cd "* ]]; then
     local target
-    target="$(command ygg "$@" --print-path)" || return $?
+    target="$(command wald "$@" --print-path)" || return $?
     builtin cd "$target" || return $?
     return
   fi
-  command ygg "$@"
+  command wald "$@"
 }
 `;
 }
 
 function fishScript(): string {
-  return `# ygg navigation integration for fish
-function ygg
+  return `# wald navigation integration for fish
+function wald
   if test (count $argv) -ge 1; and test $argv[1] = cd
-    set -l target (command ygg cd $argv[2..-1]); or return $status
+    set -l target (command wald cd $argv[2..-1]); or return $status
     builtin cd $target; or return $status
     return
   end
-  if test (count $argv) -ge 1; and contains -- $argv[1] create handoff; and contains -- --cd $argv
-    set -l target (command ygg $argv --print-path); or return $status
+  if test (count $argv) -ge 1; and contains -- $argv[1] create plant handoff; and contains -- --cd $argv
+    set -l target (command wald $argv --print-path); or return $status
     builtin cd $target; or return $status
     return
   end
-  command ygg $argv
+  command wald $argv
 end
 `;
 }

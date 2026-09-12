@@ -10,7 +10,7 @@ describe("macOS and Linux filesystem compatibility", { timeout: 15_000 }, () => 
   let repository: TestRepository;
 
   beforeEach(async () => {
-    temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "ygg-platform-test-"));
+    temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "wald-platform-test-"));
     repository = await createTestRepository(temporaryRoot);
   });
 

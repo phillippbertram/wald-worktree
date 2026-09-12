@@ -11,7 +11,7 @@ describe("tool profiles", () => {
   let worktree: Worktree;
 
   beforeEach(async () => {
-    root = await fs.mkdtemp(path.join(os.tmpdir(), "ygg-tool-test-"));
+    root = await fs.mkdtemp(path.join(os.tmpdir(), "wald-tool-test-"));
     worktree = {
       name: "feature",
       role: "linked",
@@ -63,8 +63,8 @@ function projectWithTool(
   mode: "foreground" | "detached" = "detached",
 ): ProjectConfigDocument {
   return {
-    path: ".ygg.yml",
-    sources: { repository: ".ygg.yml", workspace: null },
+    path: ".wald.yml",
+    sources: { repository: ".wald.yml", workspace: null },
     hash: "hash",
     requiresTrust: false,
     config: {

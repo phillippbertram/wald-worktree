@@ -1,6 +1,6 @@
 # Configuration
 
-`ygg` has one local workspace configuration, one local shared-file area, and up to two project
+`wald` has one local workspace configuration, one local shared-file area, and up to two project
 configuration sources. Every YAML document is strict and versioned; unknown fields are errors.
 
 Read [Worktrees explained](worktrees.md) first if the distinction between the shared repository and
@@ -8,8 +8,8 @@ per-worktree state is unfamiliar.
 
 ## Local workspace configuration
 
-Dedicated workspaces store `.ygg/workspace.yml`. Adopted repositories store
-`<git-common-dir>/ygg/workspace.yml` and expose it through a `.ygg` link in the worktree container.
+Dedicated workspaces store `.wald/workspace.yml`. Adopted repositories store
+`<git-common-dir>/wald/workspace.yml` and expose it through a `.wald` link in the worktree container.
 This file is local and should not be committed. The terms `managed` and `adopted` are internal
 layout and safety states; the CLI describes them as a standalone workspace root or a retained
 existing checkout.
@@ -28,7 +28,7 @@ default_branch: main
 trusted_project_config: null
 ```
 
-All stored paths are relative to the configuration. `ygg` canonicalizes them and enforces the
+All stored paths are relative to the configuration. `wald` canonicalizes them and enforces the
 layout boundaries before using them.
 
 ### Workspace field reference
@@ -37,12 +37,12 @@ layout boundaries before using them.
 | --- | --- | --- |
 | `version` | `1` | Workspace schema version. |
 | `mode` | `managed` or `adopted` | Internal safety mode. `managed` uses `repo.git`; `adopted` protects an existing primary checkout. |
-| `paths.git` | relative path | Git common directory used for all worktree operations. Generated and validated by `ygg`. |
-| `paths.worktrees` | relative path | Parent directory in which `ygg` creates worktrees. |
-| `paths.primary_worktree` | relative path or `null` | Original checkout protected from `ygg remove`; always `null` for a standalone bare workspace. |
+| `paths.git` | relative path | Git common directory used for all worktree operations. Generated and validated by `wald`. |
+| `paths.worktrees` | relative path | Parent directory in which `wald` creates worktrees. |
+| `paths.primary_worktree` | relative path or `null` | Original checkout protected from `wald remove`; always `null` for a standalone bare workspace. |
 | `remote` | object or `null` | Optional remote used for fetch and remote-branch resolution. `null` keeps the workspace local-only. |
 | `remote.name` | string | Existing Git remote name such as `origin` or `upstream`. |
-| `remote.fetch_refspec` | string | Explicit branch mapping used when `ygg create` fetches. |
+| `remote.fetch_refspec` | string | Explicit branch mapping used when `wald create` fetches. |
 | `default_branch` | branch name | Default base, merge-check target, and preferred project-configuration branch. |
 | `trusted_project_config` | SHA-256 or `null` | Semantic hash of the trusted effective project behavior. |
 
@@ -50,7 +50,7 @@ layout boundaries before using them.
 
 1. New branches start from its remote-tracking or local ref when `--from` is omitted.
 2. Safe removal checks whether a branch is merged into it.
-3. `ygg` uses its worktree/ref for repository project configuration and `source: default` when
+3. `wald` uses its worktree/ref for repository project configuration and `source: default` when
    there is no better current source.
 
 It does not switch existing branches, rename worktrees, or override an explicit `--from`.
@@ -58,13 +58,13 @@ It does not switch existing branches, rename worktrees, or override an explicit 
 ### Supported layouts
 
 The recommended flat standalone workspace is called
-[Ygg Flow](worktrees.md#ygg-flow). It uses `paths.worktrees: ..`:
+[Wald Flow](worktrees.md#wald-flow). It uses `paths.worktrees: ..`:
 
 ```text
 project/
-├── .ygg/workspace.yml
-├── .ygg/project.yml         optional local automation and overrides
-├── .ygg/shared/
+├── .wald/workspace.yml
+├── .wald/project.yml         optional local automation and overrides
+├── .wald/shared/
 ├── repo.git/
 ├── main/
 └── feature-payment/
@@ -74,9 +74,9 @@ A grouped standalone workspace uses a child path such as `paths.worktrees: ../wo
 
 ```text
 project/
-├── .ygg/workspace.yml
-├── .ygg/project.yml         optional local automation and overrides
-├── .ygg/shared/
+├── .wald/workspace.yml
+├── .wald/project.yml         optional local automation and overrides
+├── .wald/shared/
 ├── repo.git/
 └── worktrees/
     ├── main/
@@ -84,24 +84,24 @@ project/
 ```
 
 For standalone workspaces, `paths.worktrees` must resolve to the workspace root or one of its
-descendants and must not overlap `.ygg` or `repo.git`. Use `--worktrees-dir` during `ygg init` rather
+descendants and must not overlap `.wald` or `repo.git`. Use `--worktrees-dir` during `wald init` rather
 than editing generated paths manually.
 
 When an existing checkout is retained, the worktree directory may be any safe directory outside
 the Git directory and primary checkout. The physical configuration and shared files live below
-`<git-common-dir>/ygg`; the worktree container contains a `.ygg` link to them. `ygg config` prints the
+`<git-common-dir>/wald`; the worktree container contains a `.wald` link to them. `wald config` prints the
 canonical `workspace_config`, `workspace_root`, `worktrees_path`, and `shared_path` for both layouts.
-Re-running `ygg init` restores this link and its configured worktree container if either was deleted.
+Re-running `wald init` restores this link and its configured worktree container if either was deleted.
 
 ```text
 parent/
 ├── project/                         existing primary checkout
-│   └── .git/ygg/
+│   └── .git/wald/
 │       ├── workspace.yml
 │       ├── project.yml      optional local automation and overrides
 │       └── shared/
 └── project-worktrees/
-    └── .ygg -> ../project/.git/ygg
+    └── .wald -> ../project/.git/wald
 ```
 
 The conceptual shared-versus-local boundary is shown in
@@ -111,35 +111,35 @@ hardlinks.
 
 ### Local shared files
 
-Every initialized workspace owns a `.ygg/shared` directory. It is local, created with directory mode
+Every initialized workspace owns a `.wald/shared` directory. It is local, created with directory mode
 `700`, and never committed. Project automation accesses it only through explicit trusted
 `source: shared` steps. Files placed there retain their own permissions; use mode `600` for secrets.
-Because these files can contain secrets or other local state, `ygg uninit --apply` refuses to remove
+Because these files can contain secrets or other local state, `wald uninit --apply` refuses to remove
 them unless `--force` is also supplied.
 
 ## Project configuration
 
-Ygg resolves one effective configuration from two optional sources:
+Wald resolves one effective configuration from two optional sources:
 
-1. `<worktree>/.ygg.yml` is the repository-owned base and may vary by branch or revision.
-2. `<workspace>/.ygg/project.yml` is local to one Ygg workspace and overrides that base for every
+1. `<worktree>/.wald.yml` is the repository-owned base and may vary by branch or revision.
+2. `<workspace>/.wald/project.yml` is local to one Wald workspace and overrides that base for every
    worktree.
 
 In an adopted workspace the local file physically lives at
-`<git-common-dir>/ygg/project.yml`. It is mode `600`, is never committed, and is protected as local
-data during `ygg uninit`. If only one source exists, it supplies the complete effective behavior.
+`<git-common-dir>/wald/project.yml`. It is mode `600`, is never committed, and is protected as local
+data during `wald uninit`. If only one source exists, it supplies the complete effective behavior.
 
 Generate the recommended local starting point from detected Node package conventions:
 
 ```sh
-ygg config init [worktree]
+wald config init [worktree]
 ```
 
 Create shared repository behavior only when intended:
 
 ```sh
-ygg config init [worktree] --scope project
-git diff -- .ygg.yml
+wald config init [worktree] --scope project
+git diff -- .wald.yml
 ```
 
 The wizard detects npm, pnpm, Yarn, or Bun, package scripts, and files such as `.env.example`. It can
@@ -153,12 +153,12 @@ are omitted, so existing repository behavior remains inherited. The explicit `--
 is the only generator mode that intentionally copies the complete repository configuration.
 
 `Esc` returns to the preceding wizard step and restores the previous answer as its default;
-`Ctrl-C` exits Ygg. From the final preview, going back returns to the tool choice without discarding
+`Ctrl-C` exits Wald. From the final preview, going back returns to the tool choice without discarding
 the other detected setup decisions.
 
-For scripts, use `ygg config init --yes`; use `--force` separately when existing configuration at
+For scripts, use `wald config init --yes`; use `--force` separately when existing configuration at
 the selected scope may be replaced. `--yes` keeps the detected recommended verify scripts.
-Interactive `ygg init` offers the same wizard after retaining a checkout or creating the default
+Interactive `wald init` offers the same wizard after retaining a checkout or creating the default
 worktree in a standalone workspace and recommends local storage. Automatic project detection
 currently covers Node package managers; other ecosystems use manually configured commands.
 
@@ -166,17 +166,17 @@ During guided initialization this wizard is presented as a separate optional pha
 workspace and, for standalone layouts, the first worktree are ready. Cancelling it does not roll back
 the initialized workspace.
 
-When `.ygg.yml` already exists, copy its complete normalized behavior into the local workspace with:
+When `.wald.yml` already exists, copy its complete normalized behavior into the local workspace with:
 
 ```sh
-ygg config init [worktree] --scope workspace --from-project --yes
+wald config init [worktree] --scope workspace --from-project --yes
 ```
 
-The source `.ygg.yml` remains in place and continues as the repository base until deliberately
+The source `.wald.yml` remains in place and continues as the repository base until deliberately
 removed. Copying it locally and then removing the source preserves the semantic behavior hash when
-the effective configuration is unchanged. Ygg never deletes, commits, or pushes `.ygg.yml`.
+the effective configuration is unchanged. Wald never deletes, commits, or pushes `.wald.yml`.
 
-The repository-owned `.ygg.yml` supports this complete top-level schema:
+The repository-owned `.wald.yml` supports this complete top-level schema:
 
 ```yaml
 version: 1
@@ -226,12 +226,12 @@ The effective result, not either source file in isolation, owns execution and tr
 | --- | --- | --- |
 | `version` | required `1` | Project schema version. |
 | `defaults.fetch` | `true` | Fetch the configured remote before resolving branches. |
-| `defaults.tool` | none | Editor or agent profile used by `ygg open`/`ygg create --open`. |
+| `defaults.tool` | none | Editor or agent profile used by `wald open`/`wald create --open`. |
 | `hooks.pre_create` | `[]` | Steps before `git worktree add`; no target checkout exists yet. |
 | `hooks.post_create` | `[]` | Installation and local-file setup after checkout creation. |
 | `hooks.pre_remove` | `[]` | Project checks that may stop removal before Git changes anything. |
 | `hooks.post_remove` | `[]` | Cleanup after Git removed the worktree. |
-| `tasks` | `{}` | Named workflows invoked with `ygg run <task>`. |
+| `tasks` | `{}` | Named workflows invoked with `wald run <task>`. |
 | `tools` | `{}` | Project-specific editor or agent profiles. |
 
 ### Complete example
@@ -249,7 +249,7 @@ defaults:
 hooks:
   pre_create:
     - type: command
-      argv: [node, -e, "process.exit(process.env.YGG_BRANCH ? 0 : 1)"]
+      argv: [node, -e, "process.exit(process.env.WALD_BRANCH ? 0 : 1)"]
       cwd: workspace
       timeout_seconds: 30
 
@@ -277,7 +277,7 @@ hooks:
 
   post_remove:
     - type: command
-      argv: [node, -e, "console.log(process.env.YGG_BRANCH)"]
+      argv: [node, -e, "console.log(process.env.WALD_BRANCH)"]
       cwd: workspace
       continue_on_error: true
 
@@ -325,7 +325,7 @@ combined with `argv`:
 
 ```yaml
 - type: command
-  shell: pnpm build && cp dist/app "$YGG_WORKTREE_PATH/.local/app"
+  shell: pnpm build && cp dist/app "$WALD_WORKTREE_PATH/.local/app"
 ```
 
 `cwd` accepts `source`, `target`, or `workspace`. Its default is source for `pre_create`, workspace
@@ -335,11 +335,11 @@ During `pre_create`, the target worktree does not exist yet. On the first checko
 workspace there may also be no source worktree, so repository-local helper scripts should run in
 `post_create` or use a source that is known to exist.
 
-- `YGG_EVENT`: hook name or `task:<name>`
-- `YGG_WORKSPACE_ROOT`
-- `YGG_SOURCE_PATH`
-- `YGG_WORKTREE_PATH`
-- `YGG_BRANCH`
+- `WALD_EVENT`: hook name or `task:<name>`
+- `WALD_WORKSPACE_ROOT`
+- `WALD_SOURCE_PATH`
+- `WALD_WORKTREE_PATH`
+- `WALD_BRANCH`
 
 | Field | Default | Purpose |
 | --- | --- | --- |
@@ -380,7 +380,7 @@ workspace there may also be no source worktree, so repository-local helper scrip
 | `current` | Worktree from which the command was invoked | Carry a worktree-local file into another checkout. It may be unavailable from the workspace root. |
 | `default` | Worktree on `default_branch` | Copy committed templates or stable local files from the main development checkout. |
 | `primary` | Original protected checkout | Reuse local files after keeping an existing checkout. It is unavailable in standalone bare workspaces. |
-| `shared` | Local `.ygg/shared` directory | Central `.env`, credentials, caches, or editor configuration shared across worktrees. |
+| `shared` | Local `.wald/shared` directory | Central `.env`, credentials, caches, or editor configuration shared across worktrees. |
 
 | Field | Default | Purpose |
 | --- | --- | --- |
@@ -428,13 +428,13 @@ hooks:
 
 The source-relative portion below `env` becomes the target-relative path, producing `.env`,
 `apps/api/.env`, and `apps/web/.env.local`. Editing a shared source updates every symlink
-immediately. A copied target changes only after the corresponding named task or `ygg setup` runs
-again; `ygg hook run post_create` is the equivalent general hook command. Because file steps can
+immediately. A copied target changes only after the corresponding named task or `wald setup` runs
+again; `wald hook run post_create` is the equivalent general hook command. Because file steps can
 expose local data, their exact paths and glob patterns participate in the same project-configuration
 trust hash as commands.
 
 Every non-empty automation run reports its selected worktree, branch, target path, and step results.
-In a terminal, Ygg groups each configured step and nests concrete file operations beneath it:
+In a terminal, Wald groups each configured step and nests concrete file operations beneath it:
 
 ```text
 ┌  Hook post_create
@@ -511,7 +511,7 @@ flowchart LR
       C3 --> C4[git worktree add]
       C4 --> C5[post_create]
       C5 --> C6[Ready]
-      C5 -- Failure --> C7[Kept for ygg setup]
+      C5 -- Failure --> C7[Kept for wald setup]
     end
 
     subgraph Removal
@@ -526,32 +526,32 @@ flowchart LR
 ```
 
 `pre_create` failure leaves no new worktree. `post_create` failure keeps the worktree and reports
-`ygg setup <worktree>` for recovery. A `pre_remove` failure preserves the worktree.
+`wald setup <worktree>` for recovery. A `pre_remove` failure preserves the worktree.
 Branch deletion happens only after a successful `post_remove`; a changed or newly checked-out
 branch is preserved and reported instead.
 
 ### Run hooks manually
 
-After changing `.ygg/project.yml` or `.ygg.yml`, inspect and trust the effective behavior from the
+After changing `.wald/project.yml` or `.wald.yml`, inspect and trust the effective behavior from the
 target worktree, then run the hook explicitly:
 
 ```sh
 cd feature-payment
-ygg config
-ygg config trust --yes
-ygg hook run post_create
+wald config
+wald config trust --yes
+wald hook run post_create
 ```
 
-`ygg hook run <event> [worktree]` accepts all four lifecycle events and reloads both configuration
+`wald hook run <event> [worktree]` accepts all four lifecycle events and reloads both configuration
 sources for every invocation. If the edit changes executable behavior, the semantic hash changes
-and Ygg requires a new trust decision. Formatting-only changes keep existing trust valid.
+and Wald requires a new trust decision. Formatting-only changes keep existing trust valid.
 
 Manual execution never performs `git worktree add` or `git worktree remove`. It uses the selected
-existing worktree as `YGG_WORKTREE_PATH`; the normal working-directory defaults still apply:
+existing worktree as `WALD_WORKTREE_PATH`; the normal working-directory defaults still apply:
 `pre_create` uses the preferred source, `post_remove` uses the workspace, and the other events use
 the target. Because `pre_create` normally runs before the target exists and `post_remove` normally
-runs after it is gone, Ygg warns that manual runs of these two events simulate a different lifecycle
-state. `ygg setup [worktree]` remains a compatibility shortcut for manually running `post_create`.
+runs after it is gone, Wald warns that manual runs of these two events simulate a different lifecycle
+state. `wald setup [worktree]` remains a compatibility shortcut for manually running `post_create`.
 
 ### Named tasks and tool profiles
 
@@ -572,7 +572,7 @@ tools:
     mode: foreground
 ```
 
-Run these with `ygg run verify [worktree]` and `ygg open [worktree] --tool app-agent`. Tool arguments
+Run these with `wald run verify [worktree]` and `wald open [worktree] --tool app-agent`. Tool arguments
 may contain `{path}`; the selected worktree is also the process working directory. `mode` is
 `foreground` or `detached`.
 
@@ -583,33 +583,33 @@ availability is checked, and relative executable paths resolve from the selected
 | Field | Default | Purpose |
 | --- | --- | --- |
 | `tasks.<name>.description` | none | Human-readable text shown during interactive task selection. |
-| `tasks.<name>.steps` | required, non-empty | Ordered command/copy/symlink steps executed by `ygg run`. |
+| `tasks.<name>.steps` | required, non-empty | Ordered command/copy/symlink steps executed by `wald run`. |
 | `tools.<name>.description` | none | Human-readable editor or agent description. |
 | `tools.<name>.command` | required, non-empty | Argument array used to start the tool; `{path}` expands to the selected worktree. |
 | `tools.<name>.mode` | `foreground` | `foreground` waits and returns its exit status; `detached` starts independently. |
 
-Long-running tasks such as `ygg run dev` stream their output in the foreground. `Ctrl-C` stops the
+Long-running tasks such as `wald run dev` stream their output in the foreground. `Ctrl-C` stops the
 child process and exits with status 130 without reporting the interruption as a configuration
 failure.
 
 Built-in profiles are `code`, `cursor`, `zed`, `codex`, `codex-app`, and `claude`; unavailable
 commands are omitted from interactive selection.
 
-Repository-owned `.ygg.yml` must be a regular file. Ygg rejects a symbolic link or directory at
+Repository-owned `.wald.yml` must be a regular file. Wald rejects a symbolic link or directory at
 that path so executable configuration cannot silently resolve outside the worktree.
 
 ## Trust
 
-Any non-empty effective hook, task, or custom tool makes project configuration executable. Ygg
+Any non-empty effective hook, task, or custom tool makes project configuration executable. Wald
 hashes the merged, validated, normalized behavior with SHA-256. Comments, whitespace, mapping order,
-and moving identical behavior between `.ygg.yml` and `.ygg/project.yml` do not change trust;
+and moving identical behavior between `.wald.yml` and `.wald/project.yml` do not change trust;
 behavioral changes in either source do.
 
 ```sh
-ygg config
-ygg config trust --yes
-ygg config untrust --yes
+wald config
+wald config trust --yes
+wald config untrust --yes
 ```
 
 For a standalone workspace without a checkout, these commands combine local `project.yml` with
-`.ygg.yml` read directly from the configured default branch or revision.
+`.wald.yml` read directly from the configured default branch or revision.

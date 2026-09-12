@@ -13,7 +13,7 @@ describe("worktree change transfer", () => {
   let transfers: WorktreeTransferService;
 
   beforeEach(async () => {
-    temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "ygg-transfer-test-"));
+    temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "wald-transfer-test-"));
     repository = await createTestRepository(temporaryRoot);
     git = new GitClient();
     transfers = new WorktreeTransferService(git);

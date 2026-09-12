@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { YggError } from "../src/domain/errors.js";
+import { WaldError } from "../src/domain/errors.js";
 import type { GitClient } from "../src/infrastructure/git-client.js";
 import type { ConfigService } from "../src/services/config-service.js";
 import { DoctorService } from "../src/services/doctor-service.js";
@@ -21,7 +21,7 @@ describe("DoctorService runtime boundaries", () => {
       }),
     } as unknown as GitClient;
     const workspaces = {
-      find: vi.fn().mockRejectedValue(new YggError("No ygg workspace found.")),
+      find: vi.fn().mockRejectedValue(new WaldError("No wald workspace found.")),
     } as unknown as WorkspaceService;
     const service = new DoctorService(
       git,

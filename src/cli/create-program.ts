@@ -32,8 +32,8 @@ export function createProgram(
 ): Command {
   const context = createCliContext(output, execution);
   const program = new Command()
-    .name("ygg")
-    .description("🌳 Create and work in isolated Git checkouts safely.")
+    .name("wald")
+    .description("🌲 Where Git worktrees grow — safe, guided workspaces for parallel work.")
     .version("0.10.0")
     .showSuggestionAfterError()
     .showHelpAfterError()
@@ -47,7 +47,7 @@ export function createProgram(
 
   program.addHelpText(
     "after",
-    `\n${pc.cyan(pc.bold("🌱 Start here:"))}\n  ${pc.green("cd ~/dev/project && ygg init")}\n  ${pc.green("ygg create feature/payment --cd")}\n  ${pc.green("ygg create feature/review --tool codex")}\n`,
+    `\n${pc.cyan(pc.bold("🌱 Start here:"))}\n  ${pc.green("cd ~/dev/project && wald init")}\n  ${pc.green("wald create feature/payment --cd")}\n  ${pc.green("wald create feature/review --tool codex")}\n`,
   );
 
   program.configureOutput({

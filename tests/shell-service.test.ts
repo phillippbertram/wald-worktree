@@ -12,10 +12,11 @@ describe("shell integration", () => {
       expect(script).toContain("--cd");
       expect(script).toContain("--print-path");
       expect(script).toContain("handoff");
+      expect(script).toContain("plant");
       expect(script).toContain("builtin cd");
-      expect(script).toContain("command ygg");
-      expect(script).not.toContain("ygg completion");
-      expect(script).not.toContain("_ygg_complete");
+      expect(script).toContain("command wald");
+      expect(script).not.toContain("wald completion");
+      expect(script).not.toContain("_wald_complete");
     },
   );
 });

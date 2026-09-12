@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { YggError } from "../src/domain/errors.js";
+import { WaldError } from "../src/domain/errors.js";
 import type { Workspace } from "../src/domain/types.js";
 import type { GitClient } from "../src/infrastructure/git-client.js";
 import {
@@ -18,10 +18,10 @@ describe("worktree domain", () => {
     expect(slugifyBranch("release/1.2.0")).toBe("release-1.2.0");
   });
 
-  it.each(["", ".", "..", ".ygg", "repo.git", "nested/name", "nested\\name", " line"])(
+  it.each(["", ".", "..", ".wald", "repo.git", "nested/name", "nested\\name", " line"])(
     "rejects reserved or nested worktree name %s",
     (name) => {
-      expect(() => validateWorktreeName(name)).toThrow(YggError);
+      expect(() => validateWorktreeName(name)).toThrow(WaldError);
     },
   );
 
@@ -45,7 +45,7 @@ describe("worktree domain", () => {
   });
 
   it("reports an existing worktree as unavailable when git status fails", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "ygg-unavailable-test-"));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "wald-unavailable-test-"));
     try {
       const git = {
         run: vi.fn().mockImplementation(async (args: string[]) =>

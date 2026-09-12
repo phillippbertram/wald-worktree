@@ -7,7 +7,7 @@ describe("welcome page", () => {
     const output = plain(
       renderWelcome(
         {
-          workspaceRoot: "/Users/example/dev/ygg-worktree",
+          workspaceRoot: "/Users/example/dev/wald-worktree",
           current: { name: "main", branch: "main" },
           worktreeCount: 1,
         },
@@ -15,12 +15,10 @@ describe("welcome page", () => {
       ),
     );
 
-    expect(output).toContain(
-      ["       \\ | /", "        \\|/", "      🌳 Ygg", "        /|\\", "       / | \\"].join("\n"),
-    );
-    expect(output).toContain("Git workspaces, rooted together.");
-    expect(output).toContain("Workspace ygg-worktree · Current main (main) · 1 worktree");
-    expect(output).toContain("“Every branch grows stronger from shared roots.”");
+    expect(output).toContain(["      🌲  🌳  🌲", "          Wald"].join("\n"));
+    expect(output).toContain("Where Git worktrees grow.");
+    expect(output).toContain("Workspace wald-worktree · Current main (main) · 1 worktree");
+    expect(output).toContain("“Every tree grows stronger in shared ground.”");
   });
 
   it("renders detached worktrees and a plural count", () => {
@@ -46,14 +44,14 @@ describe("welcome page", () => {
   it("omits workspace metadata outside a workspace", () => {
     const output = plain(renderWelcome(null, () => 0));
 
-    expect(output).toContain("🌳 Ygg");
-    expect(output).toContain("Git workspaces, rooted together.");
+    expect(output).toContain("🌲  🌳  🌲");
+    expect(output).toContain("Where Git worktrees grow.");
     expect(output).not.toContain("Workspace");
     expect(output).not.toContain("Current");
   });
 
   it("selects the first and last wisdom deterministically", () => {
-    expect(selectWisdom(() => 0)).toBe("Every branch grows stronger from shared roots.");
+    expect(selectWisdom(() => 0)).toBe("Every tree grows stronger in shared ground.");
     expect(selectWisdom(() => 0.999_999)).toBe("Grow experiments freely; prune with care.");
   });
 });

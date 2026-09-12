@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { z } from "zod";
-import { YggError } from "../../domain/errors.js";
+import { WaldError } from "../../domain/errors.js";
 import { style } from "../../ui/style.js";
 import { isInteractiveTerminal, promptText, selectWorktree } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
@@ -33,7 +33,7 @@ export function registerRenameCommand(program: Command, context: CliContext): vo
     .argument("[worktree]", "Worktree name, branch, or path")
     .argument("[new-name]", "New worktree directory name")
     .option("--json", "Emit machine-readable JSON without prompting")
-    .addHelpText("after", "\nExamples:\n  ygg rename feature-payment payment-ui\n  ygg rename\n")
+    .addHelpText("after", "\nExamples:\n  wald rename feature-payment payment-ui\n  wald rename\n")
     .action(async (worktree: unknown, newName: unknown, options: unknown) => {
       await renameWorktree(
         parseCliInput(renameInputSchema, { worktree, newName, ...(options as object) }),
@@ -49,22 +49,22 @@ export async function renameWorktree(input: RenameInput, context: CliContext): P
 
   if (!identifier || !newName) {
     if (!isInteractiveTerminal()) {
-      throw new YggError("Non-interactive rename requires a worktree and new name.");
+      throw new WaldError("Non-interactive rename requires a worktree and new name.");
     }
     if (!identifier) {
       const candidates = await context.worktrees.listMoveCandidates(workspace);
       if (candidates.length === 0) {
-        throw new YggError("No worktree can be renamed from the current location.");
+        throw new WaldError("No worktree can be renamed from the current location.");
       }
       const selected = await selectWorktree(candidates, { navigation: "cancel" });
-      if (!selected) throw new YggError("No worktree selected.");
+      if (!selected) throw new WaldError("No worktree selected.");
       identifier = selected.name;
     }
     if (!newName) {
       newName = await promptText("Rename › New name · Worktree directory name:", undefined, {
         navigation: "cancel",
       });
-      if (!newName) throw new YggError("Worktree directory name cannot be empty.");
+      if (!newName) throw new WaldError("Worktree directory name cannot be empty.");
     }
   }
 

@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { Command } from "commander";
 import { z } from "zod";
-import { YggError } from "../../domain/errors.js";
+import { WaldError } from "../../domain/errors.js";
 import type { ProjectConfigDocument, Workspace } from "../../domain/types.js";
 import { humanizeRepositoryName } from "../../infrastructure/path-utils.js";
 import type { AdoptionInspection, AdoptionOptions } from "../../services/workspace-service.js";
@@ -74,13 +74,15 @@ export type InitInput = Omit<z.output<typeof initInputSchema>, "json"> & { json?
 export function registerInitCommand(program: Command, context: CliContext): void {
   program
     .command("init")
-    .description("Keep an existing checkout or create a standalone workspace (Ygg Flow by default)")
+    .description(
+      "Keep an existing checkout or create a standalone workspace (Wald Flow by default)",
+    )
     .argument("[repository]", "Remote URL or local repository to clone when provided")
     .argument("[directory]", "Workspace directory")
     .option("--adopt [path]", "Keep an existing checkout; defaults to the current directory")
     .option(
       "--worktrees-dir <path>",
-      "Worktree directory; defaults to the Ygg Flow root for cloned repositories",
+      "Worktree directory; defaults to the Wald Flow root for cloned repositories",
     )
     .option("--remote <name>", "Remote used for fetching and branch resolution")
     .option("--no-remote", "Use no remote (local-only repository)")
@@ -91,7 +93,7 @@ export function registerInitCommand(program: Command, context: CliContext): void
     .option("--json", "Emit machine-readable JSON without prompting")
     .addHelpText(
       "after",
-      "\nExamples:\n  cd ~/dev/project && ygg init\n  ygg init git@github.com:example/project.git ~/dev/project\n  ygg init git@github.com:example/project.git ~/dev/project --worktrees-dir worktrees\n  ygg init --adopt . --yes --config\n  ygg init --adopt . --yes --config --config-scope project\n",
+      "\nExamples:\n  cd ~/dev/project && wald init\n  wald init git@github.com:example/project.git ~/dev/project\n  wald init git@github.com:example/project.git ~/dev/project --worktrees-dir worktrees\n  wald init --adopt . --yes --config\n  wald init --adopt . --yes --config --config-scope project\n",
     )
     .action(async (repository: unknown, directory: unknown, options: unknown) => {
       const input = parseCliInput(initInputSchema, {
@@ -114,8 +116,8 @@ export async function initializeWorkspace(
     return await initializeAdoptedWorkspace(input, context);
   }
   if (hasAdoptionOptions(input)) {
-    throw new YggError(
-      "Existing-checkout options cannot be combined with clone mode. Use ygg init --adopt.",
+    throw new WaldError(
+      "Existing-checkout options cannot be combined with clone mode. Use wald init --adopt.",
     );
   }
   const initialize = () =>
@@ -136,7 +138,7 @@ export async function initializeWorkspace(
   );
   writeLine(
     context.output.stdout,
-    `${style.label("Then:")} ${style.command(`ygg create ${shellQuote(workspace.config.defaultBranch)} --cd`)}`,
+    `${style.label("Then:")} ${style.command(`wald create ${shellQuote(workspace.config.defaultBranch)} --cd`)}`,
   );
   return workspace;
 }
@@ -176,13 +178,13 @@ async function initializeGuidedExistingRepository(
   const keepLabel = inspection.bare
     ? "Use this bare repository in place"
     : "Keep this checkout as the primary worktree";
-  const copyLabel = "Create a separate Ygg workspace from committed history";
+  const copyLabel = "Create a separate Wald workspace from committed history";
   let previousChoice: string | undefined;
   while (true) {
     const choice = await selectValue(
       inspection.bare
-        ? "Initialize › Layout · How should ygg organize this bare repository?"
-        : "Initialize › Layout · How should ygg organize this repository?",
+        ? "Initialize › Layout · How should wald organize this bare repository?"
+        : "Initialize › Layout · How should wald organize this repository?",
       [
         ...(keepRecommended
           ? [
@@ -205,7 +207,7 @@ async function initializeGuidedExistingRepository(
                 label: `${copyLabel} (recommended)`,
                 value: "copy",
                 description: inspection.bare
-                  ? "Copy branch history into a physically independent Ygg workspace."
+                  ? "Copy branch history into a physically independent Wald workspace."
                   : "Copy committed history independently; uncommitted, ignored, stashed, and unbranched detached work stays here.",
               },
               {
@@ -270,7 +272,10 @@ async function promptForAdoptedWorktreeDirectory(
 }
 
 async function initializeGuidedSource(context: CliContext): Promise<Workspace | null> {
-  writeLine(context.output.stdout, `No Git repository or ygg workspace found in ${process.cwd()}.`);
+  writeLine(
+    context.output.stdout,
+    `No Git repository or wald workspace found in ${process.cwd()}.`,
+  );
   let previousSource: string | undefined;
   while (true) {
     const source = await selectValue(
@@ -484,7 +489,7 @@ async function chooseManagedWorktreeDirectory(initialValue?: string): Promise<st
       "Initialize › Layout · Where should worktrees be created?",
       [
         {
-          label: "Ygg Flow — directly in the workspace root (recommended)",
+          label: "Wald Flow — directly in the workspace root (recommended)",
           value: ".",
           description: "Creates main and feature directories beside repo.git.",
         },
@@ -506,7 +511,7 @@ async function chooseManagedWorktreeDirectory(initialValue?: string): Promise<st
         { navigation: "back" },
       );
       customValue = value;
-      if (!value) throw new YggError("Worktree directory cannot be empty.");
+      if (!value) throw new WaldError("Worktree directory cannot be empty.");
       return value;
     } catch (error) {
       if (isPromptBackError(error)) continue;
@@ -544,7 +549,7 @@ async function completeNewWorkspace(
     );
     writeLine(
       context.output.stdout,
-      `${style.label("Then:")} ${style.command(`ygg create ${shellQuote(workspace.config.defaultBranch)} --cd`)}`,
+      `${style.label("Then:")} ${style.command(`wald create ${shellQuote(workspace.config.defaultBranch)} --cd`)}`,
     );
     return;
   }
@@ -563,7 +568,7 @@ async function completeNewWorkspace(
   );
   writeLine(
     context.output.stdout,
-    `${style.label("Then create a feature worktree with:")} ${style.command("ygg create <branch> --cd")}`,
+    `${style.label("Then create a feature worktree with:")} ${style.command("wald create <branch> --cd")}`,
   );
 }
 
@@ -573,7 +578,7 @@ async function initializeAdoptedWorkspace(
 ): Promise<Workspace | null> {
   const explicit = input.adopt !== undefined;
   if (!isInteractiveTerminal() && (!explicit || !input.yes)) {
-    throw new YggError("Keeping a checkout non-interactively requires --adopt and --yes.");
+    throw new WaldError("Keeping a checkout non-interactively requires --adopt and --yes.");
   }
   const source = typeof input.adopt === "string" ? input.adopt : ".";
   const requested: AdoptionOptions = {
@@ -617,7 +622,7 @@ async function initializeAdoptedWorkspace(
   );
   if (inspection.worktreeDirSelectionRequired) {
     if (!isInteractiveTerminal() || input.yes) {
-      throw new YggError("Could not select a safe worktree directory. Use --worktrees-dir.");
+      throw new WaldError("Could not select a safe worktree directory. Use --worktrees-dir.");
     }
     requested.worktreeDir = await promptText(
       "Directory for new worktrees:",
@@ -645,7 +650,7 @@ async function initializeAdoptedWorkspace(
   const workspace = input.json ? await adopt() : await runTask("Adopting repository", adopt);
   if (!input.json) {
     await success(
-      `Connected existing checkout to ygg at ${style.path(workspace.root)}`,
+      `Connected existing checkout to wald at ${style.path(workspace.root)}`,
       context.output,
     );
     writeLine(
@@ -659,7 +664,7 @@ async function initializeAdoptedWorkspace(
   } else {
     writeLine(
       context.output.stdout,
-      `${style.label("Create another worktree:")} ${style.command("ygg create <branch> --cd")}`,
+      `${style.label("Create another worktree:")} ${style.command("wald create <branch> --cd")}`,
     );
   }
   return workspace;
@@ -675,7 +680,7 @@ async function repairOrReportExistingWorkspace(
     : await runTask("Checking workspace", () => context.workspaces.repair(workspace));
   const restored = [
     repair.worktreeDirCreated ? `worktree directory ${workspace.worktreeDir}` : null,
-    repair.markerCreated ? `metadata link ${path.join(workspace.worktreeDir, ".ygg")}` : null,
+    repair.markerCreated ? `metadata link ${path.join(workspace.worktreeDir, ".wald")}` : null,
     repair.sharedDirCreated ? `shared directory ${workspace.sharedDir}` : null,
   ].filter((entry): entry is string => Boolean(entry));
 
@@ -706,8 +711,8 @@ async function maybeInitializeProjectConfig(
 ): Promise<void> {
   if (!primaryWorktree) {
     if (input.config) {
-      throw new YggError(
-        "Cannot detect project configuration without a worktree. Create a worktree, then run ygg config init.",
+      throw new WaldError(
+        "Cannot detect project configuration without a worktree. Create a worktree, then run wald config init.",
       );
     }
     return;
@@ -745,7 +750,7 @@ async function maybeInitializeProjectConfig(
       );
       writeLine(
         context.output.stdout,
-        `${style.label("Later:")} ${style.command("ygg config init")}`,
+        `${style.label("Later:")} ${style.command("wald config init")}`,
       );
     }
     return;
@@ -756,14 +761,14 @@ async function maybeInitializeProjectConfig(
         "Configure › Location · Where should project automation be stored?",
         [
           {
-            label: "Local Ygg workspace (recommended)",
+            label: "Local Wald workspace (recommended)",
             value: "workspace",
             description: "Keep project.yml outside Git and apply it to every worktree.",
           },
           {
             label: "Project repository",
             value: "project",
-            description: "Create .ygg.yml in this worktree so it can be committed and shared.",
+            description: "Create .wald.yml in this worktree so it can be committed and shared.",
           },
         ],
         { navigation: "cancel", initialValue: scope },
@@ -776,7 +781,7 @@ async function maybeInitializeProjectConfig(
       );
       writeLine(
         context.output.stdout,
-        `${style.label("Later:")} ${style.command("ygg config init")}`,
+        `${style.label("Later:")} ${style.command("wald config init")}`,
       );
       return;
     }
@@ -806,7 +811,7 @@ async function maybeInitializeProjectConfig(
     );
     writeLine(
       context.output.stdout,
-      `${style.label("Later:")} ${style.command("ygg config init")}`,
+      `${style.label("Later:")} ${style.command("wald config init")}`,
     );
     return;
   }
@@ -852,8 +857,8 @@ async function inspectAdoption(
       context.workspaces.inspectAdoption(source, requested),
     );
   } catch (error) {
-    if (!explicit && error instanceof YggError && error.message.startsWith("Not a Git")) {
-      throw new YggError("No Git repository detected. Use ygg init <repository> [directory].");
+    if (!explicit && error instanceof WaldError && error.message.startsWith("Not a Git")) {
+      throw new WaldError("No Git repository detected. Use wald init <repository> [directory].");
     }
     throw error;
   }
@@ -871,10 +876,10 @@ async function resolveRepositorySettings(
   let selectedRemote = requested.remote ?? inspection.remoteName ?? undefined;
   if (inspection.remoteSelectionRequired) {
     if (!isInteractiveTerminal() || acceptDetected) {
-      throw new YggError("Multiple remotes found. Select one with --remote or --no-remote.");
+      throw new WaldError("Multiple remotes found. Select one with --remote or --no-remote.");
     }
     const selected = await selectValue(
-      "Initialize › Repository · Select the remote ygg should use:",
+      "Initialize › Repository · Select the remote wald should use:",
       [
         ...inspection.remotes.map((remote) => ({ label: remote, value: remote })),
         { label: "No remote (local only)", value: "__none__" },
@@ -887,12 +892,12 @@ async function resolveRepositorySettings(
   }
   while (!inspection.defaultBranch) {
     if (inspection.defaultBranchCandidates.length === 0) {
-      throw new YggError(
-        "Repository has no commits. Ygg requires an existing branch with at least one commit.",
+      throw new WaldError(
+        "Repository has no commits. Wald requires an existing branch with at least one commit.",
       );
     }
     if (!isInteractiveTerminal() || acceptDetected) {
-      throw new YggError("Could not determine the default branch. Use --default-branch.");
+      throw new WaldError("Could not determine the default branch. Use --default-branch.");
     }
     const custom = "__custom__";
     let selected: string;
@@ -911,7 +916,7 @@ async function resolveRepositorySettings(
     } catch (error) {
       if (!isPromptBackError(error) || !remoteWasRequired) throw error;
       const remote = await selectValue(
-        "Initialize › Repository · Select the remote ygg should use:",
+        "Initialize › Repository · Select the remote wald should use:",
         [
           ...initialInspection.remotes.map((name) => ({ label: name, value: name })),
           { label: "No remote (local only)", value: "__none__" },
@@ -938,7 +943,7 @@ async function resolveRepositorySettings(
     } else {
       requested.defaultBranch = selected;
     }
-    if (!requested.defaultBranch) throw new YggError("Default branch cannot be empty.");
+    if (!requested.defaultBranch) throw new WaldError("Default branch cannot be empty.");
     inspection = await context.workspaces.inspectAdoption(source, requested);
   }
   return inspection;
@@ -952,7 +957,7 @@ async function inspectExistingRepositoryOrNull(
     return await runTask("Inspecting repository", () => context.workspaces.inspectAdoption(source));
   } catch (error) {
     if (
-      error instanceof YggError &&
+      error instanceof WaldError &&
       (error.message.startsWith("Not a Git") ||
         error.message.startsWith("Repository path does not exist"))
     ) {
@@ -1007,7 +1012,7 @@ async function rejectExistingLocalPath(repository: string): Promise<void> {
     if (error instanceof Error && "code" in error && error.code === "ENOENT") return;
     throw error;
   }
-  throw new YggError(
+  throw new WaldError(
     `This is a local path: ${candidate}. Choose "Use an existing local repository" instead.`,
   );
 }

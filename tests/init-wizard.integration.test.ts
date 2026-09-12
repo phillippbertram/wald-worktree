@@ -85,7 +85,7 @@ describe("interactive init wizard", () => {
     prompts.tables = [];
     prompts.confirmationQuestions = [];
     temporaryRoot = await fs.realpath(
-      await fs.mkdtemp(path.join(os.tmpdir(), "ygg-init-wizard-test-")),
+      await fs.mkdtemp(path.join(os.tmpdir(), "wald-init-wizard-test-")),
     );
     repository = await createTestRepository(temporaryRoot);
     previousCwd = process.cwd();
@@ -109,10 +109,10 @@ describe("interactive init wizard", () => {
     await initializeWorkspace({}, context);
 
     expect(prompts.choices[0]).toMatchObject({
-      question: "Initialize › Layout · How should ygg organize this repository?",
+      question: "Initialize › Layout · How should wald organize this repository?",
       options: expect.arrayContaining([
         expect.objectContaining({
-          label: "Create a separate Ygg workspace from committed history (recommended)",
+          label: "Create a separate Wald workspace from committed history (recommended)",
         }),
       ]),
     });
@@ -120,11 +120,11 @@ describe("interactive init wizard", () => {
       question: "Initialize › Layout · Where should worktrees be created?",
       options: expect.arrayContaining([
         expect.objectContaining({
-          label: "Ygg Flow — directly in the workspace root (recommended)",
+          label: "Wald Flow — directly in the workspace root (recommended)",
         }),
       ]),
     });
-    expect(prompts.tables[0]).toContainEqual(["Layout", "Ygg Flow — flat standalone workspace"]);
+    expect(prompts.tables[0]).toContainEqual(["Layout", "Wald Flow — flat standalone workspace"]);
     const workspace = await context.workspaces.find(target);
     expect(workspace.worktreeDir).toBe(workspace.root);
     expect(workspace.config.remote?.name).toBe("origin");
@@ -225,7 +225,7 @@ describe("interactive init wizard", () => {
     expect(workspace.primaryWorktree).toBeNull();
     expect(workspace.worktreeDir).toBe(path.join(temporaryRoot, "bare-worktrees"));
     expect(prompts.choices[0]).toMatchObject({
-      question: "Initialize › Layout · How should ygg organize this bare repository?",
+      question: "Initialize › Layout · How should wald organize this bare repository?",
       options: expect.arrayContaining([
         expect.objectContaining({ label: "Use this bare repository in place" }),
       ]),
@@ -243,7 +243,7 @@ describe("interactive init wizard", () => {
       /must not be inside an existing worktree/u,
     );
 
-    await expect(fs.stat(path.join(repository.source, ".git", "ygg"))).rejects.toMatchObject({
+    await expect(fs.stat(path.join(repository.source, ".git", "wald"))).rejects.toMatchObject({
       code: "ENOENT",
     });
     await expect(fs.stat(unsafeDirectory)).rejects.toMatchObject({ code: "ENOENT" });
@@ -275,7 +275,7 @@ describe("interactive init wizard", () => {
     await initializeWorkspace({}, context);
 
     expect(readOutput(output)).toContain(
-      `No Git repository or ygg workspace found in ${temporaryRoot}.`,
+      `No Git repository or wald workspace found in ${temporaryRoot}.`,
     );
     expect(prompts.choices[0]).toEqual({
       question: "Initialize › Source · How would you like to start?",
@@ -291,7 +291,7 @@ describe("interactive init wizard", () => {
       ],
     });
     expect(prompts.textQuestions).toEqual([]);
-    await expect(fs.stat(path.join(temporaryRoot, ".ygg"))).rejects.toMatchObject({
+    await expect(fs.stat(path.join(temporaryRoot, ".wald"))).rejects.toMatchObject({
       code: "ENOENT",
     });
   });
@@ -436,10 +436,10 @@ describe("interactive init wizard", () => {
 
     expect(prompts.textQuestions[0]).toBe("Initialize › Local · Local repository path:");
     expect(prompts.choices[1]).toMatchObject({
-      question: "Initialize › Layout · How should ygg organize this repository?",
+      question: "Initialize › Layout · How should wald organize this repository?",
       options: expect.arrayContaining([
         expect.objectContaining({
-          label: "Create a separate Ygg workspace from committed history (recommended)",
+          label: "Create a separate Wald workspace from committed history (recommended)",
         }),
       ]),
     });
@@ -482,7 +482,7 @@ describe("interactive init wizard", () => {
 
     await initializeWorkspace({}, context);
 
-    await expect(fs.stat(path.join(repository.source, ".git", "ygg"))).rejects.toMatchObject({
+    await expect(fs.stat(path.join(repository.source, ".git", "wald"))).rejects.toMatchObject({
       code: "ENOENT",
     });
     await expect(fs.stat(worktreesDir)).rejects.toMatchObject({ code: "ENOENT" });
@@ -530,9 +530,9 @@ describe("interactive init wizard", () => {
     );
 
     await expect(
-      fs.readFile(path.join(repository.source, ".git", "ygg", "project.yml"), "utf8"),
+      fs.readFile(path.join(repository.source, ".git", "wald", "project.yml"), "utf8"),
     ).resolves.toContain("version: 1");
-    await expect(fs.stat(path.join(repository.source, ".ygg.yml"))).rejects.toMatchObject({
+    await expect(fs.stat(path.join(repository.source, ".wald.yml"))).rejects.toMatchObject({
       code: "ENOENT",
     });
   });
@@ -577,12 +577,12 @@ describe("interactive init wizard", () => {
 
     await expect(initializeWorkspace({}, context)).rejects.toThrow(expected);
 
-    await expect(fs.stat(path.join(selectedPath, ".ygg"))).rejects.toMatchObject({
+    await expect(fs.stat(path.join(selectedPath, ".wald"))).rejects.toMatchObject({
       code: "ENOENT",
     });
   });
 
-  it("recognizes an existing ygg workspace selected from another directory", async () => {
+  it("recognizes an existing wald workspace selected from another directory", async () => {
     const target = path.join(temporaryRoot, "existing-workspace");
     const output = new PassThrough();
     const context = createCliContext({ stdout: output, stderr: output });
@@ -611,5 +611,9 @@ async function contextGitOutput(args: string[], cwd: string) {
 }
 
 function readOutput(output: PassThrough): string {
-  return output.read()?.toString() ?? "";
+  let rendered = "";
+  for (let chunk = output.read(); chunk !== null; chunk = output.read()) {
+    rendered += chunk.toString();
+  }
+  return rendered;
 }

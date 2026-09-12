@@ -17,13 +17,13 @@ describe("workspace initialization preview", () => {
     const rendered = renderInitializationPreview(preview);
 
     expect(rendered).toContain("/projects/my-app/  new: workspace root");
-    expect(rendered).toContain("├── .ygg/  new: local Ygg metadata");
+    expect(rendered).toContain("├── .wald/  new: local Wald metadata");
     expect(rendered).toContain("└── repo.git/  new: shared Git database");
     expect(rendered).toContain("New worktrees: /projects/my-app/<branch>  optional next");
     expect(rendered).not.toContain("worktrees/  new: future worktrees");
     expect(initializationPreviewSummary(preview)).toContainEqual([
       "Layout",
-      "Ygg Flow — flat standalone workspace",
+      "Wald Flow — flat standalone workspace",
     ]);
   });
 
@@ -55,9 +55,9 @@ describe("workspace initialization preview", () => {
     expect(rendered).toContain("/projects/");
     expect(rendered).toContain("├── app/  existing: primary checkout");
     expect(rendered).toContain("│   └── .git/");
-    expect(rendered).toContain("│       └── ygg/  new: local Ygg metadata");
+    expect(rendered).toContain("│       └── wald/  new: local Wald metadata");
     expect(rendered).toContain("└── app-worktrees/  new: future worktree container");
-    expect(rendered).toContain(".ygg -> /projects/app/.git/ygg  new: metadata link");
+    expect(rendered).toContain(".wald -> /projects/app/.git/wald  new: metadata link");
     expect(initializationPreviewSummary(preview)).toContainEqual([
       "Layout",
       "Retained existing checkout",
@@ -102,10 +102,10 @@ function managedPreview(root: string, worktreeDir: string): WorkspaceInitializat
   const target: ManagedInitializationPlan = {
     root,
     gitDir: path.join(root, "repo.git"),
-    metadataDir: path.join(root, ".ygg"),
-    sharedDir: path.join(root, ".ygg", "shared"),
+    metadataDir: path.join(root, ".wald"),
+    sharedDir: path.join(root, ".wald", "shared"),
     worktreeDir,
-    configPath: path.join(root, ".ygg", "workspace.yml"),
+    configPath: path.join(root, ".wald", "workspace.yml"),
     rootExisted: false,
   };
   return {
@@ -133,7 +133,7 @@ function adoptionInspection(bare: boolean): AdoptionInspection {
     defaultBranchCandidates: ["main"],
     worktreeDir: bare ? "/projects/trees" : "/projects/app-worktrees",
     worktreeDirSelectionRequired: false,
-    metadataDir: path.join(gitDir, "ygg"),
+    metadataDir: path.join(gitDir, "wald"),
     existingWorkspace: null,
     modified: false,
     modifiedWorktrees: [],

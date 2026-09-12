@@ -4,7 +4,7 @@ import { CommanderError } from "commander";
 import pc from "picocolors";
 import { createCliExecutionState } from "./cli/context.js";
 import { createProgram } from "./cli/create-program.js";
-import { toErrorMessage, YggError } from "./domain/errors.js";
+import { toErrorMessage, WaldError } from "./domain/errors.js";
 import { redactSensitiveText, sanitizeTerminalText } from "./infrastructure/safe-text.js";
 import { isPromptBackError } from "./ui/terminal.js";
 
@@ -20,7 +20,7 @@ async function main(): Promise<void> {
       return;
     }
 
-    if (error instanceof YggError && error.exitCode === 130) {
+    if (error instanceof WaldError && error.exitCode === 130) {
       process.exitCode = 130;
       return;
     }
@@ -28,13 +28,13 @@ async function main(): Promise<void> {
     const message = sanitizeTerminalText(redactSensitiveText(toErrorMessage(error)), {
       multiline: true,
     });
-    const exitCode = error instanceof YggError ? error.exitCode : 1;
+    const exitCode = error instanceof WaldError ? error.exitCode : 1;
     if (execution.json) {
       process.stderr.write(
         `${JSON.stringify({
           message,
           exitCode,
-          ...(error instanceof YggError && error.effects !== undefined
+          ...(error instanceof WaldError && error.effects !== undefined
             ? { effects: error.effects }
             : {}),
         })}\n`,

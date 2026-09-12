@@ -1,7 +1,7 @@
 import { constants as fsConstants } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { YggError } from "../domain/errors.js";
+import { WaldError } from "../domain/errors.js";
 import type { Workspace, WorkspaceConfig, WorkspaceRemote, Worktree } from "../domain/types.js";
 import type { GitClient } from "../infrastructure/git-client.js";
 import { humanizeRepositoryName, isPathInsideOrEqual } from "../infrastructure/path-utils.js";
@@ -158,16 +158,16 @@ export class WorkspaceService {
     if (rootExisted) {
       const stat = await fs.stat(root);
       if (!stat.isDirectory()) {
-        throw new YggError(`Target path is not a directory: ${root}`);
+        throw new WaldError(`Target path is not a directory: ${root}`);
       }
       const entries = await fs.readdir(root);
       if (entries.length > 0) {
-        throw new YggError(`Target directory is not empty: ${root}`);
+        throw new WaldError(`Target directory is not empty: ${root}`);
       }
     }
 
     const gitDir = path.join(root, "repo.git");
-    const metadataDir = path.join(root, ".ygg");
+    const metadataDir = path.join(root, ".wald");
     const sharedDir = path.join(metadataDir, "shared");
     const worktreeDir = resolveManagedWorktreeDir(root, options.worktreeDir);
     return {
@@ -191,7 +191,7 @@ export class WorkspaceService {
     const discoveredGitDir = await this.findGitCommonDir(source);
     const gitDir = discoveredGitDir ?? discoveredWorkspace?.gitDir ?? null;
     if (!gitDir) {
-      throw new YggError(`Not a Git repository: ${source}`);
+      throw new WaldError(`Not a Git repository: ${source}`);
     }
 
     const bareResult = await this.git.run(["rev-parse", "--is-bare-repository"], {
@@ -280,7 +280,7 @@ export class WorkspaceService {
       defaultBranchCandidates,
       worktreeDir,
       worktreeDirSelectionRequired,
-      metadataDir: path.join(gitDir, "ygg"),
+      metadataDir: path.join(gitDir, "wald"),
       existingWorkspace: null,
       modified,
       modifiedWorktrees,
@@ -296,10 +296,10 @@ export class WorkspaceService {
     options: ManagedInitializationOptions = {},
   ): Promise<Workspace> {
     if (inspection.remoteSelectionRequired) {
-      throw new YggError("Multiple remotes found. Select one before creating a new workspace.");
+      throw new WaldError("Multiple remotes found. Select one before creating a new workspace.");
     }
     if (!inspection.defaultBranch) {
-      throw new YggError("Could not determine the default branch.");
+      throw new WaldError("Could not determine the default branch.");
     }
 
     const plan = await this.planManagedInitialization(
@@ -381,12 +381,12 @@ export class WorkspaceService {
     await this.validateAdoption(inspection);
     const defaultBranch = inspection.defaultBranch;
     if (!defaultBranch) {
-      throw new YggError("Could not determine the default branch. Use --default-branch.");
+      throw new WaldError("Could not determine the default branch. Use --default-branch.");
     }
 
     const metadataDir = inspection.metadataDir;
     const configPath = path.join(metadataDir, workspaceConfigFileName);
-    const markerPath = path.join(inspection.worktreeDir, ".ygg");
+    const markerPath = path.join(inspection.worktreeDir, ".wald");
     const worktreeDirExisted = await this.pathExists(inspection.worktreeDir);
 
     let createdMetadata = false;
@@ -440,20 +440,20 @@ export class WorkspaceService {
 
   async validateAdoption(inspection: AdoptionInspection): Promise<AdoptionValidation> {
     if (inspection.remoteSelectionRequired) {
-      throw new YggError("Multiple remotes found. Select one with --remote or use --no-remote.");
+      throw new WaldError("Multiple remotes found. Select one with --remote or use --no-remote.");
     }
     if (!inspection.defaultBranch) {
-      throw new YggError("Could not determine the default branch. Use --default-branch.");
+      throw new WaldError("Could not determine the default branch. Use --default-branch.");
     }
     if (inspection.worktreeDirSelectionRequired) {
-      throw new YggError("Could not select a safe worktree directory. Use --worktrees-dir.");
+      throw new WaldError("Could not select a safe worktree directory. Use --worktrees-dir.");
     }
 
     await this.validateWorktreeDir(inspection.worktreeDir, inspection.gitDir);
     if (inspection.remoteName) {
       const remotes = await this.readRemotes(inspection.gitDir);
       if (!remotes.includes(inspection.remoteName)) {
-        throw new YggError(`Git remote no longer exists: ${inspection.remoteName}`);
+        throw new WaldError(`Git remote no longer exists: ${inspection.remoteName}`);
       }
     }
     await this.validateDefaultBranch(
@@ -464,19 +464,19 @@ export class WorkspaceService {
 
     const metadataExisted = await this.pathExists(inspection.metadataDir);
     const worktreeDirExisted = await this.pathExists(inspection.worktreeDir);
-    const markerPath = path.join(inspection.worktreeDir, ".ygg");
+    const markerPath = path.join(inspection.worktreeDir, ".wald");
     const markerExisted = await lstatOrNull(markerPath);
 
     if (metadataExisted) {
-      throw new YggError(
+      throw new WaldError(
         `Adoption metadata already exists without a valid config: ${inspection.metadataDir}`,
       );
     }
     if (markerExisted) {
-      throw new YggError(`Worktree directory already contains a .ygg entry: ${markerPath}`);
+      throw new WaldError(`Worktree directory already contains a .wald entry: ${markerPath}`);
     }
     if (worktreeDirExisted && !(await fs.stat(inspection.worktreeDir)).isDirectory()) {
-      throw new YggError(`Worktree directory is not a directory: ${inspection.worktreeDir}`);
+      throw new WaldError(`Worktree directory is not a directory: ${inspection.worktreeDir}`);
     }
     return { worktreeDirExisted };
   }
@@ -486,7 +486,7 @@ export class WorkspaceService {
     let current = start;
 
     while (true) {
-      const configPath = path.join(current, ".ygg", workspaceConfigFileName);
+      const configPath = path.join(current, ".wald", workspaceConfigFileName);
       try {
         await fs.access(configPath, fsConstants.R_OK);
         return await this.read(configPath);
@@ -505,7 +505,7 @@ export class WorkspaceService {
 
     const gitDir = await this.findGitCommonDir(start);
     if (gitDir) {
-      const configPath = path.join(gitDir, "ygg", workspaceConfigFileName);
+      const configPath = path.join(gitDir, "wald", workspaceConfigFileName);
       try {
         await fs.access(configPath, fsConstants.R_OK);
         return await this.read(configPath);
@@ -516,13 +516,13 @@ export class WorkspaceService {
       }
     }
 
-    throw new YggError("No ygg workspace found. Run ygg init inside or for this repository.");
+    throw new WaldError("No wald workspace found. Run wald init inside or for this repository.");
   }
 
   async ensureSharedDirectory(workspace: Workspace): Promise<void> {
     const existing = await lstatOrNull(workspace.sharedDir);
     if (existing?.isSymbolicLink() || (existing && !existing.isDirectory())) {
-      throw new YggError(
+      throw new WaldError(
         `Shared path must be a directory, not a link or file: ${workspace.sharedDir}`,
       );
     }
@@ -532,18 +532,18 @@ export class WorkspaceService {
   async repair(workspace: Workspace): Promise<WorkspaceRepair> {
     const worktreeDirState = await lstatOrNull(workspace.worktreeDir);
     if (worktreeDirState && !worktreeDirState.isDirectory()) {
-      throw new YggError(`Worktree directory is not a directory: ${workspace.worktreeDir}`);
+      throw new WaldError(`Worktree directory is not a directory: ${workspace.worktreeDir}`);
     }
 
     const sharedState = await lstatOrNull(workspace.sharedDir);
     if (sharedState?.isSymbolicLink() || (sharedState && !sharedState.isDirectory())) {
-      throw new YggError(
+      throw new WaldError(
         `Shared path must be a directory, not a link or file: ${workspace.sharedDir}`,
       );
     }
 
     const markerPath =
-      workspace.config.mode === "adopted" ? path.join(workspace.worktreeDir, ".ygg") : null;
+      workspace.config.mode === "adopted" ? path.join(workspace.worktreeDir, ".wald") : null;
     const markerState = markerPath && worktreeDirState ? await lstatOrNull(markerPath) : null;
     const markerNeedsRepair = Boolean(
       markerPath &&
@@ -592,7 +592,7 @@ export class WorkspaceService {
     const metadataDir = path.dirname(workspace.configPath);
     let markerPath: string | null = null;
     if (workspace.config.mode === "adopted") {
-      const candidate = path.join(workspace.worktreeDir, ".ygg");
+      const candidate = path.join(workspace.worktreeDir, ".wald");
       if (await lstatOrNull(candidate)) {
         await this.inspectWorkspaceMarker(candidate, metadataDir);
         markerPath = candidate;
@@ -621,8 +621,8 @@ export class WorkspaceService {
   async uninitialize(workspace: Workspace, options: { force?: boolean } = {}): Promise<void> {
     const inspection = await this.inspectUninitialization(workspace);
     if (inspection.dataEntries.length > 0 && !options.force) {
-      throw new YggError(
-        "Ygg metadata contains local data. Use --force only if this data can be discarded.",
+      throw new WaldError(
+        "Wald metadata contains local data. Use --force only if this data can be discarded.",
       );
     }
 
@@ -649,7 +649,7 @@ export class WorkspaceService {
     try {
       realConfigPath = await fs.realpath(configPath);
     } catch (error) {
-      throw new YggError(`Cannot read workspace configuration: ${configPath}`, { cause: error });
+      throw new WaldError(`Cannot read workspace configuration: ${configPath}`, { cause: error });
     }
     return await this.toWorkspace(
       realConfigPath,
@@ -663,17 +663,17 @@ export class WorkspaceService {
   ): Promise<"valid" | "broken"> {
     const marker = await fs.lstat(markerPath);
     if (!marker.isSymbolicLink()) {
-      throw new YggError(`Workspace marker is not a symbolic link: ${markerPath}`);
+      throw new WaldError(`Workspace marker is not a symbolic link: ${markerPath}`);
     }
     let target: string;
     try {
       target = await fs.realpath(markerPath);
     } catch (error) {
       if (this.isNotFound(error)) return "broken";
-      throw new YggError(`Cannot inspect workspace marker: ${markerPath}`, { cause: error });
+      throw new WaldError(`Cannot inspect workspace marker: ${markerPath}`, { cause: error });
     }
     if (target !== (await fs.realpath(metadataDir))) {
-      throw new YggError(`Workspace marker points to different metadata: ${markerPath}`);
+      throw new WaldError(`Workspace marker points to different metadata: ${markerPath}`);
     }
     return "valid";
   }
@@ -687,7 +687,7 @@ export class WorkspaceService {
       ["paths.primary_worktree", config.paths.primaryWorktree],
     ] as const) {
       if (value && path.isAbsolute(value)) {
-        throw new YggError(`${label} must be relative to the workspace configuration.`);
+        throw new WaldError(`${label} must be relative to the workspace configuration.`);
       }
     }
 
@@ -699,42 +699,42 @@ export class WorkspaceService {
     const sharedDir = path.join(configDir, "shared");
     const sharedStat = await lstatOrNull(sharedDir);
     if (sharedStat?.isSymbolicLink() || (sharedStat && !sharedStat.isDirectory())) {
-      throw new YggError(`Shared path must be a directory, not a link or file: ${sharedDir}`);
+      throw new WaldError(`Shared path must be a directory, not a link or file: ${sharedDir}`);
     }
 
     let root: string;
 
     if (config.mode === "managed") {
       root = path.dirname(configDir);
-      if (configDir !== path.join(root, ".ygg")) {
-        throw new YggError("Managed workspace configuration must stay in <workspace>/.ygg.");
+      if (configDir !== path.join(root, ".wald")) {
+        throw new WaldError("Managed workspace configuration must stay in <workspace>/.wald.");
       }
       if (primaryWorktree) {
-        throw new YggError("Managed bare workspaces cannot define a primary worktree.");
+        throw new WaldError("Managed bare workspaces cannot define a primary worktree.");
       }
       if (gitDir !== path.join(root, "repo.git")) {
-        throw new YggError("Managed Git directory must be <workspace>/repo.git.");
+        throw new WaldError("Managed Git directory must be <workspace>/repo.git.");
       }
       if (!isPathInsideOrEqual(root, worktreeDir)) {
-        throw new YggError("Managed workspace paths must stay inside the workspace root.");
+        throw new WaldError("Managed workspace paths must stay inside the workspace root.");
       }
       if (
         worktreeDir === gitDir ||
         isPathInsideOrEqual(gitDir, worktreeDir) ||
         isPathInsideOrEqual(configDir, worktreeDir)
       ) {
-        throw new YggError("Managed worktree directory overlaps reserved workspace metadata.");
+        throw new WaldError("Managed worktree directory overlaps reserved workspace metadata.");
       }
     } else {
       root = worktreeDir;
-      if (configDir !== path.join(gitDir, "ygg")) {
-        throw new YggError("Adopted workspace configuration must stay inside the Git directory.");
+      if (configDir !== path.join(gitDir, "wald")) {
+        throw new WaldError("Adopted workspace configuration must stay inside the Git directory.");
       }
       if (isPathInsideOrEqual(gitDir, worktreeDir)) {
-        throw new YggError("Adopted worktree directory must stay outside the Git directory.");
+        throw new WaldError("Adopted worktree directory must stay outside the Git directory.");
       }
       if (primaryWorktree && isPathInsideOrEqual(primaryWorktree, worktreeDir)) {
-        throw new YggError("Adopted worktree directory must stay outside the primary checkout.");
+        throw new WaldError("Adopted worktree directory must stay outside the primary checkout.");
       }
     }
 
@@ -779,12 +779,12 @@ export class WorkspaceService {
       reject: false,
     });
     if (commit.exitCode === 0 && !commit.stdout) {
-      throw new YggError(
-        "Repository has no commits. Ygg requires an existing branch with at least one commit.",
+      throw new WaldError(
+        "Repository has no commits. Wald requires an existing branch with at least one commit.",
       );
     }
 
-    throw new YggError("Could not determine the repository's default branch.");
+    throw new WaldError("Could not determine the repository's default branch.");
   }
 
   private async inferDefaultBranch(
@@ -823,7 +823,7 @@ export class WorkspaceService {
   ): Promise<string> {
     const valid = await this.git.succeeds(["check-ref-format", "--branch", branch], { gitDir });
     if (!valid) {
-      throw new YggError(`Invalid default branch: ${branch}`);
+      throw new WaldError(`Invalid default branch: ${branch}`);
     }
 
     const references = [`refs/heads/${branch}`];
@@ -839,7 +839,7 @@ export class WorkspaceService {
         return branch;
       }
     }
-    throw new YggError(`Default branch does not resolve to a commit: ${branch}`);
+    throw new WaldError(`Default branch does not resolve to a commit: ${branch}`);
   }
 
   private resolveRemoteChoice(
@@ -848,7 +848,7 @@ export class WorkspaceService {
   ): { name: string | null; selectionRequired: boolean } {
     if (requested !== undefined) {
       if (requested && !remotes.includes(requested)) {
-        throw new YggError(`Unknown Git remote: ${requested}`);
+        throw new WaldError(`Unknown Git remote: ${requested}`);
       }
       return { name: requested, selectionRequired: false };
     }
@@ -899,13 +899,13 @@ export class WorkspaceService {
   ): Promise<void> {
     const resolved = path.resolve(worktreeDir);
     if (isPathInsideOrEqual(gitDir, resolved)) {
-      throw new YggError("Worktree directory must stay outside the Git directory.");
+      throw new WaldError("Worktree directory must stay outside the Git directory.");
     }
 
     const worktrees = knownWorktrees ?? (await this.readGitWorktrees(gitDir));
     for (const worktree of worktrees.filter((candidate) => !candidate.bare)) {
       if (isPathInsideOrEqual(worktree.path, resolved)) {
-        throw new YggError(
+        throw new WaldError(
           `Worktree directory must not be inside an existing worktree: ${worktree.path}`,
         );
       }
@@ -913,10 +913,10 @@ export class WorkspaceService {
 
     const stat = await lstatOrNull(resolved);
     if (stat && !stat.isDirectory()) {
-      throw new YggError(`Worktree directory is not a directory: ${resolved}`);
+      throw new WaldError(`Worktree directory is not a directory: ${resolved}`);
     }
-    if (await lstatOrNull(path.join(resolved, ".ygg"))) {
-      throw new YggError(`Worktree directory already contains a .ygg entry: ${resolved}`);
+    if (await lstatOrNull(path.join(resolved, ".wald"))) {
+      throw new WaldError(`Worktree directory already contains a .wald entry: ${resolved}`);
     }
   }
 
@@ -939,7 +939,7 @@ export class WorkspaceService {
       return discoveredWorkspace;
     }
 
-    const configPath = path.join(gitDir, "ygg", workspaceConfigFileName);
+    const configPath = path.join(gitDir, "wald", workspaceConfigFileName);
     try {
       await fs.access(configPath, fsConstants.R_OK);
       return await this.read(configPath);
@@ -955,7 +955,7 @@ export class WorkspaceService {
     try {
       return await this.find(source);
     } catch (error) {
-      if (error instanceof YggError && error.message.startsWith("No ygg workspace found")) {
+      if (error instanceof WaldError && error.message.startsWith("No wald workspace found")) {
         return null;
       }
       throw error;
@@ -972,16 +972,16 @@ export class WorkspaceService {
       (await canonicalPath(path.resolve(startDirectory, options.worktreeDir))) !==
         workspace.worktreeDir
     ) {
-      throw new YggError("Repository is already initialized with a different worktree directory.");
+      throw new WaldError("Repository is already initialized with a different worktree directory.");
     }
     if (
       options.remote !== undefined &&
       options.remote !== (workspace.config.remote?.name ?? null)
     ) {
-      throw new YggError("Repository is already initialized with a different remote.");
+      throw new WaldError("Repository is already initialized with a different remote.");
     }
     if (options.defaultBranch && options.defaultBranch !== workspace.config.defaultBranch) {
-      throw new YggError("Repository is already initialized with a different default branch.");
+      throw new WaldError("Repository is already initialized with a different default branch.");
     }
   }
 
@@ -1054,10 +1054,10 @@ export class WorkspaceService {
     try {
       canonical = await fs.realpath(target);
     } catch (error) {
-      throw new YggError(`Repository path does not exist: ${target}`, { cause: error });
+      throw new WaldError(`Repository path does not exist: ${target}`, { cause: error });
     }
     if (!(await fs.stat(canonical)).isDirectory()) {
-      throw new YggError(`Repository path is not a directory: ${target}`);
+      throw new WaldError(`Repository path is not a directory: ${target}`);
     }
     return canonical;
   }
@@ -1093,15 +1093,15 @@ function relativeConfigPath(configDir: string, target: string): string {
 function resolveManagedWorktreeDir(root: string, requested?: string): string {
   const resolved = requested ? path.resolve(root, requested) : root;
   if (!isPathInsideOrEqual(root, resolved)) {
-    throw new YggError("Managed worktree directory must stay inside the workspace root.");
+    throw new WaldError("Managed worktree directory must stay inside the workspace root.");
   }
   if (
     resolved === path.join(root, "repo.git") ||
     isPathInsideOrEqual(path.join(root, "repo.git"), resolved) ||
-    resolved === path.join(root, ".ygg") ||
-    isPathInsideOrEqual(path.join(root, ".ygg"), resolved)
+    resolved === path.join(root, ".wald") ||
+    isPathInsideOrEqual(path.join(root, ".wald"), resolved)
   ) {
-    throw new YggError("Managed worktree directory overlaps reserved workspace metadata.");
+    throw new WaldError("Managed worktree directory overlaps reserved workspace metadata.");
   }
   return resolved;
 }

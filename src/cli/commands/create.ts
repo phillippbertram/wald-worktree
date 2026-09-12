@@ -1,6 +1,6 @@
 import { type Command, Option } from "commander";
 import { z } from "zod";
-import { toErrorMessage, YggError } from "../../domain/errors.js";
+import { toErrorMessage, WaldError } from "../../domain/errors.js";
 import type { Worktree } from "../../domain/types.js";
 import { builtInToolNames } from "../../services/tool-service.js";
 import type { CreatedWorktree, CreatePlan } from "../../services/worktree-workflow-service.js";
@@ -71,6 +71,7 @@ export type CreateInput = Omit<z.output<typeof createInputSchema>, "json"> & { j
 export function registerCreateCommand(program: Command, context: CliContext): void {
   program
     .command("create")
+    .alias("plant")
     .description("Create and prepare a worktree for an existing or new branch")
     .argument("[branch]", "Branch to check out or create")
     .option("--from <commit-ish>", "Base commit for a new branch only")
@@ -85,7 +86,7 @@ export function registerCreateCommand(program: Command, context: CliContext): vo
     .addOption(new Option("--print-path").hideHelp())
     .addHelpText(
       "after",
-      `\nBuilt-in tools: ${builtInToolNames.join(", ")}\n\nExamples:\n  ygg create feature/payment --cd\n  ygg create hotfix/payment --from release/1.x --cd\n  ygg create feature/review --tool codex\n`,
+      `\nBuilt-in tools: ${builtInToolNames.join(", ")}\n\nExamples:\n  wald create feature/payment --cd\n  wald create hotfix/payment --from release/1.x --cd\n  wald create feature/review --tool codex\n`,
     )
     .action(
       async (
@@ -163,7 +164,7 @@ export async function createWorktree(
         );
         return created;
       }
-      throw new YggError(
+      throw new WaldError(
         `Worktree was created at ${created.path}, but opening it failed: ${toErrorMessage(error)}`,
         { cause: error },
       );
@@ -219,7 +220,7 @@ export async function createWorktree(
     } else if (!input.open && !input.tool) {
       writeLine(
         context.output.stdout,
-        `${style.label("Next:")} ${style.command(`ygg cd ${shellQuote(created.name)}`)}`,
+        `${style.label("Next:")} ${style.command(`wald cd ${shellQuote(created.name)}`)}`,
       );
       writeLine(
         context.output.stdout,

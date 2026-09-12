@@ -1,7 +1,7 @@
 import { constants as fsConstants } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { toErrorMessage, YggError } from "../domain/errors.js";
+import { toErrorMessage, WaldError } from "../domain/errors.js";
 import type {
   AutomationStep,
   ProjectConfigDocument,
@@ -55,22 +55,22 @@ export class DoctorService {
       checks.push({
         id: "workspace.discovery",
         status: "pass",
-        summary: "Ygg workspace configuration was discovered and validated.",
+        summary: "Wald workspace configuration was discovered and validated.",
       });
     } catch (error) {
-      if (error instanceof YggError && error.message.startsWith("No ygg workspace found")) {
+      if (error instanceof WaldError && error.message.startsWith("No wald workspace found")) {
         checks.push({
           id: "workspace.discovery",
           status: "warning",
-          summary: "No Ygg workspace was found from the current directory.",
-          suggestion: "Run ygg init in a Git repository or provide a repository to clone.",
+          summary: "No Wald workspace was found from the current directory.",
+          suggestion: "Run wald init in a Git repository or provide a repository to clone.",
         });
       } else {
         checks.push({
           id: "workspace.configuration",
           status: "fail",
           summary: "Workspace discovery or configuration validation failed.",
-          suggestion: "Repair the workspace configuration, then run ygg doctor again.",
+          suggestion: "Repair the workspace configuration, then run wald doctor again.",
         });
       }
       checks.push({
@@ -163,7 +163,7 @@ export class DoctorService {
         "Worktree directory",
         workspace.worktreeDir,
         false,
-        "Run ygg init again to restore missing workspace directories.",
+        "Run wald init again to restore missing workspace directories.",
       ),
     );
     checks.push(
@@ -172,7 +172,7 @@ export class DoctorService {
         "Shared directory",
         workspace.sharedDir,
         false,
-        "Run ygg init again to restore missing workspace directories.",
+        "Run wald init again to restore missing workspace directories.",
       ),
     );
     if (workspace.primaryWorktree) {
@@ -188,7 +188,7 @@ export class DoctorService {
     }
 
     if (workspace.config.mode === "adopted") {
-      const markerPath = path.join(workspace.worktreeDir, ".ygg");
+      const markerPath = path.join(workspace.worktreeDir, ".wald");
       try {
         const marker = await fs.lstat(markerPath);
         const markerTarget = await fs.realpath(markerPath);
@@ -198,28 +198,28 @@ export class DoctorService {
             ? {
                 id: "workspace.marker",
                 status: "pass",
-                summary: "The .ygg marker resolves to this workspace metadata directory.",
+                summary: "The .wald marker resolves to this workspace metadata directory.",
               }
             : {
                 id: "workspace.marker",
                 status: "fail",
-                summary: "The .ygg marker does not resolve to this workspace metadata directory.",
-                suggestion: "Run ygg init --adopt . --yes to repair the workspace marker.",
+                summary: "The .wald marker does not resolve to this workspace metadata directory.",
+                suggestion: "Run wald init --adopt . --yes to repair the workspace marker.",
               },
         );
       } catch (error) {
         checks.push({
           id: "workspace.marker",
           status: "fail",
-          summary: `The .ygg marker could not be resolved: ${safeMessage(error)}`,
-          suggestion: "Run ygg init --adopt . --yes to repair the workspace marker.",
+          summary: `The .wald marker could not be resolved: ${safeMessage(error)}`,
+          suggestion: "Run wald init --adopt . --yes to repair the workspace marker.",
         });
       }
     } else {
       checks.push({
         id: "workspace.marker",
         status: "skipped",
-        summary: "Managed workspaces do not use a worktree-root .ygg marker.",
+        summary: "Managed workspaces do not use a worktree-root .wald marker.",
       });
     }
   }
@@ -295,7 +295,8 @@ export class DoctorService {
               id: "git.invocation-context",
               status: "fail",
               summary: "The invocation worktree belongs to a different Git common directory.",
-              suggestion: "Run ygg doctor from the intended workspace and verify its .ygg marker.",
+              suggestion:
+                "Run wald doctor from the intended workspace and verify its .wald marker.",
             },
       );
     } catch (error) {
@@ -412,7 +413,7 @@ export class DoctorService {
         id: "git.worktrees",
         status: "warning",
         summary: `${stale.length} missing or prunable worktree registrations were found.`,
-        suggestion: "Preview safe cleanup with ygg prune.",
+        suggestion: "Preview safe cleanup with wald prune.",
       });
     } else {
       checks.push({
@@ -456,7 +457,7 @@ export class DoctorService {
         id: "project.configuration",
         status: "fail",
         summary: "Repository or workspace-local project configuration validation failed.",
-        suggestion: "Repair .ygg.yml or the workspace-local project.yml.",
+        suggestion: "Repair .wald.yml or the workspace-local project.yml.",
       });
       return;
     }
@@ -479,7 +480,7 @@ export class DoctorService {
             id: "project.trust",
             status: "warning",
             summary: "Executable project configuration is not trusted.",
-            suggestion: "Review it, then run ygg config trust --yes if it is safe.",
+            suggestion: "Review it, then run wald config trust --yes if it is safe.",
           }
         : {
             id: "project.trust",

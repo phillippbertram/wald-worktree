@@ -29,7 +29,7 @@ describe("carry worktree lifecycle", () => {
 
   beforeEach(async () => {
     previousCwd = process.cwd();
-    temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "ygg-carry-workflow-test-"));
+    temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "wald-carry-workflow-test-"));
     repository = await createTestRepository(temporaryRoot);
     git = new GitClient();
     configs = new ConfigService();
@@ -50,7 +50,7 @@ describe("carry worktree lifecycle", () => {
     const source = await worktrees.add(workspace, { branch: "main", fetch: false });
     process.chdir(source.path);
     await fs.writeFile(
-      path.join(source.path, ".ygg.yml"),
+      path.join(source.path, ".wald.yml"),
       `version: 1
 hooks:
   pre_create:
@@ -185,7 +185,7 @@ hooks:
     );
     const source = await worktrees.add(workspace, { branch: "main", fetch: false });
     process.chdir(source.path);
-    const configPath = path.join(source.path, ".ygg.yml");
+    const configPath = path.join(source.path, ".wald.yml");
     await fs.writeFile(
       configPath,
       `version: 1
@@ -224,7 +224,7 @@ hooks:
 
   it("keeps a fully carried worktree when post-create fails", async () => {
     await fs.writeFile(
-      path.join(repository.source, ".ygg.yml"),
+      path.join(repository.source, ".wald.yml"),
       `version: 1
 hooks:
   post_create:
@@ -233,7 +233,7 @@ hooks:
 `,
       "utf8",
     );
-    await git.run(["add", ".ygg.yml"], { cwd: repository.source });
+    await git.run(["add", ".wald.yml"], { cwd: repository.source });
     await git.run(["commit", "-m", "add failing hook"], { cwd: repository.source });
     await git.run(["push", "origin", "main"], { cwd: repository.source });
     const workspace = await workspaces.initialize(
@@ -253,7 +253,7 @@ hooks:
     await configs.trust(workspace, plan.project);
 
     await expect(workflow.executeCreate(plan)).rejects.toThrow(
-      /post-create setup failed[\s\S]*ygg setup/u,
+      /post-create setup failed[\s\S]*wald setup/u,
     );
     const created = await worktrees.resolve(workspace, "feature/post-failure");
     expect(await fs.readFile(path.join(created.path, "local.txt"), "utf8")).toBe("carried\n");

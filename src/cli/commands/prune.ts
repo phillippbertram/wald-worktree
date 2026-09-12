@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { z } from "zod";
-import { YggError } from "../../domain/errors.js";
+import { WaldError } from "../../domain/errors.js";
 import type { Worktree } from "../../domain/types.js";
 import { style } from "../../ui/style.js";
 import { confirm, isInteractiveTerminal } from "../../ui/terminal.js";
@@ -57,7 +57,7 @@ export async function pruneWorktrees(input: PruneInput, context: CliContext): Pr
     else {
       writeLine(
         context.output.stdout,
-        `${style.warning("Preview only.")} Run ${style.command("ygg prune --apply")} to remove this metadata.`,
+        `${style.warning("Preview only.")} Run ${style.command("wald prune --apply")} to remove this metadata.`,
       );
     }
     return;
@@ -65,7 +65,7 @@ export async function pruneWorktrees(input: PruneInput, context: CliContext): Pr
 
   if (!input.yes) {
     if (!isInteractiveTerminal()) {
-      throw new YggError("Non-interactive pruning requires --apply --yes.");
+      throw new WaldError("Non-interactive pruning requires --apply --yes.");
     }
     const accepted = await confirm(
       `Prune metadata for ${candidates.map((worktree) => style.worktree(worktree.name)).join(", ")}?`,

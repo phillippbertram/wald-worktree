@@ -14,6 +14,7 @@ type CompletionCandidates = Record<CompletionKind, CompletionCandidate[]>;
 
 export function registerCompletionCommand(program: Command, context: CliContext): void {
   const completion = tab(program, { completionCommandName: "completion" });
+  registerCompletionAlias(completion, "create", "plant");
   registerCompletionAlias(completion, "list", "ls");
   const publicCommand = findRegisteredCommand(program, "completion");
   const runtimeCommand = findRegisteredCommand(program, "complete");
@@ -22,7 +23,7 @@ export function registerCompletionCommand(program: Command, context: CliContext)
     .description(completionDescription)
     .addHelpText(
       "after",
-      '\nExamples:\n  eval "$(ygg completion zsh)"\n  eval "$(ygg completion bash)"\n  ygg completion fish | source\n',
+      '\nExamples:\n  eval "$(wald completion zsh)"\n  eval "$(wald completion bash)"\n  wald completion fish | source\n',
     )
     .hook("preAction", (_thisCommand, actionCommand) => {
       const shell = actionCommand.processedArgs[0];
@@ -92,6 +93,7 @@ function requiredTabCommand(completion: RootCommand, path: string) {
 function requestedCompletionKinds(args: string[]): Set<CompletionKind> {
   switch (args[0]) {
     case "create":
+    case "plant":
       return args.includes("--carry") ? new Set(["tools"]) : new Set(["branches", "tools"]);
     case "handoff":
       return new Set(["tools"]);
@@ -195,6 +197,7 @@ function emptyCompletionCandidates(): CompletionCandidates {
 
 function applyDynamicHandlers(completion: RootCommand, candidates: CompletionCandidates): void {
   setArgumentHandler(completion, "create", "branch", candidates.branches);
+  setArgumentHandler(completion, "plant", "branch", candidates.branches);
   for (const command of ["cd", "open", "setup", "remove", "exec"]) {
     setArgumentHandler(
       completion,
@@ -209,6 +212,7 @@ function applyDynamicHandlers(completion: RootCommand, candidates: CompletionCan
   setArgumentHandler(completion, "hook run", "worktree", candidates.worktrees);
   setArgumentHandler(completion, "config init", "worktree", candidates.worktrees);
   setOptionHandler(completion, "create", "tool", candidates.tools);
+  setOptionHandler(completion, "plant", "tool", candidates.tools);
   setOptionHandler(completion, "handoff", "tool", candidates.tools);
   setOptionHandler(completion, "open", "tool", candidates.tools);
   const scopes = [

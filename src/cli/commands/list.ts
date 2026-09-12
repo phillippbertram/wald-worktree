@@ -24,7 +24,7 @@ export async function listWorktrees(input: ListInput, context: CliContext): Prom
   const worktrees = await runTask("Reading worktrees", () => context.worktrees.list(workspace));
   if (input.json) writeJson(context.output.stdout, worktrees);
   else if (worktrees.length === 0) {
-    writeLine(context.output.stdout, "No worktrees yet. Run ygg create <branch> to create one.");
+    writeLine(context.output.stdout, "No worktrees yet. Run wald create <branch> to create one.");
   } else if (isInteractiveTerminal()) await printWorktreeTable(worktrees);
   else printPlainWorktrees(worktrees, context.output.stdout);
 }

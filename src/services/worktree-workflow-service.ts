@@ -1,4 +1,4 @@
-import { toErrorMessage, YggError } from "../domain/errors.js";
+import { toErrorMessage, WaldError } from "../domain/errors.js";
 import type { HookEvent, ProjectConfigDocument, Workspace, Worktree } from "../domain/types.js";
 import type { GitClient } from "../infrastructure/git-client.js";
 import { type AutomationContext, AutomationService } from "./automation-service.js";
@@ -62,12 +62,12 @@ export class WorktreeWorkflowService {
     const context = await this.readWorktreeContext(workspace);
     const sourceDocument = await this.readSourceProjectConfig(workspace, context);
     if (options.carry && options.from) {
-      throw new YggError(
+      throw new WaldError(
         "Cannot combine carry with an explicit base; carry always starts at HEAD.",
       );
     }
     if (options.carry && !context.current) {
-      throw new YggError("Run ygg create --carry from inside the source worktree.");
+      throw new WaldError("Run wald create --carry from inside the source worktree.");
     }
     const from = await this.resolveRequestedBase(
       options.carry ? "HEAD" : options.from,
@@ -122,7 +122,7 @@ export class WorktreeWorkflowService {
         plan.carrySource.path,
       );
       if ((sourceProject?.hash ?? null) !== (plan.project?.hash ?? null)) {
-        throw new YggError(
+        throw new WaldError(
           "The effective project configuration changed after pre-create. Review and trust it, then retry the carry.",
         );
       }
@@ -135,7 +135,7 @@ export class WorktreeWorkflowService {
         plan.prepared.strategy.type !== "new" ||
         plan.prepared.strategy.base !== snapshot.head
       ) {
-        throw new YggError(
+        throw new WaldError(
           "The source worktree or its HEAD changed after pre-create. Review it, then retry the carry.",
         );
       }
@@ -149,7 +149,7 @@ export class WorktreeWorkflowService {
       }
       targetProject = await this.configs.resolveProjectConfig(plan.workspace, created.path);
       if ((plan.project?.hash ?? null) !== (targetProject?.hash ?? null)) {
-        throw new YggError(
+        throw new WaldError(
           `Worktree was created at ${created.path}, but its effective project configuration does not match the configuration inspected before creation. Review the worktree before running hooks.`,
         );
       }
@@ -158,7 +158,7 @@ export class WorktreeWorkflowService {
         await this.rollbackFailedCarry(plan.workspace, created, snapshot, error);
       }
       if (snapshot) {
-        throw new YggError(
+        throw new WaldError(
           `Carrying local changes failed: ${toErrorMessage(error)}\nThe created worktree and branch were preserved because the target may contain changes. Inspect ${created.path} and branch ${created.branch}; preserve anything useful before manual cleanup.`,
           { cause: error },
         );
@@ -180,8 +180,8 @@ export class WorktreeWorkflowService {
       };
       await this.automation.runHook(targetProject, "post_create", postContext);
     } catch (error) {
-      throw new YggError(
-        `Worktree was created at ${created.path}, but post-create setup failed: ${toErrorMessage(error)}\nRetry with: ygg setup ${shellQuote(created.name)}`,
+      throw new WaldError(
+        `Worktree was created at ${created.path}, but post-create setup failed: ${toErrorMessage(error)}\nRetry with: wald setup ${shellQuote(created.name)}`,
         { cause: error },
       );
     }
@@ -206,12 +206,12 @@ export class WorktreeWorkflowService {
     try {
       await this.worktrees.rollbackCreated(workspace, created, snapshot.head);
     } catch (rollbackError) {
-      throw new YggError(
+      throw new WaldError(
         `Carrying local changes failed: ${toErrorMessage(error)}\nAutomatic rollback did not complete: ${toErrorMessage(rollbackError)}\nInspect the target path ${created.path} and branch ${created.branch}; preserve anything useful before manual cleanup.`,
         { cause: error },
       );
     }
-    throw new YggError(
+    throw new WaldError(
       `Carrying local changes failed and the created worktree and branch were rolled back: ${toErrorMessage(error)}`,
       { cause: error },
     );
@@ -243,12 +243,12 @@ export class WorktreeWorkflowService {
   ): Promise<void> {
     const branchDeletion = options.deleteBranch ? plan.inspection.branchDeletion : null;
     if (branchDeletion && !branchDeletion.eligible) {
-      throw new YggError(
+      throw new WaldError(
         `Cannot delete the local branch for ${plan.inspection.worktree.name}: ${branchDeletion.reason}.`,
       );
     }
     if (branchDeletion?.eligible && !branchDeletion.mergedIntoDefault && !options.force) {
-      throw new YggError(
+      throw new WaldError(
         `Cannot delete the unmerged local branch for ${plan.inspection.worktree.name} without --force.`,
       );
     }
@@ -271,7 +271,7 @@ export class WorktreeWorkflowService {
       const branchKept = branchDeletion?.eligible
         ? `\nLocal branch ${branchDeletion.branch} was kept.`
         : "";
-      throw new YggError(
+      throw new WaldError(
         `Worktree ${plan.inspection.worktree.name} was removed, but its post-remove hook failed: ${toErrorMessage(error)}${branchKept}`,
         {
           cause: error,
@@ -285,7 +285,7 @@ export class WorktreeWorkflowService {
           force: options.force,
         });
       } catch (error) {
-        throw new YggError(
+        throw new WaldError(
           `Worktree ${plan.inspection.worktree.name} was removed, but local branch ${branchDeletion.branch} was kept because it could not be deleted: ${toErrorMessage(error)}`,
           {
             cause: error,
@@ -307,7 +307,7 @@ export class WorktreeWorkflowService {
       this.readWorktreeContext(workspace),
     ]);
     if (!project) {
-      throw new YggError(`No project configuration found for ${worktree.path}`);
+      throw new WaldError(`No project configuration found for ${worktree.path}`);
     }
     await this.ensureTrusted(workspace, project, options.trustProjectConfig);
     await this.automation.runTask(project, name, {
@@ -404,8 +404,8 @@ export class WorktreeWorkflowService {
       await this.configs.trust(workspace, project);
       return;
     }
-    throw new YggError(
-      `Project configuration is not trusted: ${project?.path ?? "effective configuration"}\nReview it, then run: ygg config trust`,
+    throw new WaldError(
+      `Project configuration is not trusted: ${project?.path ?? "effective configuration"}\nReview it, then run: wald config trust`,
     );
   }
 

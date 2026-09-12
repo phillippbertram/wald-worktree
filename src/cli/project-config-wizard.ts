@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { YggError } from "../domain/errors.js";
+import { WaldError } from "../domain/errors.js";
 import type { ProjectConfigDocument, ProjectConfigOverlay, Workspace } from "../domain/types.js";
 import {
   projectConfigFileName,
@@ -41,11 +41,11 @@ export async function initializeProjectConfiguration(
   context: CliContext,
 ): Promise<ProjectConfigDocument | null> {
   if (!options.yes && !isInteractiveTerminal()) {
-    throw new YggError("Non-interactive configuration initialization requires --yes.");
+    throw new WaldError("Non-interactive configuration initialization requires --yes.");
   }
 
   if (options.fromProject && options.scope !== "workspace") {
-    throw new YggError("--from-project requires --scope workspace.");
+    throw new WaldError("--from-project requires --scope workspace.");
   }
   const configPath =
     options.scope === "workspace"
@@ -57,7 +57,7 @@ export async function initializeProjectConfiguration(
   let overwrite = options.force;
   if (exists && !overwrite) {
     if (options.yes || !isInteractiveTerminal()) {
-      throw new YggError(
+      throw new WaldError(
         `Project configuration already exists: ${configPath}. Use --force to replace it.`,
       );
     }
@@ -80,7 +80,7 @@ export async function initializeProjectConfiguration(
 
   if (importProject) {
     if (!repositoryConfig) {
-      throw new YggError(`No ${projectConfigFileName} found in ${root} to copy.`);
+      throw new WaldError(`No ${projectConfigFileName} found in ${root} to copy.`);
     }
     return await writeConfiguration(
       workspace,
@@ -163,7 +163,7 @@ async function writeConfiguration(
   if (copiedFromProject && options.fromProject && !options.yes) {
     context.output.stdout.write(formatConfiguration(config, options.scope, context));
     if (!(await confirm(`Write ${configFileName}?`, true))) {
-      throw new YggError("Configuration migration was cancelled.", { exitCode: 130 });
+      throw new WaldError("Configuration migration was cancelled.", { exitCode: 130 });
     }
   }
   const write = async () => {
@@ -181,7 +181,7 @@ async function writeConfiguration(
   else await runTask(`Writing ${configFileName}`, write);
   const document = await context.configs.resolveProjectConfig(workspace, root);
   if (!document) {
-    throw new YggError(`Could not resolve project configuration after writing ${configPath}.`);
+    throw new WaldError(`Could not resolve project configuration after writing ${configPath}.`);
   }
   if (options.quiet) return document;
   await success(`Created ${style.path(configPath)}`, context.output);
@@ -205,7 +205,7 @@ async function writeConfiguration(
   if (document.requiresTrust) {
     writeLine(
       context.output.stdout,
-      `${style.label("Then:")} ${style.command("ygg config trust")}`,
+      `${style.label("Then:")} ${style.command("wald config trust")}`,
     );
   }
   return document;

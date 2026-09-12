@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { z } from "zod";
-import { YggError } from "../../domain/errors.js";
+import { WaldError } from "../../domain/errors.js";
 import { style } from "../../ui/style.js";
 import { isInteractiveTerminal, isPromptBackError, promptText } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
@@ -25,7 +25,7 @@ export function registerExecCommand(program: Command, context: CliContext): void
     .argument("[worktree]", "Worktree name, branch, or path")
     .argument("[command...]", "Command and arguments after --")
     .allowUnknownOption(true)
-    .addHelpText("after", "\nExample:\n  ygg exec feature-payment -- pnpm test\n")
+    .addHelpText("after", "\nExample:\n  wald exec feature-payment -- pnpm test\n")
     .action(async (worktree: unknown, command: unknown) => {
       const input = parseCliInput(execInputSchema, { worktree, command });
       await executeCommand(input, context);
@@ -53,7 +53,7 @@ export async function executeCommand(
       return;
     }
     if (!isInteractiveTerminal()) {
-      throw new YggError("Non-interactive execution requires: ygg exec <worktree> -- <command>");
+      throw new WaldError("Non-interactive execution requires: wald exec <worktree> -- <command>");
     }
     try {
       rawCommand = await promptText(
@@ -66,7 +66,7 @@ export async function executeCommand(
       forcePrompt = true;
       continue;
     }
-    if (!rawCommand) throw new YggError("Command cannot be empty.");
+    if (!rawCommand) throw new WaldError("Command cannot be empty.");
     writeLine(
       context.output.stderr,
       `${style.label("Running through /bin/sh:")} ${style.command(rawCommand)}`,

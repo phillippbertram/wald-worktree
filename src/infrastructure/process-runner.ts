@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import type { Writable } from "node:stream";
 import { execa } from "execa";
-import { YggError } from "../domain/errors.js";
+import { WaldError } from "../domain/errors.js";
 import { formatCommandForDisplay } from "./safe-text.js";
 
 export type ProcessOptions = {
@@ -15,7 +15,7 @@ export class ProcessRunner {
   async runArgv(argv: string[], options: ProcessOptions): Promise<void> {
     const [command, ...args] = argv;
     if (!command) {
-      throw new YggError("Cannot execute an empty command.");
+      throw new WaldError("Cannot execute an empty command.");
     }
     await this.run(command, args, options);
   }
@@ -27,20 +27,20 @@ export class ProcessRunner {
   async runInteractive(argv: string[], cwd: string): Promise<void> {
     const [command, ...args] = argv;
     if (!command) {
-      throw new YggError("Cannot execute an empty command.");
+      throw new WaldError("Cannot execute an empty command.");
     }
     const result = await execa(command, args, {
       cwd,
       reject: false,
       stdio: "inherit",
     }).catch((error: unknown) => {
-      throw new YggError(`Could not start command: ${command}`, { cause: error });
+      throw new WaldError(`Could not start command: ${command}`, { cause: error });
     });
     if (result.signal === "SIGINT" || result.exitCode === 130) {
-      throw new YggError("Command interrupted.", { exitCode: 130 });
+      throw new WaldError("Command interrupted.", { exitCode: 130 });
     }
     if (result.exitCode !== 0) {
-      throw new YggError(
+      throw new WaldError(
         `Command failed with exit code ${result.exitCode}: ${formatCommandForDisplay(argv)}`,
         {
           exitCode: result.exitCode ?? 1,
@@ -56,7 +56,7 @@ export class ProcessRunner {
   async launchDetached(argv: string[], cwd: string): Promise<void> {
     const [command, ...args] = argv;
     if (!command) {
-      throw new YggError("Cannot launch an empty tool command.");
+      throw new WaldError("Cannot launch an empty tool command.");
     }
     await new Promise<void>((resolve, reject) => {
       const child = spawn(command, args, {
@@ -65,7 +65,7 @@ export class ProcessRunner {
         stdio: "ignore",
       });
       child.once("error", (error) =>
-        reject(new YggError(`Could not launch tool: ${command}`, { cause: error })),
+        reject(new WaldError(`Could not launch tool: ${command}`, { cause: error })),
       );
       child.once("spawn", () => {
         child.unref();
@@ -89,22 +89,22 @@ export class ProcessRunner {
     });
     subprocess.all?.pipe(output, { end: false });
     const result = await subprocess.catch((error: unknown) => {
-      throw new YggError(`Could not start command: ${command}`, { cause: error });
+      throw new WaldError(`Could not start command: ${command}`, { cause: error });
     });
     if (result.timedOut) {
-      throw new YggError(
+      throw new WaldError(
         `Command timed out after ${options.timeoutMs ?? 0}ms: ${formatCommandForDisplay([command, ...args])}`,
       );
     }
     if (result.signal === "SIGINT" || result.exitCode === 130) {
-      throw new YggError("Command interrupted.", { exitCode: 130 });
+      throw new WaldError("Command interrupted.", { exitCode: 130 });
     }
     if (result.exitCode !== 0) {
       const outcome =
         result.exitCode === undefined
           ? `signal ${result.signal ?? "unknown"}`
           : `exit code ${result.exitCode}`;
-      throw new YggError(
+      throw new WaldError(
         `Command failed with ${outcome}: ${formatCommandForDisplay([command, ...args])}`,
         {
           exitCode: result.exitCode ?? 1,

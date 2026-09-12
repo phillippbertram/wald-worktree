@@ -28,10 +28,10 @@ describe("workspace status service", () => {
       worktree("deleted", "missing"),
     ];
     const project = {
-      path: "/workspace/main/.ygg.yml",
+      path: "/workspace/main/.wald.yml",
       sources: {
-        repository: "/workspace/main/.ygg.yml",
-        workspace: "/workspace/.ygg/project.yml",
+        repository: "/workspace/main/.wald.yml",
+        workspace: "/workspace/.wald/project.yml",
       },
       requiresTrust: true,
     } as ProjectConfigDocument;
@@ -133,8 +133,8 @@ describe("workspace status service", () => {
   ] as const)("maps project trust to $expected", async ({ requiresTrust, trusted, expected }) => {
     const current = worktree("main", "clean");
     const project = {
-      path: "/workspace/main/.ygg.yml",
-      sources: { repository: "/workspace/main/.ygg.yml", workspace: null },
+      path: "/workspace/main/.wald.yml",
+      sources: { repository: "/workspace/main/.wald.yml", workspace: null },
       requiresTrust,
     } as ProjectConfigDocument;
     const service = statusService(

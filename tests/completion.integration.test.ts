@@ -55,7 +55,7 @@ describe("dynamic shell completion", () => {
   let workspace: string;
 
   beforeEach(async () => {
-    temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "ygg-completion-test-"));
+    temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "wald-completion-test-"));
     repository = await createTestRepository(temporaryRoot);
     await createRemoteBranch(repository, "feature/remote");
     workspace = path.join(temporaryRoot, "workspace");
@@ -91,10 +91,10 @@ tools:
     mode: foreground
 `;
     await Promise.all([
-      fs.writeFile(path.join(workspace, "main", ".ygg.yml"), projectConfig, "utf8"),
-      fs.writeFile(path.join(workspace, "feature-local", ".ygg.yml"), projectConfig, "utf8"),
+      fs.writeFile(path.join(workspace, "main", ".wald.yml"), projectConfig, "utf8"),
+      fs.writeFile(path.join(workspace, "feature-local", ".wald.yml"), projectConfig, "utf8"),
       fs.writeFile(
-        path.join(workspace, ".ygg", "project.yml"),
+        path.join(workspace, ".wald", "project.yml"),
         `version: 1
 tasks:
   local-check:
@@ -137,6 +137,7 @@ tools:
       expect.arrayContaining([
         "init",
         "create",
+        "plant",
         "handoff",
         "doctor",
         "status",
@@ -153,6 +154,10 @@ tools:
     expect(suggestionValues(options.stdout)).toEqual(
       expect.arrayContaining(["--from", "--name", "--carry", "--tool", "--json", "--help"]),
     );
+    const plantOptions = await runCli(temporaryRoot, "complete", "--", "plant", "--");
+    expect(suggestionValues(plantOptions.stdout)).toEqual(
+      expect.arrayContaining(["--from", "--name", "--carry", "--tool", "--json", "--help"]),
+    );
     expect(suggestionValues(doctorOptions.stdout)).toEqual(
       expect.arrayContaining(["--json", "--verbose", "--help"]),
     );
@@ -165,6 +170,7 @@ tools:
 
   it("completes branches and worktrees with descriptions", async () => {
     const branches = await runCli(workspace, "complete", "--", "create", "");
+    const plantBranches = await runCli(workspace, "complete", "--", "plant", "");
     const carryBranches = await runCli(workspace, "complete", "--", "create", "--carry", "");
     const handoffBranches = await runCli(workspace, "complete", "--", "handoff", "");
     const hookEvents = await runCli(workspace, "complete", "--", "hook", "run", "");
@@ -182,6 +188,7 @@ tools:
     expect(branches.stdout).toContain("feature/local\tlocal branch");
     expect(branches.stdout).toContain("feature/remote\torigin branch");
     expect(branches.stdout.match(/^main\t/gmu)).toHaveLength(1);
+    expect(plantBranches.stdout).toBe(branches.stdout);
     expect(suggestionValues(carryBranches.stdout)).not.toEqual(
       expect.arrayContaining(["main", "feature/local", "feature/remote"]),
     );

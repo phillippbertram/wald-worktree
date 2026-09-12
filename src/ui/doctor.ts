@@ -54,7 +54,7 @@ export function renderDoctorReport(
 
 function renderSummary(report: DoctorReport): string[] {
   const lines = [
-    `${style.heading("Doctor summary")} ${pc.dim("(run ygg doctor --verbose for details):")}`,
+    `${style.heading("Doctor summary")} ${pc.dim("(run wald doctor --verbose for details):")}`,
   ];
   for (const section of sections(report.checks)) {
     const issues = section.checks.filter(

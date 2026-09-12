@@ -12,7 +12,7 @@ export type StatusInput = z.output<typeof statusInputSchema>;
 export function registerStatusCommand(program: Command, context: CliContext): void {
   program
     .command("status")
-    .description("Show the current Ygg workspace and worktree status")
+    .description("Show the current Wald workspace and worktree status")
     .option("--json", "Emit machine-readable JSON")
     .action(async (options: unknown) => {
       await showWorkspaceStatus(parseCliInput(statusInputSchema, options), context);

@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { z } from "zod";
-import { YggError } from "../../domain/errors.js";
+import { WaldError } from "../../domain/errors.js";
 import { style } from "../../ui/style.js";
 import { isInteractiveTerminal, isPromptBackError, searchSelect } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
@@ -24,7 +24,7 @@ export function registerRunCommand(program: Command, context: CliContext): void 
     .argument("[worktree]", "Worktree name, branch, or path")
     .addHelpText(
       "after",
-      "\nExamples:\n  ygg run verify feature-payment\n  ygg run dev feature-payment\n",
+      "\nExamples:\n  wald run verify feature-payment\n  wald run dev feature-payment\n",
     )
     .action(async (task: unknown, worktree: unknown) => {
       await runProjectTask(parseCliInput(runInputSchema, { task, worktree }), context);
@@ -45,14 +45,14 @@ export async function runProjectTask(input: RunInput, context: CliContext): Prom
     });
     initialPath = worktree.path;
     const project = await context.workflow.projectForWorktree(workspace, worktree);
-    if (!project) throw new YggError(`No project configuration found for ${worktree.path}`);
+    if (!project) throw new WaldError(`No project configuration found for ${worktree.path}`);
     if (Object.keys(project.config.tasks).length === 0) {
-      throw new YggError("No tasks are configured in the effective project configuration.");
+      throw new WaldError("No tasks are configured in the effective project configuration.");
     }
     while (true) {
       let task = input.task;
       if (!task) {
-        if (!isInteractiveTerminal()) throw new YggError("Task is required without a TTY.");
+        if (!isInteractiveTerminal()) throw new WaldError("Task is required without a TTY.");
         try {
           task = await searchSelect(
             `Run › Task · Select a task for ${style.worktree(worktree.name)}:`,

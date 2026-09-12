@@ -9,7 +9,7 @@ const workspace = {
     remote: { name: "origin" },
   },
 } as Workspace;
-const document = { path: ".ygg.yml" } as ProjectConfigDocument;
+const document = { path: ".wald.yml" } as ProjectConfigDocument;
 const git = {} as GitClient;
 
 describe("effective project configuration resolution", () => {

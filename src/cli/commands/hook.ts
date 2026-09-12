@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { z } from "zod";
-import { YggError } from "../../domain/errors.js";
+import { WaldError } from "../../domain/errors.js";
 import { type HookEvent, hookEvents } from "../../domain/types.js";
 import { style } from "../../ui/style.js";
 import { isInteractiveTerminal, isPromptBackError, searchSelect } from "../../ui/terminal.js";
@@ -31,7 +31,7 @@ export function registerHookCommand(program: Command, context: CliContext): void
     .argument("[worktree]", "Worktree name, branch, or path")
     .addHelpText(
       "after",
-      "\nExamples:\n  ygg hook run post_create feature-payment\n  ygg hook run pre_remove feature-payment\n",
+      "\nExamples:\n  wald hook run post_create feature-payment\n  wald hook run pre_remove feature-payment\n",
     )
     .action(async (event: unknown, worktree: unknown) => {
       await runProjectHook(parseCliInput(hookRunInputSchema, { event, worktree }), context);
@@ -61,10 +61,10 @@ export async function runProjectHook(
     });
     initialPath = worktree.path;
     const project = await context.workflow.projectForWorktree(workspace, worktree);
-    if (!project) throw new YggError(`No project configuration found for ${worktree.path}`);
+    if (!project) throw new WaldError(`No project configuration found for ${worktree.path}`);
     const configuredEvents = hookEvents.filter((event) => project.config.hooks[event].length > 0);
     if (configuredEvents.length === 0 && !input.event) {
-      throw new YggError("No hooks are configured in the effective project configuration.");
+      throw new WaldError("No hooks are configured in the effective project configuration.");
     }
 
     while (true) {
@@ -72,7 +72,7 @@ export async function runProjectHook(
       if (input.event) {
         event = input.event;
       } else {
-        if (!isInteractiveTerminal()) throw new YggError("Hook event is required without a TTY.");
+        if (!isInteractiveTerminal()) throw new WaldError("Hook event is required without a TTY.");
         try {
           event = z.enum(hookEvents).parse(
             await searchSelect(
@@ -97,7 +97,7 @@ export async function runProjectHook(
       }
 
       if (project.config.hooks[event].length === 0) {
-        throw new YggError(
+        throw new WaldError(
           presentation.emptyMessage?.(event, worktree.name) ??
             `No ${event} hook is configured for ${worktree.name}.`,
         );

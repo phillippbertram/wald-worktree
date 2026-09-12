@@ -1,5 +1,5 @@
 import { execa } from "execa";
-import { YggError } from "../domain/errors.js";
+import { WaldError } from "../domain/errors.js";
 import { redactSensitiveText, sanitizeTerminalText } from "./safe-text.js";
 
 export type GitRunOptions = {
@@ -27,7 +27,7 @@ export class GitClient {
       stdin: options.input === undefined ? "ignore" : undefined,
       stripFinalNewline: options.stripFinalNewline ?? true,
     }).catch((error: unknown) => {
-      throw new YggError("Git could not be started. Is Git installed and available in PATH?", {
+      throw new WaldError("Git could not be started. Is Git installed and available in PATH?", {
         cause: error,
       });
     });
@@ -41,7 +41,7 @@ export class GitClient {
     if (options.reject !== false && output.exitCode !== 0) {
       const rawDetail = output.stderr.trim() || output.stdout.trim() || "Git command failed.";
       const detail = sanitizeTerminalText(redactSensitiveText(rawDetail), { multiline: true });
-      throw new YggError(detail, { exitCode: output.exitCode });
+      throw new WaldError(detail, { exitCode: output.exitCode });
     }
 
     return output;

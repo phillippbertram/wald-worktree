@@ -9,7 +9,7 @@ import {
   select,
   text,
 } from "@clack/prompts";
-import { YggError } from "../domain/errors.js";
+import { WaldError } from "../domain/errors.js";
 import type { Worktree } from "../domain/types.js";
 import { style } from "./style.js";
 import { renderTable } from "./table.js";
@@ -44,7 +44,7 @@ export class PromptBackError extends Error {
   }
 }
 
-export class PromptExitError extends YggError {
+export class PromptExitError extends WaldError {
   constructor(options?: { cause?: unknown }) {
     super("Interactive prompt was interrupted.", { ...options, exitCode: 130 });
     this.name = "PromptExitError";
@@ -247,7 +247,7 @@ function toClackChoices(choices: Choice[], includeGroups: boolean): ClackChoice[
   for (const [index, choice] of choices.entries()) {
     if (includeGroups && choice.group && choice.group !== previousGroup) {
       rendered.push({
-        value: `__ygg_group_${index}`,
+        value: `__wald_group_${index}`,
         label: `── ${choice.group.toLocaleUpperCase()} ──`,
         disabled: true,
       });

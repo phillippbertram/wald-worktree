@@ -14,7 +14,7 @@ describe("CLI contract", () => {
     const output = new PassThrough();
     const program = createProgram({ stdout: output, stderr: output });
 
-    expect(program.name()).toBe("ygg");
+    expect(program.name()).toBe("wald");
     expect(program.commands.map((command) => command.name())).toEqual([
       "init",
       "create",
@@ -41,6 +41,9 @@ describe("CLI contract", () => {
     expect(program.commands.find((command) => command.name() === "list")?.aliases()).toEqual([
       "ls",
     ]);
+    expect(program.commands.find((command) => command.name() === "create")?.aliases()).toEqual([
+      "plant",
+    ]);
     expect(completion?.registeredArguments[0]?.argChoices).toEqual(["zsh", "bash", "fish"]);
     expect(complete?.helpInformation()).toContain("Generate completion suggestions");
     expect(program.helpInformation()).not.toContain("complete --");
@@ -59,7 +62,7 @@ describe("CLI contract", () => {
     const output = new PassThrough();
     const program = createProgram({ stdout: output, stderr: output });
 
-    await expect(program.parseAsync(["node", "ygg", "prune", "--yes"])).rejects.toThrow(
+    await expect(program.parseAsync(["node", "wald", "prune", "--yes"])).rejects.toThrow(
       /--yes: Requires --apply/u,
     );
   });
@@ -68,10 +71,10 @@ describe("CLI contract", () => {
     const output = new PassThrough();
     const program = createProgram({ stdout: output, stderr: output });
 
-    await expect(program.parseAsync(["node", "ygg", "uninit", "--yes"])).rejects.toThrow(
+    await expect(program.parseAsync(["node", "wald", "uninit", "--yes"])).rejects.toThrow(
       /--yes: Requires --apply/u,
     );
-    await expect(program.parseAsync(["node", "ygg", "uninit", "--force"])).rejects.toThrow(
+    await expect(program.parseAsync(["node", "wald", "uninit", "--force"])).rejects.toThrow(
       /--force: Requires --apply/u,
     );
   });
@@ -81,7 +84,18 @@ describe("CLI contract", () => {
     const program = createProgram({ stdout: output, stderr: output });
 
     await expect(
-      program.parseAsync(["node", "ygg", "create", "main", "--name", ""]),
+      program.parseAsync(["node", "wald", "create", "main", "--name", ""]),
+    ).rejects.toThrow(
+      /Invalid command input:[\s\S]*--name: Cannot be empty\.[\s\S]*Run with --help/u,
+    );
+  });
+
+  it("routes the plant alias through the create command contract", async () => {
+    const output = new PassThrough();
+    const program = createProgram({ stdout: output, stderr: output });
+
+    await expect(
+      program.parseAsync(["node", "wald", "plant", "main", "--name", ""]),
     ).rejects.toThrow(
       /Invalid command input:[\s\S]*--name: Cannot be empty\.[\s\S]*Run with --help/u,
     );
@@ -92,7 +106,7 @@ describe("CLI contract", () => {
     const program = createProgram({ stdout: output, stderr: output });
 
     await expect(
-      program.parseAsync(["node", "ygg", "create", "feature/review", "--cd", "--tool", "codex"]),
+      program.parseAsync(["node", "wald", "create", "feature/review", "--cd", "--tool", "codex"]),
     ).rejects.toThrow(/--cd: Cannot be combined with --open or --tool/u);
   });
 
@@ -101,7 +115,7 @@ describe("CLI contract", () => {
     const program = createProgram({ stdout: output, stderr: output });
 
     await expect(
-      program.parseAsync(["node", "ygg", "create", "feature/review", "--carry", "--from", "main"]),
+      program.parseAsync(["node", "wald", "create", "feature/review", "--carry", "--from", "main"]),
     ).rejects.toThrow(/--carry: Cannot be combined with --from/u);
   });
 
@@ -110,10 +124,18 @@ describe("CLI contract", () => {
     const program = createProgram({ stdout: output, stderr: output });
 
     await expect(
-      program.parseAsync(["node", "ygg", "init", "--config-scope", "project"]),
+      program.parseAsync(["node", "wald", "init", "--config-scope", "project"]),
     ).rejects.toThrow(/--config-scope: Requires --config/u);
     await expect(
-      program.parseAsync(["node", "ygg", "config", "init", "--scope", "project", "--from-project"]),
+      program.parseAsync([
+        "node",
+        "wald",
+        "config",
+        "init",
+        "--scope",
+        "project",
+        "--from-project",
+      ]),
     ).rejects.toThrow(/--from-project: Requires --scope workspace/u);
   });
 
@@ -151,17 +173,19 @@ describe("CLI contract", () => {
     const configInitHelp = captureHelp(configInit);
     const hookRunHelp = captureHelp(hookRun);
 
-    expect(rootHelp).toContain("Usage: ygg");
-    expect(rootHelp).toContain("🌳 Create and work in isolated Git checkouts safely.");
-    expect(rootHelp).toContain("🌱 Start here:");
-    expect(rootHelp).toContain("cd ~/dev/project && ygg init");
-    expect(initHelp).toContain(
-      "Keep an existing checkout or create a standalone workspace (Ygg Flow by default)",
+    expect(rootHelp).toContain("Usage: wald");
+    expect(rootHelp).toContain(
+      "🌲 Where Git worktrees grow — safe, guided workspaces for parallel work.",
     );
-    expect(initHelp).toContain("defaults to the Ygg Flow root");
+    expect(rootHelp).toContain("🌱 Start here:");
+    expect(rootHelp).toContain("cd ~/dev/project && wald init");
+    expect(initHelp.replace(/\s+/gu, " ")).toContain(
+      "Keep an existing checkout or create a standalone workspace (Wald Flow by default)",
+    );
+    expect(initHelp).toContain("defaults to the Wald Flow root");
     expect(initHelp).toContain("cloned repositories");
     expect(initHelp).toContain("--config-scope <scope>");
-    expect(createHelp).toContain("ygg create feature/payment --cd");
+    expect(createHelp).toContain("wald create feature/payment --cd");
     expect(createHelp).toContain("--carry");
     expect(createHelp).toContain("--json");
     expect(createHelp).toContain("codex-app");
@@ -169,7 +193,7 @@ describe("CLI contract", () => {
     expect(handoffHelp).toContain("does not move a running editor, process, or agent session");
     expect(handoffHelp).toContain("--json");
     expect(doctorHelp).toContain("Diagnose the runtime, workspace, Git state");
-    expect(openHelp).toContain("ygg open feature-payment --tool code");
+    expect(openHelp).toContain("wald open feature-payment --tool code");
     expect(configInitHelp).toContain("--scope <scope>");
     expect(configInitHelp).toContain("--from-project");
     expect(hookRunHelp).toContain("<event> [worktree]");
@@ -200,9 +224,9 @@ describe("CLI contract", () => {
 
     expect(root.stdout).toContain("\u001B[");
     expect(subcommand.stdout).toContain("\u001B[");
-    expect(stripVTControlCharacters(root.stdout)).toContain("Usage: ygg");
-    expect(stripVTControlCharacters(subcommand.stdout)).toContain("Usage: ygg create");
+    expect(stripVTControlCharacters(root.stdout)).toContain("Usage: wald");
+    expect(stripVTControlCharacters(subcommand.stdout)).toContain("Usage: wald create");
     expect(plain.stdout).not.toContain("\u001B[");
-    expect(plain.stdout).toContain("Usage: ygg");
+    expect(plain.stdout).toContain("Usage: wald");
   });
 });

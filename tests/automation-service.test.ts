@@ -1,6 +1,6 @@
 import { PassThrough } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
-import { YggError } from "../src/domain/errors.js";
+import { WaldError } from "../src/domain/errors.js";
 import type { AutomationStep, Workspace } from "../src/domain/types.js";
 import type { ProcessOptions } from "../src/infrastructure/process-runner.js";
 import type { AutomationObserver } from "../src/services/automation-observer.js";
@@ -26,7 +26,7 @@ describe("automation observer lifecycle", () => {
   it("finishes interrupted runs before preserving exit code 130", async () => {
     const observer = createObserver();
     const runArgv = vi.fn(async () => {
-      throw new YggError("Command interrupted.", { exitCode: 130 });
+      throw new WaldError("Command interrupted.", { exitCode: 130 });
     });
     const service = createService(runArgv, observer.value);
 
@@ -47,7 +47,7 @@ describe("automation observer lifecycle", () => {
       throw new Error("renderer cleanup failed");
     });
     const runArgv = vi.fn(async () => {
-      throw new YggError("Command interrupted.", { exitCode: 130 });
+      throw new WaldError("Command interrupted.", { exitCode: 130 });
     });
     const service = createService(runArgv, observer.value);
 

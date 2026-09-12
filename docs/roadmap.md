@@ -12,7 +12,7 @@ coordination features.
 
 - Add Flutter, iOS, Rust, or other setup detection only after concrete repositories establish safe
   defaults.
-- Keep manually authored project commands in `.ygg/project.yml` or `.ygg.yml` as the universal
+- Keep manually authored project commands in `.wald/project.yml` or `.wald.yml` as the universal
   fallback.
 
 ## Later, based on demonstrated need

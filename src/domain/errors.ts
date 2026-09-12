@@ -1,4 +1,4 @@
-export class YggError extends Error {
+export class WaldError extends Error {
   readonly exitCode: number;
   readonly effects: unknown;
 
@@ -7,7 +7,7 @@ export class YggError extends Error {
     options?: { cause?: unknown; exitCode?: number; effects?: unknown },
   ) {
     super(message, { cause: options?.cause });
-    this.name = "YggError";
+    this.name = "WaldError";
     this.exitCode = options?.exitCode ?? 1;
     this.effects = options?.effects;
   }

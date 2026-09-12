@@ -59,7 +59,7 @@ export function registerHandoffCommand(program: Command, context: CliContext): v
     .addOption(new Option("--print-path").hideHelp())
     .addHelpText(
       "after",
-      `\nThis transfers code state only. It does not move a running editor, process, or agent session.\n\nBuilt-in tools: ${builtInToolNames.join(", ")}\n\nExamples:\n  ygg handoff feature/payment --cd\n  ygg handoff feature/review --tool codex\n`,
+      `\nThis transfers code state only. It does not move a running editor, process, or agent session.\n\nBuilt-in tools: ${builtInToolNames.join(", ")}\n\nExamples:\n  wald handoff feature/payment --cd\n  wald handoff feature/review --tool codex\n`,
     )
     .action(
       async (

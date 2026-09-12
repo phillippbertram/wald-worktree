@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { z } from "zod";
-import { YggError } from "../../domain/errors.js";
+import { WaldError } from "../../domain/errors.js";
 import type { BranchDeletionPlan } from "../../services/worktree-service.js";
 import type { RemovePlan } from "../../services/worktree-workflow-service.js";
 import { style } from "../../ui/style.js";
@@ -67,7 +67,7 @@ export async function removeWorktrees(input: RemoveInput, context: CliContext): 
   while (true) {
     if (promptedForSelection) {
       if (!isInteractiveTerminal()) {
-        throw new YggError("Non-interactive removal requires worktree names and --yes.");
+        throw new WaldError("Non-interactive removal requires worktree names and --yes.");
       }
       const current = await context.worktrees.current(workspace);
       const candidates = (await context.worktrees.list(workspace)).filter(
@@ -105,7 +105,7 @@ export async function removeWorktrees(input: RemoveInput, context: CliContext): 
     if (input.deleteBranch) {
       const ineligible = plans.filter((plan) => !plan.inspection.branchDeletion.eligible);
       if (ineligible.length > 0) {
-        throw new YggError(
+        throw new WaldError(
           `Cannot delete local branches:\n${ineligible
             .map((plan) => {
               const deletion = plan.inspection.branchDeletion;
@@ -150,7 +150,7 @@ export async function removeWorktrees(input: RemoveInput, context: CliContext): 
       });
     } else if (!input.yes) {
       if (!isInteractiveTerminal()) {
-        throw new YggError("Non-interactive removal requires --yes.");
+        throw new WaldError("Non-interactive removal requires --yes.");
       }
       try {
         confirmedByBranchChoice = plans.some((plan) => plan.inspection.branchDeletion.eligible);
@@ -169,7 +169,7 @@ export async function removeWorktrees(input: RemoveInput, context: CliContext): 
 
     if (!input.yes && !confirmedByBranchChoice) {
       if (!isInteractiveTerminal()) {
-        throw new YggError("Non-interactive removal requires --yes.");
+        throw new WaldError("Non-interactive removal requires --yes.");
       }
       try {
         const branchAction =

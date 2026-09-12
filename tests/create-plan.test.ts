@@ -12,7 +12,7 @@ describe("create plan presentation", () => {
       { stdout: output },
     );
 
-    const rendered = output.read()?.toString() ?? "";
+    const rendered = readOutput(output);
     expect(rendered).toContain("feature/review");
     expect(rendered).toContain("create a new local branch");
     expect(rendered).toContain("origin/main");
@@ -28,8 +28,8 @@ describe("create plan presentation", () => {
     const labels = [plan({ type: "local" }), plan({ type: "remote", remoteName: "origin" })].map(
       (createPlan) => {
         const output = new PassThrough();
-      printCreatePlan(createPlan, { type: "stay" }, { stdout: output });
-        return output.read()?.toString() ?? "";
+        printCreatePlan(createPlan, { type: "stay" }, { stdout: output });
+        return readOutput(output);
       },
     );
 
@@ -38,12 +38,20 @@ describe("create plan presentation", () => {
   });
 });
 
+function readOutput(output: PassThrough): string {
+  let rendered = "";
+  for (let chunk = output.read(); chunk !== null; chunk = output.read()) {
+    rendered += chunk.toString();
+  }
+  return rendered;
+}
+
 function plan(strategy: CreatePlan["prepared"]["strategy"]): CreatePlan {
   return {
     workspace: {
       root: "/workspace",
-      configPath: "/workspace/.ygg/workspace.yml",
-      sharedDir: "/workspace/.ygg/shared",
+      configPath: "/workspace/.wald/workspace.yml",
+      sharedDir: "/workspace/.wald/shared",
       gitDir: "/workspace/repo.git",
       worktreeDir: "/workspace",
       primaryWorktree: null,
@@ -64,10 +72,10 @@ function plan(strategy: CreatePlan["prepared"]["strategy"]): CreatePlan {
       strategy,
     },
     project: {
-      path: "origin/main:.ygg.yml",
+      path: "origin/main:.wald.yml",
       hash: "a".repeat(64),
       requiresTrust: true,
-      sources: { repository: "origin/main:.ygg.yml", workspace: null },
+      sources: { repository: "origin/main:.wald.yml", workspace: null },
       config: {
         version: 1,
         defaults: { fetch: true },

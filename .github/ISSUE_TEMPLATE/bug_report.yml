@@ -15,7 +15,7 @@ body:
     id: environment
     attributes:
       label: Environment
-      description: Include OS, Node.js, pnpm, Git, and ygg versions.
+      description: Include OS, Node.js, pnpm, Git, and wald versions.
     validations:
       required: true
   - type: textarea

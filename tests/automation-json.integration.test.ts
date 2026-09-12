@@ -18,7 +18,7 @@ describe("automation JSON contracts", { timeout: 20_000 }, () => {
   let repository: TestRepository;
 
   beforeEach(async () => {
-    temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "ygg-json-test-"));
+    temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "wald-json-test-"));
     repository = await createTestRepository(temporaryRoot);
   });
 
@@ -112,7 +112,7 @@ describe("automation JSON contracts", { timeout: 20_000 }, () => {
     await runCli(workspace, "create", "main", "--no-fetch", "--json");
     await runCli(workspace, "create", "feature/failing-remove", "--no-fetch", "--json");
     await fs.writeFile(
-      path.join(workspace, ".ygg", "project.yml"),
+      path.join(workspace, ".wald", "project.yml"),
       `version: 1
 hooks:
   post_remove:
@@ -179,8 +179,8 @@ hooks:
 
   it("returns a doctor failure report on stdout with exit code one", async () => {
     const broken = path.join(temporaryRoot, "broken");
-    await fs.mkdir(path.join(broken, ".ygg"), { recursive: true });
-    await fs.writeFile(path.join(broken, ".ygg", "workspace.yml"), "version: [\n", "utf8");
+    await fs.mkdir(path.join(broken, ".wald"), { recursive: true });
+    await fs.writeFile(path.join(broken, ".wald", "workspace.yml"), "version: [\n", "utf8");
 
     const result = await runCli(broken, "doctor", "--json");
 
@@ -219,13 +219,13 @@ hooks:
     expect(JSON.parse(unchanged.stdout)).toMatchObject({ action: "unchanged", restored: [] });
     await expect(
       fs.readFile(
-        path.join(JSON.parse(initialized.stdout).workspace.gitDir, "ygg", "project.yml"),
+        path.join(JSON.parse(initialized.stdout).workspace.gitDir, "wald", "project.yml"),
         "utf8",
       ),
     ).resolves.toContain("version: 1");
 
     const workspace = JSON.parse(initialized.stdout).workspace as { gitDir: string };
-    await fs.rm(path.join(workspace.gitDir, "ygg", "shared"), { recursive: true });
+    await fs.rm(path.join(workspace.gitDir, "wald", "shared"), { recursive: true });
     const repaired = await runCli(
       repository.source,
       "init",

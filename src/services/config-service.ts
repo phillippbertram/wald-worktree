@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { parseDocument, stringify } from "yaml";
 import { z } from "zod";
-import { YggError } from "../domain/errors.js";
+import { WaldError } from "../domain/errors.js";
 import type {
   AutomationStep,
   ProjectConfig,
@@ -17,7 +17,7 @@ import type { GitClient } from "../infrastructure/git-client.js";
 import { formatCommandForDisplay, formatShellForDisplay } from "../infrastructure/safe-text.js";
 
 export const workspaceConfigFileName = "workspace.yml";
-export const projectConfigFileName = ".ygg.yml";
+export const projectConfigFileName = ".wald.yml";
 export const workspaceProjectConfigFileName = "project.yml";
 
 const workspaceRemoteFileSchema = z
@@ -238,7 +238,7 @@ export class ConfigService {
       throw error;
     }
     if (stat.isSymbolicLink() || !stat.isFile()) {
-      throw new YggError(
+      throw new WaldError(
         `Repository project configuration must be a regular file, not a link or directory: ${configPath}`,
       );
     }
@@ -265,12 +265,12 @@ export class ConfigService {
       stat = await fs.lstat(configPath);
     } catch (error) {
       if (isNotFound(error)) return null;
-      throw new YggError(`Cannot inspect workspace project configuration: ${configPath}`, {
+      throw new WaldError(`Cannot inspect workspace project configuration: ${configPath}`, {
         cause: error,
       });
     }
     if (stat.isSymbolicLink() || !stat.isFile()) {
-      throw new YggError(
+      throw new WaldError(
         `Workspace project configuration must be a regular file, not a link or directory: ${configPath}`,
       );
     }
@@ -291,7 +291,7 @@ export class ConfigService {
     const content = this.formatWorkspaceProjectConfig(config);
     const existing = await lstatOrNull(configPath);
     if (existing?.isSymbolicLink() || (existing && !existing.isFile())) {
-      throw new YggError(
+      throw new WaldError(
         `Workspace project configuration must be a regular file, not a link or directory: ${configPath}`,
       );
     }
@@ -430,9 +430,9 @@ export class ConfigService {
         return;
       } catch (error) {
         if (isAlreadyExists(error)) {
-          throw new YggError(`Project configuration already exists: ${configPath}`);
+          throw new WaldError(`Project configuration already exists: ${configPath}`);
         }
-        throw new YggError(`Cannot write project configuration: ${configPath}`, { cause: error });
+        throw new WaldError(`Cannot write project configuration: ${configPath}`, { cause: error });
       }
     }
 
@@ -441,7 +441,7 @@ export class ConfigService {
       await fs.writeFile(temporaryPath, content, { mode });
       await fs.rename(temporaryPath, configPath);
     } catch (error) {
-      throw new YggError(`Cannot write project configuration: ${configPath}`, { cause: error });
+      throw new WaldError(`Cannot write project configuration: ${configPath}`, { cause: error });
     } finally {
       await fs.rm(temporaryPath, { force: true });
     }
@@ -452,7 +452,7 @@ export class ConfigService {
     try {
       raw = await fs.readFile(configPath, "utf8");
     } catch (error) {
-      throw new YggError(`Cannot read workspace configuration: ${configPath}`, { cause: error });
+      throw new WaldError(`Cannot read workspace configuration: ${configPath}`, { cause: error });
     }
     return parseYaml(raw, configPath);
   }
@@ -559,7 +559,7 @@ function emptyProjectConfig(): ProjectConfig {
 function parseYaml(raw: string, configPath: string): unknown {
   const document = parseDocument(raw, { prettyErrors: true });
   if (document.errors.length > 0) {
-    throw new YggError(
+    throw new WaldError(
       `Configuration is not valid YAML: ${configPath}\n${document.errors.map((error) => error.message).join("\n")}`,
     );
   }
@@ -812,11 +812,11 @@ function toAutomationStepFile(step: AutomationStep): AutomationStepFile {
   };
 }
 
-function invalidConfigurationError(configPath: string, error: z.ZodError): YggError {
+function invalidConfigurationError(configPath: string, error: z.ZodError): WaldError {
   const details = error.issues
     .map((issue) => `${issue.path.join(".") || "configuration"}: ${issue.message}`)
     .join("\n");
-  return new YggError(`Configuration is invalid: ${configPath}\n${details}`);
+  return new WaldError(`Configuration is invalid: ${configPath}\n${details}`);
 }
 
 function semanticHash(value: ProjectConfig): string {

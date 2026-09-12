@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { YggError } from "../domain/errors.js";
+import { WaldError } from "../domain/errors.js";
 import type { Workspace, Worktree, WorktreeState } from "../domain/types.js";
 import type { GitClient } from "../infrastructure/git-client.js";
 import { isPathInside } from "../infrastructure/path-utils.js";
@@ -117,10 +117,10 @@ export class WorktreeService {
 
     const target = path.resolve(workspace.worktreeDir, directoryName);
     if (!isPathInside(workspace.worktreeDir, target)) {
-      throw new YggError("Worktree directory must stay inside the configured worktree root.");
+      throw new WaldError("Worktree directory must stay inside the configured worktree root.");
     }
     if (target === workspace.gitDir) {
-      throw new YggError(`Reserved worktree directory: ${directoryName}`);
+      throw new WaldError(`Reserved worktree directory: ${directoryName}`);
     }
     const remote = workspace.config.remote;
     if (options.fetch !== false && remote) {
@@ -134,18 +134,18 @@ export class WorktreeService {
     const worktrees = await this.list(workspace);
     const existingCheckout = worktrees.find((worktree) => worktree.branchRef === branchRef);
     if (existingCheckout) {
-      throw new YggError(
+      throw new WaldError(
         `Branch ${options.branch} is already checked out at ${existingCheckout.path}`,
       );
     }
     if (await pathEntryExists(target)) {
-      throw new YggError(
+      throw new WaldError(
         `Worktree directory already exists: ${target}. Choose another directory with --name <directory>.`,
       );
     }
     const portableCollision = await findPortableNameCollision(workspace.worktreeDir, directoryName);
     if (portableCollision) {
-      throw new YggError(
+      throw new WaldError(
         `Worktree directory name conflicts with existing entry ${portableCollision} when compared case-insensitively: ${directoryName}. Choose another directory with --name <directory>.`,
       );
     }
@@ -154,7 +154,7 @@ export class WorktreeService {
     const remoteExists = remoteRef ? await this.refExists(workspace, remoteRef) : false;
 
     if (options.newBranchOnly && (localExists || remoteExists)) {
-      throw new YggError(`Carry target must be a new branch: ${options.branch}`);
+      throw new WaldError(`Carry target must be a new branch: ${options.branch}`);
     }
 
     if (localExists) {
@@ -223,7 +223,7 @@ export class WorktreeService {
       (worktree) => worktree.branchRef === prepared.branchRef,
     );
     if (!created) {
-      throw new YggError(
+      throw new WaldError(
         `Git created the worktree, but it could not be read back: ${prepared.target}`,
       );
     }
@@ -279,10 +279,10 @@ export class WorktreeService {
     ];
 
     if (matches.length === 0) {
-      throw new YggError(`No worktree matches: ${identifier}`);
+      throw new WaldError(`No worktree matches: ${identifier}`);
     }
     if (matches.length > 1) {
-      throw new YggError(`Worktree identifier is ambiguous: ${identifier}`);
+      throw new WaldError(`Worktree identifier is ambiguous: ${identifier}`);
     }
     return matches[0] as Worktree;
   }
@@ -311,7 +311,7 @@ export class WorktreeService {
     const hardBlockers: string[] = [];
 
     if (worktree.role === "primary") {
-      hardBlockers.push("the primary checkout cannot be removed by ygg");
+      hardBlockers.push("the primary checkout cannot be removed by wald");
     }
     if (worktree.state === "unavailable") {
       hardBlockers.push("the worktree state could not be read safely");
@@ -339,7 +339,7 @@ export class WorktreeService {
 
   async remove(workspace: Workspace, worktree: Worktree, force: boolean): Promise<void> {
     if (worktree.role === "primary") {
-      throw new YggError(`Refusing to remove the primary checkout: ${worktree.path}`);
+      throw new WaldError(`Refusing to remove the primary checkout: ${worktree.path}`);
     }
     const args = ["worktree", "remove"];
     if (force) {
@@ -355,17 +355,17 @@ export class WorktreeService {
     options: { force?: boolean } = {},
   ): Promise<void> {
     if (plan.branch === workspace.config.defaultBranch) {
-      throw new YggError(`Refusing to delete the configured default branch: ${plan.branch}`);
+      throw new WaldError(`Refusing to delete the configured default branch: ${plan.branch}`);
     }
     if (plan.branchRef !== `refs/heads/${plan.branch}`) {
-      throw new YggError(`Refusing to delete an unexpected branch reference: ${plan.branchRef}`);
+      throw new WaldError(`Refusing to delete an unexpected branch reference: ${plan.branchRef}`);
     }
 
     const existingCheckout = (await this.list(workspace)).find(
       (worktree) => worktree.branchRef === plan.branchRef,
     );
     if (existingCheckout) {
-      throw new YggError(
+      throw new WaldError(
         `Refusing to delete branch ${plan.branch}; it is checked out at ${existingCheckout.path}`,
       );
     }
@@ -378,12 +378,12 @@ export class WorktreeService {
       return;
     }
     if (current.stdout !== plan.expectedHead) {
-      throw new YggError(
+      throw new WaldError(
         `Refusing to delete branch ${plan.branch}; its HEAD changed after review.`,
       );
     }
     if (!(await this.isBranchMergedIntoDefault(workspace, plan.branchRef)) && !options.force) {
-      throw new YggError(
+      throw new WaldError(
         `Refusing to delete branch ${plan.branch}; it is no longer merged into ${workspace.config.defaultBranch}.`,
       );
     }
@@ -427,44 +427,44 @@ export class WorktreeService {
       this.current(workspace, cwd),
     ]);
     if (worktree.role === "primary") {
-      throw new YggError(`Refusing to rename the primary checkout: ${worktree.path}`);
+      throw new WaldError(`Refusing to rename the primary checkout: ${worktree.path}`);
     }
     if (worktree.path === current?.path) {
-      throw new YggError(
-        `Refusing to rename the current worktree: ${worktree.path}. Run ygg rename from the workspace or another worktree.`,
+      throw new WaldError(
+        `Refusing to rename the current worktree: ${worktree.path}. Run wald rename from the workspace or another worktree.`,
       );
     }
     if (worktree.state === "missing") {
-      throw new YggError(`Refusing to rename a missing worktree: ${worktree.path}`);
+      throw new WaldError(`Refusing to rename a missing worktree: ${worktree.path}`);
     }
     if (worktree.state === "unavailable") {
-      throw new YggError(
+      throw new WaldError(
         `Refusing to rename a worktree whose state is unavailable: ${worktree.path}`,
       );
     }
     if (worktree.locked) {
-      throw new YggError(`Refusing to rename a locked worktree: ${worktree.path}`);
+      throw new WaldError(`Refusing to rename a locked worktree: ${worktree.path}`);
     }
 
     const worktreeRoot = await canonicalPath(workspace.worktreeDir);
     if ((await canonicalPath(path.dirname(worktree.path))) !== worktreeRoot) {
-      throw new YggError(
+      throw new WaldError(
         `Refusing to rename a worktree outside the configured worktree root: ${worktree.path}`,
       );
     }
     if (await this.hasSubmodules(worktree)) {
-      throw new YggError(`Refusing to rename a worktree containing submodules: ${worktree.path}`);
+      throw new WaldError(`Refusing to rename a worktree containing submodules: ${worktree.path}`);
     }
 
     const target = path.resolve(workspace.worktreeDir, newName);
     if (!isPathInside(workspace.worktreeDir, target)) {
-      throw new YggError("Worktree directory must stay inside the configured worktree root.");
+      throw new WaldError("Worktree directory must stay inside the configured worktree root.");
     }
     if (target === worktree.path) {
-      throw new YggError(`Worktree is already named ${newName}.`);
+      throw new WaldError(`Worktree is already named ${newName}.`);
     }
     if (await pathEntryExists(target)) {
-      throw new YggError(`Worktree directory already exists: ${target}`);
+      throw new WaldError(`Worktree directory already exists: ${target}`);
     }
     return { worktree, target };
   }
@@ -479,7 +479,7 @@ export class WorktreeService {
       moved.branchRef !== plan.worktree.branchRef ||
       moved.head !== plan.worktree.head
     ) {
-      throw new YggError(
+      throw new WaldError(
         `Git moved the worktree, but its identity could not be verified at ${plan.target}`,
       );
     }
@@ -502,7 +502,7 @@ export class WorktreeService {
       current.locked ||
       current.state !== "clean"
     ) {
-      throw new YggError(
+      throw new WaldError(
         `Refusing to roll back a created worktree whose Git identity changed: ${worktree.path}`,
       );
     }
@@ -519,14 +519,14 @@ export class WorktreeService {
       gitDir: workspace.gitDir,
     });
     if (!valid) {
-      throw new YggError(`Invalid branch name: ${branch}`);
+      throw new WaldError(`Invalid branch name: ${branch}`);
     }
   }
 
   private async resolveBase(workspace: Workspace, requestedBase?: string): Promise<string> {
     if (requestedBase) {
       if (!(await this.commitExists(workspace, requestedBase))) {
-        throw new YggError(`Base does not resolve to a commit: ${requestedBase}`);
+        throw new WaldError(`Base does not resolve to a commit: ${requestedBase}`);
       }
       return requestedBase;
     }
@@ -541,7 +541,7 @@ export class WorktreeService {
     if (await this.commitExists(workspace, workspace.config.defaultBranch)) {
       return workspace.config.defaultBranch;
     }
-    throw new YggError(
+    throw new WaldError(
       `Default branch does not resolve to a commit: ${workspace.config.defaultBranch}`,
     );
   }
@@ -656,7 +656,7 @@ export function slugifyBranch(branch: string): string {
     .replace(/^[.-]+|[.-]+$/gu, "");
 
   if (!slug) {
-    throw new YggError(`Could not derive a directory name from branch: ${branch}`);
+    throw new WaldError(`Could not derive a directory name from branch: ${branch}`);
   }
   return slug;
 }
@@ -667,7 +667,7 @@ export function validateWorktreeName(name: string): void {
     name.trim() !== name ||
     name === "." ||
     name === ".." ||
-    name === ".ygg" ||
+    name === ".wald" ||
     name === "repo.git" ||
     path.isAbsolute(name) ||
     name.includes("/") ||
@@ -675,7 +675,7 @@ export function validateWorktreeName(name: string): void {
     name.includes("\0") ||
     hasControlCharacters(name)
   ) {
-    throw new YggError(`Invalid worktree directory name: ${name}`);
+    throw new WaldError(`Invalid worktree directory name: ${name}`);
   }
 }
 
@@ -724,7 +724,7 @@ export function parseWorktreePorcelain(output: string): ParsedWorktree[] {
     }
 
     if (!worktreePath) {
-      throw new YggError("Git returned a worktree record without a path.");
+      throw new WaldError("Git returned a worktree record without a path.");
     }
 
     return {

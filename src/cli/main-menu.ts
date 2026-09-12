@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import { YggError } from "../domain/errors.js";
+import { WaldError } from "../domain/errors.js";
 import { redactSensitiveText, sanitizeTerminalText } from "../infrastructure/safe-text.js";
 import { style } from "../ui/style.js";
 import { isInteractiveTerminal, isPromptBackError, selectValue } from "../ui/terminal.js";
@@ -151,15 +151,15 @@ export async function runMainMenu(program: Command, context: CliContext): Promis
         group: "Maintenance",
       },
       {
-        label: "Disconnect Ygg workspace",
+        label: "Disconnect Wald workspace",
         value: "uninit",
-        description: "Remove Ygg metadata while keeping the Git repository.",
+        description: "Remove Wald metadata while keeping the Git repository.",
         group: "Maintenance",
       },
       {
         label: "Exit",
         value: "exit",
-        description: "Close the interactive Ygg session.",
+        description: "Close the interactive Wald session.",
         group: "Session",
       },
     ];
@@ -245,7 +245,7 @@ export async function runMainMenu(program: Command, context: CliContext): Promis
       }
     } catch (error) {
       if (isPromptBackError(error)) continue;
-      if (error instanceof YggError && error.exitCode !== 130) {
+      if (error instanceof WaldError && error.exitCode !== 130) {
         writeLine(
           context.output.stderr,
           `${style.danger("Error:")} ${sanitizeTerminalText(redactSensitiveText(error.message), { multiline: true })}`,
@@ -262,7 +262,7 @@ export async function runMainMenu(program: Command, context: CliContext): Promis
           {
             label: "Exit",
             value: "exit",
-            description: "Close the interactive Ygg session.",
+            description: "Close the interactive Wald session.",
           },
         ],
         { navigation: "back" },

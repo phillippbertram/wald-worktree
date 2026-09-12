@@ -158,10 +158,10 @@ describe("terminal prompt navigation", () => {
 
     const selectOptions = prompts.select.mock.calls[0]?.[0].options;
     expect(selectOptions).toEqual([
-      { value: "__ygg_group_0", label: "── COMMON ──", disabled: true },
+      { value: "__wald_group_0", label: "── COMMON ──", disabled: true },
       { value: "one", label: "One", hint: "First" },
       { value: "two", label: "Two", hint: undefined },
-      { value: "__ygg_group_2", label: "── ADVANCED ──", disabled: true },
+      { value: "__wald_group_2", label: "── ADVANCED ──", disabled: true },
       { value: "three", label: "Three", hint: undefined },
     ]);
     expect(prompts.select.mock.calls[0]?.[0]).toMatchObject({

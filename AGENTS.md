@@ -6,7 +6,7 @@ duplicating these rules.
 
 ## Project Context
 
-Ygg is a configurable Git worktree and agent-workflow CLI. It creates, discovers, prepares, opens,
+Wald is a configurable Git worktree and agent-workflow CLI. It creates, discovers, prepares, opens,
 automates, and safely removes worktrees while keeping Git as the underlying source of truth.
 
 Safety, deterministic behavior, and useful non-interactive commands are part of the product
@@ -26,8 +26,9 @@ user-facing CLI text.
 - `src/ui/` owns terminal prompts and presentation, not repository mutation rules.
 - `tests/` owns executable behavior and regression coverage.
 - `README.md` owns the product overview and first-use journey.
+- `docs/brand.md` owns the product name, message, visual language, and tone.
 - `docs/` owns detailed CLI, configuration, worktree, and agent-workflow documentation.
-- `skills/ygg-worktrees/` owns the portable skill for agents using Ygg in other repositories.
+- `skills/wald-worktrees/` owns the portable skill for agents using Wald in other repositories.
 
 Inspect the relevant implementation, tests, and documentation before changing behavior. Do not
 infer current behavior from a single source when an executable contract is available.
@@ -103,7 +104,7 @@ files, or local configuration based on an inferred cleanup request.
   assertions.
 - Respect `noUncheckedIndexedAccess`; handle missing values explicitly.
 - Use Zod at untrusted CLI and configuration boundaries and produce readable user-facing errors.
-- Use `YggError` for expected operational failures that should be presented without an internal
+- Use `WaldError` for expected operational failures that should be presented without an internal
   stack trace.
 - Pass external commands as an executable plus explicit argument array. Do not introduce shell
   interpolation or expansion for user- or configuration-provided values.
@@ -116,11 +117,11 @@ files, or local configuration based on an inferred cleanup request.
 
 ## Safety and Trust Boundaries
 
-- Treat repository URLs, paths, branch names, `.ygg.yml` contents, and subprocess output as
+- Treat repository URLs, paths, branch names, `.wald.yml` contents, and subprocess output as
   untrusted input.
 - Validate paths before writes. Copy and symlink operations must not escape their allowed source or
   destination roots through `..`, absolute paths, or symbolic-link traversal.
-- Preserve the `.ygg.yml` trust model. Executable hooks, tasks, and tools require an explicit local
+- Preserve the `.wald.yml` trust model. Executable hooks, tasks, and tools require an explicit local
   trust decision; declarative configuration alone must not silently execute code.
 - Keep destructive workflows preview-first. Applying removal, pruning, or uninitialization must
   require the documented explicit confirmation flags in non-interactive use.
@@ -160,12 +161,14 @@ the task.
   safety guarantees, configuration, or workflows change.
 - Keep `README.md` concise and task-oriented. Put detailed reference material in the matching file
   under `docs/` and link to it instead of duplicating long explanations.
+- Keep product copy, emoji, colors, and metaphors aligned with `docs/brand.md`. Forest language must
+  not replace precise Git terminology in commands, errors, safety guidance, or machine output.
 - Keep `docs/cli-reference.md` aligned with the shipped command surface.
-- Keep `docs/configuration.md` aligned with the accepted `.ygg.yml` schema and trust behavior.
+- Keep `docs/configuration.md` aligned with the accepted `.wald.yml` schema and trust behavior.
 - Keep `docs/worktrees.md` aligned with workspace layouts, lifecycle, and Git semantics.
 - Keep `docs/agent-workflows.md` aligned with supported multi-worktree agent usage.
-- Update `skills/ygg-worktrees/` when a change affects how external agents should discover or safely
-  operate Ygg. Keep the default skill short and route detail to its reference files.
+- Update `skills/wald-worktrees/` when a change affects how external agents should discover or safely
+  operate Wald. Keep the default skill short and route detail to its reference files.
 - Document only implemented behavior. Clearly label roadmap or proposed behavior and do not present
   it as available.
 - Maintain one canonical owner per topic. Prefer links over repeated text that can drift.
