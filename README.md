@@ -156,7 +156,7 @@ project/
 
 Branch separators become hyphens in default directory names. Use `ygg status` for the current
 workspace context and `ygg list` to see the exact branch, state, and path of every worktree.
-Use `ygg doctor` for a deeper read-only diagnosis of the runtime, configuration, paths, Git
+Use `ygg doctor` for a concise read-only diagnosis of the runtime, configuration, paths, Git
 registrations, trust state, configured file sources, and executables. It also works outside a Ygg
 workspace and suggests safe follow-up commands without fetching or repairing anything.
 

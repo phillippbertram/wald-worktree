@@ -200,7 +200,7 @@ ygg handoff feature/review --tool codex
 ## `ygg doctor`
 
 ```text
-ygg doctor [--json]
+ygg doctor [--json] [--verbose]
 ```
 
 Runs a read-only diagnosis even outside a Ygg workspace or when workspace configuration is invalid.
@@ -212,7 +212,11 @@ file-step sources, and configured argv/tool executables.
 Doctor never fetches, repairs, changes trust, or runs hooks. It does not print remote URLs or
 environment contents. Suggested commands such as `ygg init`, `ygg prune`, `git worktree repair`, or
 `git worktree lock` remain explicit follow-up actions. No workspace is a warning with exit 0;
-runtime, configuration, and consistency failures exit 1. `--json` emits `{status, checks}`.
+runtime, configuration, and consistency failures exit 1.
+
+The default output groups checks into a concise runtime, workspace, repository, worktree, and
+project summary. `--verbose` shows every individual check, identifier, skipped check, and safe
+suggestion. `--json` emits the unchanged machine-readable `{status, checks}` report.
 
 ## `ygg status`
 

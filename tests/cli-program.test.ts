@@ -48,6 +48,11 @@ describe("CLI contract", () => {
     expect(program.commands.find((command) => command.name() === "config")?.commands).toHaveLength(
       3,
     );
+    expect(
+      program.commands
+        .find((command) => command.name() === "doctor")
+        ?.options.map((option) => option.long),
+    ).toEqual(["--json", "--verbose"]);
   });
 
   it("requires --apply when prune confirmation is passed", async () => {
