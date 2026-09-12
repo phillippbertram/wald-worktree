@@ -1,13 +1,23 @@
 # 🌲 Wald — Git Worktrees CLI
 
+[![CI](https://github.com/phillippbertram/wald-worktree/actions/workflows/ci.yml/badge.svg)](https://github.com/phillippbertram/wald-worktree/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-1F4D3A.svg)](LICENSE)
+[![Node.js >= 22.13](https://img.shields.io/badge/Node.js-%3E%3D22.13-5F7D4E.svg)](package.json)
+[![Platforms: macOS and Linux](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-6B4F3A.svg)](docs/cli-reference.md)
+
 **Wald — Where Git worktrees grow.**
 
 **Git worktrees, ready for real work.**
 
-Git creates another checkout. Wald turns it into a predictable, prepared, and safely managed
-development workspace.
+Git gives you another checkout. Wald turns it into a predictable, prepared development workspace
+for features, hotfixes, reviews, experiments, and coding agents.
 
-With plain Git, starting parallel work often means several manual steps:
+![Independent Git worktrees growing from one shared repository.](docs/assets/wald-worktrees.png)
+
+## From checkout to ready workspace
+
+Creating a useful worktree with plain Git often means remembering the branch, path, dependencies,
+local files, and editor setup yourself:
 
 ```sh
 git worktree add ../feature-payment -b feature/payment origin/main
@@ -17,118 +27,54 @@ cp ../main/.env.local .env.local
 code .
 ```
 
-With Wald and trusted project setup:
+With Wald and trusted project setup, the same intent becomes:
 
 ```sh
 wald create feature/payment --tool code
 ```
 
-Prefer the forest shorthand? `wald plant` is an exact alias for `wald create`:
+Wald resolves the branch, chooses a stable path, creates the worktree, runs trusted setup, provides
+configured local files, and opens your tool. `wald plant` is an exact alias for `wald create`.
 
-```sh
-wald plant feature/payment --tool code
-```
-
-Wald resolves the branch, chooses a predictable path, creates the worktree, links or copies local
-files, runs trusted lifecycle hooks, and opens the configured tool.
-
-- **Ready from the start** — Install dependencies and provide local files through trusted setup.
-- **Safe through the lifecycle** — Preview changes, trust executable configuration, diagnose
-  problems, and remove worktrees with guardrails.
-- **Built for parallel work** — Keep stable paths, move between worktrees from the shell, and see the
-  complete workspace at a glance.
-- **Made for tools and agents** — Use tool profiles, named tasks, JSON output, and code handoffs
-  without sharing working files.
-
-![Independent Git worktrees growing from one shared repository.](docs/assets/wald-worktrees.png)
-
-## Why Wald?
-
-**Wald** is the German word for forest. The name is short, distinctive, and describes the shape of a
-healthy worktree setup: the repository is the shared ground, while every feature, hotfix, review,
-or coding agent grows as an independent tree.
-
-Each worktree gets its own files, dependencies, editor, and processes. Under the surface, all of
-them remain connected through the same Git history, just as a forest shares one living ground while
-every tree has room to grow. The metaphor makes the workspace easy to picture; Git remains the
-source of truth.
+![Wald creates a feature worktree and shows the workspace status.](docs/demo/wald-create.gif)
 
 ## Why worktrees?
 
-Branches are excellent at organizing history, but a normal checkout still gives you only one set of
-files at a time. A worktree turns another branch into another real project folder.
+A branch separates Git history. A worktree also separates the files, index, dependencies, editor,
+and running processes you use for that branch. Your unfinished feature can stay open while you fix
+production, review a pull request, or give an agent an isolated folder.
 
-[Git worktrees](https://git-scm.com/docs/git-worktree) let one repository support several of these
-folders at once. No repeated cloning, no forced context switch, and no need to hide unfinished work
-just to look at something else.
+All worktrees still share one repository's objects, refs, remotes, and history. Git remains the
+source of truth; Wald manages the repeatable workflow around it.
 
-When production breaks during unfinished feature work, that changes the workflow:
+| When this happens | Instead of | Use |
+| --- | --- | --- |
+| Production breaks during feature work | Stash, switch, rebuild context | A hotfix worktree |
+| A review needs a clean checkout | Disturb your current index | A review worktree |
+| A long test must run in parallel | Wait or duplicate the clone | An experiment worktree |
+| Two agents need the same repository | Share files and staging state | One worktree per agent |
 
-```mermaid
-flowchart TB
-    Problem["Production bug<br/>feature has uncommitted work"]
+New to the idea? Start with [Worktrees explained](docs/worktrees.md).
 
-    Problem --> Switch["One checkout"]
-    Switch --> Stash["Stash or create a WIP commit"]
-    Stash --> Change["Switch branch and rebuild context"]
-    Change --> Fix1["Fix and verify"]
-    Fix1 --> Return["Switch back and restore the feature"]
+## What Wald adds to Git
 
-    Problem --> Parallel["Worktrees with Wald"]
-    Parallel --> Keep["Keep the feature folder untouched"]
-    Keep --> Fix2["Create, fix, and verify in a hotfix folder"]
-    Fix2 --> Remove["Remove the finished folder"]
-```
+- **Ready from the start** — trusted lifecycle hooks can install dependencies and provide local
+  files.
+- **Predictable workspaces** — stable paths and clear status make every checkout easy to find.
+- **Safe lifecycle commands** — previews, trust checks, dirty-state checks, and protected primary
+  checkouts guard important work.
+- **Developer and agent workflows** — named tasks, tool profiles, JSON output, and code-only
+  handoffs fit terminals, editors, scripts, and coding agents.
 
-The useful boundary is simple:
-
-| Shared through Git                   | Independent in each worktree  |
-| ------------------------------------ | ----------------------------- |
-| Commits and Git objects              | Checked-out files             |
-| Branches and tags                    | `HEAD` and index              |
-| Remotes and fetched refs             | Dependencies and build output |
-| Stashes and normal repository config | Editors and running processes |
-
-Separate folders isolate files, not external resources. Two development servers may still compete
-for the same port or database.
-
-### A quick rule of thumb
-
-| Situation                                                      | Best fit                          |
-| -------------------------------------------------------------- | --------------------------------- |
-| An urgent task would interrupt unfinished work                 | Create another worktree.          |
-| A review or test must run beside current development           | Create another worktree.          |
-| Two editors or agents must not share staged or generated files | Give each one a worktree.         |
-| One small task is active and switching has no setup cost       | A normal branch switch is enough. |
-
-Want a gentler tour through the idea? [Worktrees explained](docs/worktrees.md) walks through the
-mental model, real examples, layouts, and common pitfalls.
-
-## How Wald builds on Git
-
-Git's native `git worktree` command remains the foundation and source of truth. Wald adds the
-workflow around it: predictable paths, branch resolution, trusted setup, navigation, tools, and
-safe cleanup.
-
-```mermaid
-flowchart TB
-    Intent["Create a feature, hotfix, review, or agent workspace"]
-    Intent --> Wald["Wald"]
-    Wald --> Resolve["Resolve local or remote branch"]
-    Resolve --> Create["Create at a predictable path"]
-    Create --> Setup["Run trusted setup and link local files"]
-    Setup --> Open["Enter it or open an editor or agent"]
-    Open --> Safe["Verify and remove with safety checks"]
-    Safe --> Git["Git worktree and repository state"]
-```
+Wald does not replace branches, invent a second repository model, or hide Git state. You can keep
+using `git status`, `git log`, commits, merges, and pushes exactly as before.
 
 ## Get started
 
-Supported platforms are macOS and Linux with Node.js 22.13.0 or newer, pnpm 11, and Git 2.31.0 or
-newer. Git 2.31 is required because Wald uses absolute common-directory resolution introduced with
-`git rev-parse --path-format` ([Git 2.31 release notes](https://github.com/git/git/blob/master/Documentation/RelNotes/2.31.0.adoc)).
+Wald supports macOS and Linux and requires Node.js 22.13.0 or newer and Git 2.31.0 or newer. Building
+from source uses pnpm 11.15.1.
 
-Until Wald is published to npm, install it directly from this repository:
+Until Wald is published to npm, install it from this repository:
 
 ```sh
 git clone git@github.com:phillippbertram/wald-worktree.git
@@ -138,223 +84,134 @@ pnpm run install:global
 wald --help
 ```
 
-Wald uses its own metadata namespace and does not detect workspaces created under earlier product
-names or provide legacy command aliases. Re-initialize or adopt an existing repository safely with
-`wald init`; renaming metadata directories by hand is not a supported upgrade path.
+### Keep an existing checkout
 
-### 1. Set up your workspace
-
-From a remote repository:
-
-```sh
-wald init git@github.com:example/project.git ~/dev/project
-```
-
-Or keep an existing checkout exactly where it is and use the guided setup:
+Run the guided setup inside a repository you already use:
 
 ```sh
 cd ~/dev/project
 wald init
 ```
 
-Wald validates the choices, previews absolute paths and the resulting tree, and asks before
-initializing anything. See [workspace layouts](docs/worktrees.md#workspace-layouts) for standalone,
-grouped, and retained-checkout variants.
+Wald previews the layout and asks before writing workspace metadata. Your existing checkout stays
+where it is and remains protected as the primary worktree.
 
-### Prefer a guided menu?
-
-Run `wald` without a command. A compact forest welcome, the current workspace overview, and a
-changing worktree thought lead into the guided menu. The menu stays open, refreshes the workspace
-after every action, and always brings you back to an up-to-date overview. `Esc` goes back or cancels
-and `Ctrl-C` exits; the complete navigation contract lives in the
-[CLI reference](docs/cli-reference.md#general-behavior).
-
-### 2. Add your first worktrees
+### Start from a remote repository
 
 ```sh
-cd ~/dev/project
-wald create main --cd
-wald create feature/payment --tool code
-wald create feature/review --carry
+wald init git@github.com:example/project.git ~/dev/project
 ```
 
-The recommended layout is called **[Wald Flow](docs/worktrees.md#wald-flow)**. Unlike git-flow or
-GitHub Flow, it does not prescribe branches, merges, or releases. Wald Flow organizes the physical
-workspace: the Git database and every worktree live side by side, making the whole forest easy to
-scan.
+This creates the recommended standalone layout and guides you through the first worktree and
+optional project setup.
 
-```text
-project/
-├── .wald/
-│   ├── workspace.yml        local workspace layout and trust
-│   ├── project.yml          local project automation and overrides
-│   └── shared/              local files shared with worktrees
-├── repo.git/                shared Git repository, no files checked out here
-├── main/                    main branch worktree
-└── feature-payment/         feature/payment branch worktree
+### Create your first workspace
+
+```sh
+wald create feature/payment --cd
+wald create hotfix/payment --from release/1.x --tool code
+wald create feature/review --tool codex
 ```
 
-Branch separators become hyphens in default directory names. Use `wald status` for the current
-workspace context and `wald list` to see the exact branch, state, and path of every worktree.
-Use `wald doctor` for a concise read-only diagnosis of the runtime, configuration, paths, Git
-registrations, trust state, configured file sources, and executables. It also works outside a Wald
-workspace and suggests safe follow-up commands without fetching or repairing anything.
+Wald reuses a local branch, tracks a matching remote branch, or creates a new branch from the
+configured default branch. Add `--from HEAD` when new work should begin at the current commit.
 
-### 3. Work, verify, and tidy up
+## A practical daily flow
 
 ```sh
 wald status
 wald list
-wald run verify feature-payment
-wald remove feature-payment
+wald create feature/search --cd
+wald run verify feature-search
+wald remove feature-search
 ```
 
-`wald status` summarizes the current checkout, local upstream comparison, project trust, and workspace
-states without fetching or changing anything. It reads local state only: it never consults the
-remote or changes the repository. `wald run verify` is available when the effective
-project configuration defines that task. Removal checks for local changes, a branch not merged
-into the configured default branch, and locks before deleting the linked checkout. Branches are
-kept by default; an interactive prompt or `--delete-branch` can also delete an eligible local
-branch, but never its remote branch. Deleting an unmerged branch additionally requires `--force`.
-If project setup failed during creation, fix the cause and retry it with
-`wald setup feature-payment`. To test any lifecycle hook after editing
-`.wald/project.yml`, run it explicitly without creating or removing a worktree:
+`wald status` is a read-only summary of the current workspace. `wald list` shows every checkout and
+its exact path. `wald remove` checks local changes, locks, and merge state before removing a linked
+checkout; it keeps the branch unless you explicitly request eligible branch deletion.
 
-```sh
-wald hook run post_create feature-payment
+Need to move unfinished code into a clean branch? `wald handoff feature/review` carries staged,
+unstaged, and non-ignored untracked file contents into a new worktree while leaving the source
+unchanged. It transfers code, not a running editor, process, or agent session.
+
+## Wald Flow
+
+Wald Flow is the recommended physical layout. It is not a branching or release strategy.
+
+```text
+project/
+├── .wald/
+│   ├── workspace.yml        local layout and trust
+│   ├── project.yml          local automation and overrides
+│   └── shared/              local files shared with worktrees
+├── repo.git/                shared Git repository
+├── main/                    main branch worktree
+└── feature-payment/         feature/payment worktree
 ```
 
-Repeated setup is safe for an already correct symlink: Wald reports it as `UNCHANGED`. Configure
-`on_existing: skip` or `on_existing: replace` explicitly when a different existing target should
-be preserved or replaced.
+Prefer to retain an existing checkout or group worktrees in a subdirectory? Wald supports those
+layouts too. See [Workspace layouts](docs/worktrees.md#workspace-layouts).
 
-## Pick the workflow that fits your day
-
-| Goal                                  | Create                                                     | Finish                                                                  |
-| ------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Fix production beside unfinished work | `wald create hotfix/payment --from release/1.x --tool code` | `wald remove hotfix-payment`                                             |
-| Review a remote branch locally        | `wald create contributor/payment-fix --tool code`           | Run the configured checks, then remove it                               |
-| Run a long test beside development    | `wald create experiment/migration --cd`                     | Remove it after the experiment                                          |
-| Give two agents separate files        | `wald create feature/api` and `wald create feature/ui`       | Open each agent in a separate terminal; verify and remove independently |
-| Move unfinished code to a fresh branch | `wald handoff feature/review --tool codex`                  | Continue in the new worktree; the source remains unchanged              |
-
-Wald reuses a local branch, tracks a matching branch from the configured remote, or creates a new
-branch from the default branch. Use `--from HEAD` only when new work should start from the current
-worktree's exact commit. Use `--carry` instead when the new branch should also receive the current
-staged, unstaged, and non-ignored untracked files. `wald handoff` is the guided code-only form of the
-same operation; it does not transfer a running editor, process, or agent session. A new local branch
-has no upstream even when it starts at `origin/main`; publish it explicitly with the command Wald
-prints after creation.
-
-When the branch or handoff target was selected interactively, Wald shows the resolved strategy,
-starting ref, target path, carry source, trust state, lifecycle-step counts, and destination before
-asking `Create this worktree?`. Declining performs no branch, worktree, trust, or hook mutation. A
-fully explicit `wald create <branch>` or `wald handoff <branch>` remains prompt-free.
-
-For automation, `init`, `create`, `handoff`, `rename`, `remove`, and `doctor` accept `--json` in
-addition to the existing JSON-capable read and cleanup commands. JSON mode never prompts: provide
-all required identifiers and confirmation flags explicitly. Successful lifecycle commands emit one
-JSON document on stdout; errors leave stdout empty and emit a redacted JSON error on stderr.
-
-Rename a linked worktree directory without changing its branch:
-
-```sh
-wald rename feature-payment payment-review
-```
-
-The worktree may be dirty. Wald keeps its branch, `HEAD`, index, and files and refuses primary,
-current, external, locked, missing, or submodule-containing worktrees.
-
-## Move between worktrees without friction
-
-Shell integration lets `wald cd`, `wald create --cd`, and `wald handoff --cd` take you straight to the
-selected worktree:
-
-```sh
-# zsh
-eval "$(wald completion zsh)"
-
-# bash
-eval "$(wald completion bash)"
-
-# fish
-wald completion fish | source
-```
-
-Add the matching line to your shell configuration once and navigation feels just like a built-in
-shell command. Without it, `wald cd` still prints the canonical path; create and handoff print a
-normal `cd` fallback.
-
-## Make every worktree feel ready
-
-By default, Wald keeps project automation outside Git in `.wald/project.yml`. It applies to every
-worktree in this Wald workspace and can install dependencies, copy or link local files, expose named
-tasks, and define editor or agent profiles.
+## Make every worktree project-ready
 
 ```sh
 wald config init
 wald config trust
 ```
 
-Use `wald config init --scope project` when the team should share a repository-owned `.wald.yml`.
-When both files exist, `.wald.yml` is the base and the workspace-local `project.yml` overrides only
-the sections it defines.
+Project configuration can define dependency installation, copy or symlink steps, lifecycle hooks,
+named tasks, and editor or agent profiles. Wald keeps local automation in `.wald/project.yml` by
+default; teams can deliberately share a repository-owned `.wald.yml`.
 
-See [Configuration](docs/configuration.md) for the YAML schema, local shared files, lifecycle hooks,
-tasks, tools, and trust model. Wald always asks you to review and trust executable project behavior
-locally before running it.
+Executable project behavior never runs silently. Review it, trust it locally, and use
+`wald config untrust` whenever that decision should be revoked. The complete schema and precedence
+rules live in [Configuration](docs/configuration.md).
 
-## Clean up with confidence
+## Move through the forest from your shell
 
-| Goal                                                  | Command                                        | Result                                                                      |
-| ----------------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------- |
-| Finish with an existing worktree                      | `wald remove feature-payment`                   | Removes the checkout directory and keeps the branch by default.             |
-| Remove its local branch too                           | `wald remove feature-payment --delete-branch`   | Removes the checkout and eligible local branch; keeps the remote branch.    |
-| Inspect metadata for a directory deleted outside Git  | `wald prune`                                    | Preview only; changes nothing.                                              |
-| Apply that metadata cleanup                           | `wald prune --apply`                            | Removes only stale Git worktree registrations.                              |
-| Diagnose runtime and workspace consistency            | `wald doctor`                                   | Reports only; suggests safe repair commands without applying them.           |
-| Restore a deleted worktree container or metadata link | `wald init`                                     | Repairs the existing workspace without replacing its configuration.         |
-| Inspect removal of Wald from the repository            | `wald uninit`                                   | Previews Wald-owned metadata; keeps Git, branches, and worktree directories. |
-| Remove Wald from the repository                        | `wald uninit --apply`                           | Removes only Wald workspace metadata after safety checks.                    |
+Load completion and directory navigation once in your shell profile:
 
-Let Wald do the tidying instead of moving or deleting linked worktree folders manually. `wald remove`
-checks their state first; `wald prune` is the recovery path for administrative metadata after a
-folder is already missing. Re-running `wald init` repairs a missing worktree container, `.wald` link,
-or shared directory. Removing one worktree keeps its branch and shared history intact. With
-`--force`, Wald prints every bypassed safeguard before confirmation; the primary
-checkout and worktrees whose state cannot be read remain protected. Use `wald uninit` only when the
-repository should stop being managed by Wald. See the
-[removal safety matrix](docs/cli-reference.md#wald-remove) for the complete contract.
+```sh
+# zsh
+eval "$(wald completion zsh)"
+```
 
-## Keep exploring
+Bash and Fish are supported too. With integration loaded, `wald cd`, `wald create --cd`, and
+`wald handoff --cd` can change the current shell directory. Without it, Wald prints the canonical
+path and a normal `cd` fallback. See [Shell integration](docs/cli-reference.md#wald-completion).
 
-- [Brand identity](docs/brand.md): Wald's name, message, visual language, and tone.
-- [Worktrees explained](docs/worktrees.md): Wald Flow, the forest model, workflows, and pitfalls.
-- [CLI reference](docs/cli-reference.md): every command, argument, option, and non-interactive rule.
-- [Configuration](docs/configuration.md): YAML schema, trust model, hooks, tasks, files, and tools.
-- [Agent workflows](docs/agent-workflows.md): isolated worktrees for coding agents.
-- [Roadmap](docs/roadmap.md): intentionally deferred capabilities.
+## Give coding agents separate files
 
-## ☕ Support Wald
+```sh
+wald create feature/api --tool codex
+wald create feature/ui --tool codex-app
+wald list
+```
 
-If Wald saves you a few stashes, context switches, or accidental branch mix-ups, you can support its
-development with a coffee:
+Each agent gets an independent index and working directory while commits and refs remain shared.
+Keep branch ownership explicit, run configured verification per worktree, and merge through your
+normal Git workflow. Read [Agent workflows](docs/agent-workflows.md) for the operating model.
 
-<a href="https://www.buymeacoffee.com/phillippbertram" target="_blank">
-  <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="60" width="217" />
-</a>
+## Learn more
+
+- [Worktrees explained](docs/worktrees.md) — mental model, Wald Flow, workflows, and pitfalls.
+- [Configuration](docs/configuration.md) — setup, files, hooks, tasks, tools, and trust.
+- [Agent workflows](docs/agent-workflows.md) — isolated workspaces for parallel coding agents.
+- [Roadmap](docs/roadmap.md) — implemented scope and intentionally deferred capabilities.
+- [Brand identity](docs/brand.md) — Wald's name, voice, visual language, and public naming.
+- [CLI reference](docs/cli-reference.md) — every command, flag, JSON contract, and safety rule.
 
 ## Build Wald with us
 
+Issues and focused pull requests are welcome. Read [Contributing](CONTRIBUTING.md) and run the
+project checks before opening a pull request:
+
 ```sh
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm build
+pnpm run ci
 ```
 
-Remove the global installation with `pnpm run uninstall:global`. To explore the CLI without
-installing it globally, use `pnpm dev -- --help`.
+If Wald saves you a few stashes or context switches, you can also
+[buy me a coffee](https://www.buymeacoffee.com/phillippbertram).
 
 ## License
 
