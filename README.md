@@ -7,17 +7,17 @@
 
 **Wald — Where Git worktrees grow.**
 
-**Git worktrees, ready for real work.**
-
-Git gives you another checkout. Wald turns it into a predictable, prepared development workspace
-for features, hotfixes, reviews, experiments, and coding agents.
+Git can create another checkout in one command. The rest is usually up to you: choose a path,
+install dependencies, bring over local files, and open the right editor. Wald handles that repeatable
+setup, so unfinished feature work can stay put while you fix a bug, review a pull request, or give a
+coding agent its own folder.
 
 ![Independent Git worktrees growing from one shared repository.](docs/assets/wald-worktrees.png)
 
-## From checkout to ready workspace
+## The setup around a worktree
 
-Creating a useful worktree with plain Git often means remembering the branch, path, dependencies,
-local files, and editor setup yourself:
+A plain Git worktree gives you another set of checked-out files. For most projects, a few more steps
+follow:
 
 ```sh
 git worktree add ../feature-payment -b feature/payment origin/main
@@ -27,14 +27,15 @@ cp ../main/.env.local .env.local
 code .
 ```
 
-With Wald and trusted project setup, the same intent becomes:
+Once you have trusted the project's setup, the same job becomes:
 
 ```sh
 wald create feature/payment --tool code
 ```
 
-Wald resolves the branch, chooses a stable path, creates the worktree, runs trusted setup, provides
-configured local files, and opens your tool. `wald plant` is an exact alias for `wald create`.
+Wald resolves the branch, chooses the path, creates the worktree, and runs the trusted setup. It can
+also copy or link configured local files and open your editor or agent. `wald plant` is an exact alias
+for `wald create`.
 
 ![Wald creates a feature worktree and shows the workspace status.](docs/demo/wald-create.gif)
 
@@ -45,7 +46,7 @@ and running processes you use for that branch. Your unfinished feature can stay 
 production, review a pull request, or give an agent an isolated folder.
 
 All worktrees still share one repository's objects, refs, remotes, and history. Git remains the
-source of truth; Wald manages the repeatable workflow around it.
+source of truth; Wald handles worktree paths, setup, and removal around it.
 
 | When this happens | Instead of | Use |
 | --- | --- | --- |
@@ -58,13 +59,11 @@ New to the idea? Start with [Worktrees explained](docs/worktrees.md).
 
 ## What Wald adds to Git
 
-- **Ready from the start** — trusted lifecycle hooks can install dependencies and provide local
-  files.
-- **Predictable workspaces** — stable paths and clear status make every checkout easy to find.
-- **Safe lifecycle commands** — previews, trust checks, dirty-state checks, and protected primary
-  checkouts guard important work.
-- **Developer and agent workflows** — named tasks, tool profiles, JSON output, and code-only
-  handoffs fit terminals, editors, scripts, and coding agents.
+- Runs trusted lifecycle hooks to install dependencies and copy or link local files.
+- Gives each worktree a stable path and shows the exact location in `wald status` and `wald list`.
+- Checks for local changes, locks, unmerged branches, and protected primary checkouts before removal.
+- Exposes named tasks, tool profiles, JSON output, and code-only handoffs for terminals, scripts, and
+  coding agents.
 
 Wald does not replace branches, invent a second repository model, or hide Git state. You can keep
 using `git status`, `git log`, commits, merges, and pushes exactly as before.
@@ -93,8 +92,8 @@ cd ~/dev/project
 wald init
 ```
 
-Wald previews the layout and asks before writing workspace metadata. Your existing checkout stays
-where it is and remains protected as the primary worktree.
+Before writing workspace metadata, Wald shows the proposed layout and asks for confirmation. Your
+existing checkout stays where it is and remains protected as the primary worktree.
 
 ### Start from a remote repository
 
@@ -102,8 +101,8 @@ where it is and remains protected as the primary worktree.
 wald init git@github.com:example/project.git ~/dev/project
 ```
 
-This creates the recommended standalone layout and guides you through the first worktree and
-optional project setup.
+Wald creates the standalone layout, then offers to create the first worktree and configure the
+project.
 
 ### Create your first workspace
 
@@ -116,7 +115,7 @@ wald create feature/review --tool codex
 Wald reuses a local branch, tracks a matching remote branch, or creates a new branch from the
 configured default branch. Add `--from HEAD` when new work should begin at the current commit.
 
-## A practical daily flow
+## A typical day
 
 ```sh
 wald status
@@ -149,25 +148,25 @@ project/
 └── feature-payment/         feature/payment worktree
 ```
 
-Prefer to retain an existing checkout or group worktrees in a subdirectory? Wald supports those
-layouts too. See [Workspace layouts](docs/worktrees.md#workspace-layouts).
+You can also keep an existing checkout where it is or group worktrees in a subdirectory. See
+[Workspace layouts](docs/worktrees.md#workspace-layouts).
 
-## Make every worktree project-ready
+## Project setup in every worktree
 
 ```sh
 wald config init
 wald config trust
 ```
 
-Project configuration can define dependency installation, copy or symlink steps, lifecycle hooks,
-named tasks, and editor or agent profiles. Wald keeps local automation in `.wald/project.yml` by
-default; teams can deliberately share a repository-owned `.wald.yml`.
+Put repeated setup in the project configuration: install dependencies, copy or link files, run
+lifecycle hooks, and define named tasks or editor profiles. Wald stores local automation in
+`.wald/project.yml` by default; teams can deliberately share a repository-owned `.wald.yml`.
 
-Executable project behavior never runs silently. Review it, trust it locally, and use
-`wald config untrust` whenever that decision should be revoked. The complete schema and precedence
-rules live in [Configuration](docs/configuration.md).
+Wald never runs executable project behavior without local trust. Review the effective configuration,
+trust it locally, and use `wald config untrust` to revoke that decision. The complete schema and
+precedence rules live in [Configuration](docs/configuration.md).
 
-## Move through the forest from your shell
+## Shell integration
 
 Load completion and directory navigation once in your shell profile:
 
@@ -180,7 +179,7 @@ Bash and Fish are supported too. With integration loaded, `wald cd`, `wald creat
 `wald handoff --cd` can change the current shell directory. Without it, Wald prints the canonical
 path and a normal `cd` fallback. See [Shell integration](docs/cli-reference.md#wald-completion).
 
-## Give coding agents separate files
+## One worktree per coding agent
 
 ```sh
 wald create feature/api --tool codex
@@ -188,9 +187,9 @@ wald create feature/ui --tool codex-app
 wald list
 ```
 
-Each agent gets an independent index and working directory while commits and refs remain shared.
-Keep branch ownership explicit, run configured verification per worktree, and merge through your
-normal Git workflow. Read [Agent workflows](docs/agent-workflows.md) for the operating model.
+Each agent gets its own index and working directory while commits and refs remain shared. Give each
+branch a clear owner, run the configured checks in that worktree, and merge through your normal Git
+workflow. [Agent workflows](docs/agent-workflows.md) covers the details.
 
 ## Learn more
 
@@ -201,7 +200,7 @@ normal Git workflow. Read [Agent workflows](docs/agent-workflows.md) for the ope
 - [Brand identity](docs/brand.md) — Wald's name, voice, visual language, and public naming.
 - [CLI reference](docs/cli-reference.md) — every command, flag, JSON contract, and safety rule.
 
-## Build Wald with us
+## Contributing
 
 Issues and focused pull requests are welcome. Read [Contributing](CONTRIBUTING.md) and run the
 project checks before opening a pull request:

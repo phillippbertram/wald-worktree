@@ -12,19 +12,19 @@ Technical behavior remains owned by the implementation and the corresponding ref
 - **Product promise:** **Git worktrees, ready for real work.**
 - **Supporting line:** **Parallel work, naturally.**
 
-Wald is the German word for forest. It is short, distinctive, easy to recognize in a terminal, and
-fits a tool that gives parallel worktrees a clear place to grow.
+Wald is the German word for forest. The name is short enough for a terminal and gives the product a
+simple picture: several worktrees growing from the same repository.
 
 ## The analogy
 
-The repository is the shared ground. Its Git history connects the whole workspace below the
-surface. Each worktree is an independent tree with its own files, dependencies, editor, and running
-processes. Together they form a Wald: separate working environments growing from one repository.
+The repository is the shared ground. Its Git history connects the workspace below the surface. Each
+worktree is a separate tree with its own files, dependencies, editor, and running processes. Put
+them together and you have a Wald: several working folders connected to one repository.
 
 Use the analogy to make worktrees approachable, not to replace Git terminology. Commands remain
 technical and predictable: `create`, `handoff`, `status`, `doctor`, `remove`, and `prune`. `plant` is
-the single playful alias for the additive `create` command. Do not build a second metaphorical
-vocabulary or add playful aliases for destructive operations.
+the one playful alias, and it maps directly to `create`. Keep destructive commands technical;
+removing a worktree should never be disguised as forest wordplay.
 
 The recommended flat standalone layout is **Wald Flow**. It describes the physical arrangement of a
 workspace, not a branching, merging, or release strategy.
@@ -42,6 +42,15 @@ Wald should sound:
 Forest language belongs in the welcome screen, product introduction, section headings, and small
 moments of delight. Errors, confirmations, JSON, and safety guidance use direct technical language.
 Avoid mystical or extended metaphors and jokes that obscure behavior.
+
+Start with the situation the reader recognizes, then say what Wald does. “Wald checks for local
+changes before removing a worktree” is better than “Wald provides a safe and predictable lifecycle.”
+Prefer concrete verbs and nouns over strings of reassuring adjectives.
+
+Do not stack several slogans, pad a paragraph with generic benefits, or force every explanation into
+a symmetrical list. Sentence length and rhythm may vary. Address the reader directly where that
+makes an instruction easier to follow, but do not invent a personal origin story or speak for the
+maintainer without a real quote.
 
 ## Color palette
 

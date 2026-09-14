@@ -1,8 +1,8 @@
 # Agent workflows
 
-Wald gives every coding agent its own tree: a concrete Git worktree connected to the same repository.
-Agents no longer share staged, unstaged, untracked, or generated files just because their tasks
-belong to the same repository.
+Run two coding agents in the same checkout and they can edit or stage each other's files. Put each
+agent in its own Git worktree and they still share the repository, but not the working directory or
+index. Wald creates and keeps track of those folders.
 
 ```mermaid
 flowchart TB
@@ -22,7 +22,8 @@ isolation works in grouped and retained-checkout workspaces.
 
 ## Run two tasks in parallel
 
-**Starting point:** an API task and a UI task must progress independently.
+Suppose one agent owns an API change and another owns a UI change. Start with a worktree for each
+branch:
 
 ```sh
 wald create feature/api
@@ -36,9 +37,9 @@ project/
 └── feature-ui/              Codex App edits and commits feature/ui here
 ```
 
-Built-in profiles cover Code, Cursor, Zed, Codex, Codex App, and Claude. Effective project
-configuration can define or replace profiles under `tools`; custom definitions override same-named
-built-ins, and workspace-local definitions override same-named repository profiles.
+Wald knows how to open Code, Cursor, Zed, Codex, Codex App, and Claude out of the box. Projects can
+define or replace profiles under `tools`. A custom profile overrides a built-in with the same name,
+and a workspace-local profile overrides its repository counterpart.
 
 Open foreground agents from separate terminals:
 
@@ -50,8 +51,8 @@ wald open feature-api --tool codex
 wald open feature-ui --tool codex-app
 ```
 
-Each agent remains responsible for its own edits and commits. If the project exposes a `verify`
-task, verify and remove the completed worktrees separately:
+Each agent remains responsible for its own edits and commits. If the project has a `verify` task,
+run it in each worktree before removing that worktree:
 
 ```sh
 wald run verify feature-api
@@ -69,8 +70,8 @@ an explicit handoff.
 
 ## Hand off unfinished code
 
-When unfinished local code should continue on a fresh branch, run the handoff from its current
-worktree:
+If unfinished local code should continue on a fresh branch, run the handoff from the folder that
+contains those changes:
 
 ```sh
 wald handoff feature/review --tool codex
@@ -99,8 +100,8 @@ not move between worktrees.
   success, the changes exist in both worktrees.
 - Inspect dirty, unmerged, and locked state before any forced removal.
 
-Wald deliberately does not orchestrate multiple agents or transfer running sessions. Its handoff is
-limited to a verified copy of local code into a fresh worktree.
+Wald does not decide which agent owns a task or move a running session between folders. A handoff
+only makes a verified copy of the local code in a fresh worktree.
 
 See [Wald Flow](worktrees.md#wald-flow) for the recommended workspace layout,
 [four everyday workflows](worktrees.md#four-everyday-workflows) for the general worktree model, and
@@ -112,5 +113,5 @@ See [Wald Flow](worktrees.md#wald-flow) for the recommended workspace layout,
 and use the CLI safely. Copy that directory into the skill location supported by the agent host, or
 include it with the repository so the host can discover it.
 
-The skill routes detailed creation and lifecycle questions to focused references, keeping its
-default context small.
+The main skill stays short. Separate references cover worktree creation, automation, and lifecycle
+details when an agent needs them.

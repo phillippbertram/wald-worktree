@@ -1,10 +1,9 @@
 # CLI reference
 
-This document describes the complete public `wald` command surface. Run `wald <command> --help` for the
-same signatures and concise inline examples.
+This page lists every public `wald` command and option. Run `wald <command> --help` for the same
+signature and a few examples in the terminal.
 
-For the underlying mental model and visual workflows, start with
-[Worktrees explained](worktrees.md).
+If worktrees are new to you, start with [Worktrees explained](worktrees.md).
 
 Supported platforms are macOS and Linux with Node.js 22.13.0 or newer and Git 2.31.0 or newer.
 Git 2.31 introduced the `rev-parse --path-format` behavior used for canonical common-directory
@@ -57,22 +56,22 @@ wald init [repository] [directory]
 wald init --adopt [path] [options]
 ```
 
-Without explicit arguments in a terminal, `wald init` inspects the current directory and guides the
-user through keeping an existing checkout or creating a standalone workspace. Outside a Git
-repository, it offers separate paths for cloning a remote URL or selecting a local checkout or bare
-repository. A selected local repository gets the same keep-or-copy choice. With `repository`, the
-direct command clones a remote or local repository into a standalone workspace. Its default flat
-layout is [Wald Flow](worktrees.md#wald-flow); `--worktrees-dir` selects a grouped alternative.
+In a terminal, `wald init` without arguments looks at the current directory and asks whether to keep
+an existing checkout or create a standalone workspace. Outside a Git repository, it can clone a
+remote URL or use a local checkout or bare repository. A selected local repository gets the same
+keep-or-copy choice. With `repository`, the direct command clones a remote or local repository into
+a standalone workspace. Its default flat layout is [Wald Flow](worktrees.md#wald-flow);
+`--worktrees-dir` selects a grouped alternative.
 
-The guided flow validates the target, previews absolute paths and the resulting directory tree, then
-asks `Initialize this workspace?`. Workspace creation, the optional default-branch worktree, and
-the optional project-configuration wizard are separate phases. The wizard recommends the local
-`.wald/project.yml`; declining a later phase keeps the initialized workspace and prints the
-corresponding next command.
+Before writing anything, the guided flow validates the target, shows the absolute paths and
+resulting directory tree, then asks `Initialize this workspace?`. Workspace creation, the optional
+default-branch worktree, and the optional project-configuration wizard are separate phases. The
+wizard recommends the local `.wald/project.yml`. Declining a later phase keeps the initialized
+workspace and prints the corresponding next command.
 
-The source, repository settings, destination, worktree layout, and final plan form a navigable
-sequence. After workspace creation, `Esc` only cancels the optional worktree or project-automation
-phase; it cannot return to the source or layout choices.
+Before workspace creation, `Esc` moves back through the source, repository settings, destination,
+worktree layout, and final plan. After creation, it only cancels the optional worktree or
+project-automation phase; it cannot return to the earlier choices.
 
 When retaining a checkout, relative worktree-directory names resolve beside it and absolute paths
 are used directly. A bare source is described as a repository rather than a checkout. Local

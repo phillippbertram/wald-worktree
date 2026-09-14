@@ -1,12 +1,13 @@
 # Worktrees explained
 
-Git worktrees let one repository provide several project folders at the same time. This guide builds
-the mental model first, then shows where Wald fits and how the workflow looks in daily development.
+Git worktrees let one repository have several working folders at the same time. You can leave a
+half-finished feature open in one folder and fix a production bug in another. This guide explains
+what Git shares between those folders, what stays separate, and where Wald helps.
 
 ## The forest as a mental model
 
-Wald uses a forest as a teaching aid for real Git concepts. The metaphor never replaces the
-technical names used by Git, the CLI, or configuration:
+Wald borrows the forest picture to explain how the pieces fit together. Git, the CLI, and the
+configuration still use their proper technical names:
 
 | Forest image | Technical meaning |
 | --- | --- |
@@ -19,6 +20,8 @@ The default branch is the preferred base for new work and the comparison target 
 Wald does not enforce one history. An explicit `--from` may start new work from another commit.
 
 ## The four building blocks
+
+Most worktree confusion disappears once these four terms are kept separate:
 
 | Term | Think of it as | Example |
 | --- | --- | --- |
@@ -54,11 +57,13 @@ project/
 └── contributor-fix/         files + HEAD + index for contributor/fix
 ```
 
-Each worktree behaves like a normal repository folder: open it in an editor, run `git status`, edit
-files, commit, and start processes there. A commit created in one worktree immediately becomes part
-of the shared repository and is visible from the others.
+You work in each folder as usual: open it in an editor, run `git status`, edit files, commit, and
+start processes. A commit created in one worktree immediately becomes part of the shared repository
+and is visible from the others.
 
 ## Shared and independent state
+
+Files and staging are separate; commits and refs are not. In practice, that means:
 
 ```mermaid
 flowchart TB
@@ -85,8 +90,8 @@ flowchart TB
 
 ### 1. Fix production without disturbing a feature
 
-**Starting point:** `feature/payment` has uncommitted changes and production needs a fix based on
-`release/1.x`.
+You are halfway through `feature/payment` when production needs a fix based on `release/1.x`. Leave
+the feature folder alone and create the hotfix beside it:
 
 ```sh
 wald create hotfix/payment --from release/1.x --tool code
@@ -108,8 +113,8 @@ The hotfix folder is removed after safety checks. The branch and the feature wor
 
 ### 2. Review a teammate's branch beside your own work
 
-**Starting point:** the configured remote contains `contributor/payment-fix`, the project exposes a
-`verify` task, and your current branch must stay open.
+Your current branch needs to stay open, but `contributor/payment-fix` is ready for review on the
+configured remote. Create a second folder and run the project's `verify` task there:
 
 ```sh
 wald create contributor/payment-fix --tool code
@@ -135,8 +140,8 @@ Wald prints the explicit `git push -u <remote> HEAD` command needed to publish i
 
 ### 3. Keep coding while a long test runs
 
-**Starting point:** an experiment or verification job should not occupy the folder used for current
-development.
+A migration test will run for a while, and you still want to use the main folder for development.
+Give the test its own worktree:
 
 ```sh
 wald create experiment/migration
@@ -158,7 +163,8 @@ wald remove experiment-migration
 
 ### 4. Give parallel agents separate files
 
-**Starting point:** two coding tasks must not share staged, unstaged, untracked, or generated files.
+Two coding agents need the same repository, but they must not share staged, unstaged, untracked, or
+generated files. Give each task its own branch and folder:
 
 ```sh
 wald create feature/api
@@ -197,8 +203,8 @@ databases, or other shared services.
 
 ## Carry unfinished code into another worktree
 
-**Starting point:** the current branch has staged, unstaged, or untracked code that should continue
-on a fresh branch without cleaning or changing the source.
+Sometimes the code in front of you belongs on a fresh branch, but cleaning the current folder first
+would only get in the way. Carry the staged, unstaged, and untracked state into a new worktree:
 
 ```sh
 wald create feature/review --carry
@@ -227,8 +233,8 @@ trust, hooks, branch creation, or checkout creation. Explicit branch commands re
 
 ## The worktree lifecycle
 
-This lifecycle works in every supported workspace layout. **Wald Flow** names the recommended flat
-layout, not a branching model or this create-to-remove sequence.
+Creation and removal follow the same path in every supported workspace layout. **Wald Flow** is the
+name of the recommended flat layout, not a branching model or this create-to-remove sequence.
 
 ```mermaid
 flowchart TB
@@ -282,9 +288,9 @@ Create it directly from a remote repository:
 wald init git@github.com:example/project.git ~/dev/project
 ```
 
-Like git-flow and GitHub Flow, the name describes a preferred way of working. Unlike those branching
-models, Wald Flow defines only the physical worktree layout. It does not prescribe branch names,
-merge direction, release branches, or deployment policy.
+Despite the name, Wald Flow is not another branching model such as git-flow or GitHub Flow. It only
+describes where the repository and worktree folders live. Branch names, merge direction, releases,
+and deployments stay up to the project.
 
 ### Grouped standalone workspace
 
@@ -305,7 +311,8 @@ wald init git@github.com:example/project.git ~/dev/project --worktrees-dir workt
 
 ### Retained existing checkout
 
-Guided initialization can keep an existing checkout in place and add a separate worktree container:
+If the repository already exists on disk, guided initialization can leave that checkout in place and
+put new worktrees in a separate directory:
 
 ```text
 ~/dev/
@@ -323,7 +330,7 @@ cd ~/dev/project
 wald init
 ```
 
-The wizard suggests a safe target, previews absolute paths and the resulting tree, then asks for
+Wald suggests a safe target, shows the absolute paths and resulting directory tree, then asks for
 confirmation. The original checkout is never moved or deleted and is protected from `wald remove`.
 
 Creating a separate standalone workspace from a local repository is different: Wald copies committed
@@ -334,7 +341,7 @@ See [Configuration](configuration.md#supported-layouts) for generated paths and 
 
 ## Wald and native Git
 
-Wald does not replace Git. It applies workspace policy around the native operations:
+Wald uses Git for the underlying repository operations and adds the workspace rules around them:
 
 | Intent | Wald workflow | Native foundation |
 | --- | --- | --- |
@@ -350,8 +357,8 @@ Wald does not replace Git. It applies workspace policy around the native operati
 | Repair workspace infrastructure | `wald init` | Restore the configured container, metadata link, or shared directory |
 | Stop managing the repository with Wald | `wald uninit` | Preview-first removal of Wald-owned metadata |
 
-Use Wald for normal workspace operations so paths, setup, trust, and safety checks stay consistent.
-Regular Git commands inside a selected worktree continue to work normally.
+Use Wald when creating, finding, preparing, or removing worktrees so those workspace rules are
+applied. Inside a worktree, regular Git commands continue to work normally.
 
 ## Common questions and pitfalls
 

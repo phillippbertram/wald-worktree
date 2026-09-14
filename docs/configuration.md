@@ -1,7 +1,8 @@
 # Configuration
 
-`wald` has one local workspace configuration, one local shared-file area, and up to two project
-configuration sources. Every YAML document is strict and versioned; unknown fields are errors.
+Every Wald workspace has one local configuration and one directory for shared local files. Project
+setup may come from two configuration files. Every YAML document is strict and versioned; unknown
+fields are errors.
 
 Read [Worktrees explained](worktrees.md) first if the distinction between the shared repository and
 per-worktree state is unfamiliar.
@@ -104,7 +105,7 @@ parent/
     └── .wald -> ../project/.git/wald
 ```
 
-The conceptual shared-versus-local boundary is shown in
+For a visual explanation of the shared and local pieces, see
 [Shared and independent state](worktrees.md#shared-and-independent-state). A separate workspace
 copied from a local repository starts with independent Git object files and does not use local clone
 hardlinks.
@@ -119,7 +120,7 @@ them unless `--force` is also supplied.
 
 ## Project configuration
 
-Wald resolves one effective configuration from two optional sources:
+Wald combines up to two files into the configuration it actually uses:
 
 1. `<worktree>/.wald.yml` is the repository-owned base and may vary by branch or revision.
 2. `<workspace>/.wald/project.yml` is local to one Wald workspace and overrides that base for every
@@ -129,13 +130,13 @@ In an adopted workspace the local file physically lives at
 `<git-common-dir>/wald/project.yml`. It is mode `600`, is never committed, and is protected as local
 data during `wald uninit`. If only one source exists, it supplies the complete effective behavior.
 
-Generate the recommended local starting point from detected Node package conventions:
+Run the setup wizard to create a local configuration from detected Node package conventions:
 
 ```sh
 wald config init [worktree]
 ```
 
-Create shared repository behavior only when intended:
+To store project setup in the repository instead:
 
 ```sh
 wald config init [worktree] --scope project
@@ -162,9 +163,9 @@ Interactive `wald init` offers the same wizard after retaining a checkout or cre
 worktree in a standalone workspace and recommends local storage. Automatic project detection
 currently covers Node package managers; other ecosystems use manually configured commands.
 
-During guided initialization this wizard is presented as a separate optional phase after the
-workspace and, for standalone layouts, the first worktree are ready. Cancelling it does not roll back
-the initialized workspace.
+During guided initialization, the wizard is a separate optional step after the workspace and, for
+standalone layouts, the first worktree are ready. Cancelling it does not roll back the initialized
+workspace.
 
 When `.wald.yml` already exists, copy its complete normalized behavior into the local workspace with:
 
@@ -220,7 +221,7 @@ tools:
 | `tasks.<name>` | Add or replace that named task; `null` removes an inherited task. |
 | `tools.<name>` | Add or replace that named tool; `null` removes an inherited tool. |
 
-The effective result, not either source file in isolation, owns execution and trust.
+Wald executes and trusts the merged result, not either source file on its own.
 
 | Field | Default | Purpose |
 | --- | --- | --- |
@@ -236,8 +237,8 @@ The effective result, not either source file in isolation, owns execution and tr
 
 ### Complete example
 
-This example demonstrates every lifecycle hook, safe argument-array commands, copy/symlink setup,
-named tasks, and a custom agent profile. Adapt its project-specific paths before using it:
+The example below includes every lifecycle hook, argument-array commands, copy and symlink setup,
+named tasks, and a custom agent profile. Adjust its project-specific paths before using it:
 
 ```yaml
 version: 1
@@ -469,7 +470,7 @@ never printed or expanded.
 
 Redirected and other non-TTY output keeps the append-only row format. It prints `RUNNING` before
 each configured step, streams command output without presentation changes, and then prints the
-result. This format remains suitable for logs and scripts:
+result. The same rows work in logs and scripts:
 
 ```text
 STEP  STATUS     TYPE      SOURCE / COMMAND                    TARGET / CWD                  NOTE
