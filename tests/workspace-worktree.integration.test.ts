@@ -342,8 +342,8 @@ describe("managed Git workspace", () => {
 
     expect(moved).toMatchObject({
       name: "renamed-feature",
-      branch: feature.branch,
-      branchRef: feature.branchRef,
+      branch: "renamed-feature",
+      branchRef: "refs/heads/renamed-feature",
       head: feature.head,
       state: "modified",
     });
@@ -352,7 +352,7 @@ describe("managed Git workspace", () => {
     expect(await fs.readFile(path.join(moved.path, "untracked.txt"), "utf8")).toBe("keep me\n");
   });
 
-  it("renames a clean linked worktree without changing its branch or HEAD", async () => {
+  it("renames a clean linked worktree and branch without changing HEAD", async () => {
     const workspace = await workspaces.initialize(
       repository.remote,
       path.join(temporaryRoot, "clean-rename-workspace"),
@@ -369,8 +369,8 @@ describe("managed Git workspace", () => {
 
     expect(moved).toMatchObject({
       name: "clean-renamed",
-      branch: feature.branch,
-      branchRef: feature.branchRef,
+      branch: "clean-renamed",
+      branchRef: "refs/heads/clean-renamed",
       head: feature.head,
       state: "clean",
     });

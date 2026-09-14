@@ -188,6 +188,12 @@ describe("interactive main menu", () => {
       expect.anything(),
     );
     expect(interactions.renameWorktree).toHaveBeenCalledWith({}, expect.anything());
+    expect(interactions.selectCalls.flatMap((call) => call.options)).toContainEqual(
+      expect.objectContaining({
+        value: "rename",
+        description: "Rename a checkout directory and its local branch.",
+      }),
+    );
   });
 
   it("hides handoff outside a worktree and rename without a valid target", async () => {

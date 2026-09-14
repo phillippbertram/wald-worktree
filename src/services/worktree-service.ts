@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { WaldError } from "../domain/errors.js";
+import { toErrorMessage, WaldError } from "../domain/errors.js";
 import type { Workspace, Worktree, WorktreeState } from "../domain/types.js";
 import type { GitClient } from "../infrastructure/git-client.js";
 import { isPathInside } from "../infrastructure/path-utils.js";
@@ -59,6 +59,30 @@ export type BranchDeletionInspection =
 export type MoveWorktreePlan = {
   worktree: Worktree;
   target: string;
+  cwd: string;
+  worktreeRoot: string;
+  gitPath: string;
+  directoryId: string;
+  tracking: BranchTracking;
+  options: RenameWorktreeOptions;
+  branchChange: {
+    before: string | null;
+    after: string | null;
+    renamed: boolean;
+    upstream: string | null;
+  };
+};
+
+export type RenameWorktreeOptions = {
+  branch?: string;
+  keepBranch?: boolean;
+};
+
+type BranchTracking = {
+  remote: string;
+  merge: string;
+  upstream: string | null;
+  upstreamRef: string | null;
 };
 
 export class WorktreeService {
@@ -388,7 +412,11 @@ export class WorktreeService {
     });
   }
 
-  async listMoveCandidates(workspace: Workspace, cwd = process.cwd()): Promise<Worktree[]> {
+  async listMoveCandidates(
+    workspace: Workspace,
+    cwd = process.cwd(),
+    options: RenameWorktreeOptions = {},
+  ): Promise<Worktree[]> {
     const worktrees = await this.list(workspace);
     const current = await this.currentFromList(worktrees, cwd);
     const worktreeRoot = await canonicalPath(workspace.worktreeDir);
@@ -400,6 +428,12 @@ export class WorktreeService {
         worktree.state === "missing" ||
         worktree.state === "unavailable" ||
         worktree.locked ||
+        (!options.keepBranch &&
+          (!worktree.branch ||
+            worktree.branch === workspace.config.defaultBranch ||
+            worktrees.some(
+              (other) => other.path !== worktree.path && other.branchRef === worktree.branchRef,
+            ))) ||
         (await canonicalPath(path.dirname(worktree.path))) !== worktreeRoot ||
         (await this.hasSubmodules(worktree))
       ) {
@@ -415,7 +449,11 @@ export class WorktreeService {
     identifier: string,
     newName: string,
     cwd = process.cwd(),
+    options: RenameWorktreeOptions = {},
   ): Promise<MoveWorktreePlan> {
+    if (options.branch !== undefined && options.keepBranch) {
+      throw new WaldError("--branch and --keep-branch cannot be combined.");
+    }
     validateWorktreeName(newName);
     const [worktree, current] = await Promise.all([
       this.resolve(workspace, identifier),
@@ -461,24 +499,403 @@ export class WorktreeService {
     if (await pathEntryExists(target)) {
       throw new WaldError(`Worktree directory already exists: ${target}`);
     }
-    return { worktree, target };
+    if ((await this.list(workspace)).some((candidate) => candidate.path === target)) {
+      throw new WaldError(`Worktree destination is already registered with Git: ${target}`);
+    }
+    const portableCollision = await findPortableNameCollision(workspace.worktreeDir, newName);
+    if (portableCollision) {
+      throw new WaldError(`Worktree directory conflicts with existing entry: ${portableCollision}`);
+    }
+    if (!options.keepBranch) {
+      if (!worktree.branch) {
+        throw new WaldError("Detached worktrees require --keep-branch to rename their directory.");
+      }
+      if (worktree.branch === workspace.config.defaultBranch) {
+        throw new WaldError(
+          "The configured default branch requires --keep-branch to rename its directory.",
+        );
+      }
+    }
+    const branch = options.keepBranch ? worktree.branch : (options.branch ?? newName);
+    const renamed = branch !== worktree.branch;
+    if (renamed) await this.assertExclusiveRenameBranch(workspace, worktree);
+    if (branch !== null) {
+      await this.validateRenameBranch(workspace, branch);
+      if (renamed) await this.assertRenameBranchAvailable(workspace, branch);
+    }
+    const identity = await this.inspectMoveIdentity(workspace, worktree, cwd);
+    return {
+      worktree,
+      target,
+      cwd,
+      worktreeRoot,
+      ...identity,
+      options: { ...options },
+      branchChange: {
+        before: worktree.branch,
+        after: branch,
+        renamed,
+        upstream: identity.tracking.upstream,
+      },
+    };
   }
 
   async move(workspace: Workspace, plan: MoveWorktreePlan): Promise<Worktree> {
-    await this.git.run(["worktree", "move", plan.worktree.path, plan.target], {
-      gitDir: workspace.gitDir,
-    });
-    const moved = (await this.list(workspace)).find((worktree) => worktree.path === plan.target);
+    // A prepared plan may be stale. Recheck every boundary before the first mutation.
+    const current = await this.prepareMove(
+      workspace,
+      plan.worktree.path,
+      path.basename(plan.target),
+      plan.cwd,
+      plan.options,
+    );
     if (
-      !moved ||
-      moved.branchRef !== plan.worktree.branchRef ||
-      moved.head !== plan.worktree.head
+      current.target !== plan.target ||
+      current.worktreeRoot !== plan.worktreeRoot ||
+      current.worktree.head !== plan.worktree.head ||
+      current.worktree.branchRef !== plan.worktree.branchRef ||
+      current.gitPath !== plan.gitPath ||
+      current.directoryId !== plan.directoryId ||
+      !sameTracking(current.tracking, plan.tracking) ||
+      current.branchChange.after !== plan.branchChange.after ||
+      current.branchChange.before !== plan.branchChange.before ||
+      current.branchChange.renamed !== plan.branchChange.renamed
     ) {
+      throw new WaldError("Worktree identity, HEAD, or upstream changed after rename preparation.");
+    }
+
+    try {
+      if (plan.branchChange.renamed) {
+        await this.renameLocalBranch(workspace, plan.branchChange.before, plan.branchChange.after);
+      }
+      await this.verifyMove(workspace, plan, plan.worktree.path, plan.branchChange.after);
+      await this.verifyRenamedRef(workspace, plan, plan.worktree.path);
+      if (await pathEntryExists(plan.target)) {
+        throw new WaldError(`Worktree directory already exists: ${plan.target}`);
+      }
+      await this.git.run(["worktree", "move", plan.worktree.path, plan.target], {
+        gitDir: workspace.gitDir,
+      });
+      const moved = await this.verifyMove(workspace, plan, plan.target, plan.branchChange.after);
+      await this.verifyRenamedRef(workspace, plan, plan.target);
+      if (await pathEntryExists(plan.worktree.path)) {
+        throw new WaldError(`The original worktree path still exists: ${plan.worktree.path}`);
+      }
+      return moved;
+    } catch (error) {
+      try {
+        await this.rollbackMove(workspace, plan);
+      } catch (rollbackError) {
+        throw new WaldError(
+          `Rename failed: ${toErrorMessage(error)}\nRollback incomplete: ${toErrorMessage(rollbackError)}\n` +
+            `Recovery: inspect git worktree list --porcelain and both paths (${plan.worktree.path}, ${plan.target}). ` +
+            `Verify HEAD ${plan.worktree.head}, the worktree Git directory ${plan.gitPath}, and upstream ${plan.tracking.upstream ?? "none"}. ` +
+            `If the matching worktree remains at ${plan.target}, use git worktree move to restore ${plan.worktree.path}. ` +
+            (plan.branchChange.renamed
+              ? `If its branch remains ${plan.branchChange.after}, verify ${plan.branchChange.before} is free, then use git branch --move to restore ${plan.branchChange.before}. `
+              : "") +
+            "Do not force, delete, or overwrite conflicting paths or refs.",
+          { cause: error },
+        );
+      }
       throw new WaldError(
-        `Git moved the worktree, but its identity could not be verified at ${plan.target}`,
+        `Rename failed; original worktree path and branch restored: ${toErrorMessage(error)}`,
+        { cause: error },
       );
     }
-    return moved;
+  }
+
+  private async renameLocalBranch(
+    workspace: Workspace,
+    before: string | null,
+    after: string | null,
+  ): Promise<void> {
+    if (!before || !after) throw new WaldError("Cannot rename a detached HEAD.");
+    await this.git.run(["branch", "--move", "--", before, after], { gitDir: workspace.gitDir });
+  }
+
+  private async verifyRenamedRef(
+    workspace: Workspace,
+    plan: MoveWorktreePlan,
+    worktreePath: string,
+  ): Promise<void> {
+    if (
+      plan.branchChange.renamed &&
+      plan.branchChange.before &&
+      (await this.refExists(workspace, `refs/heads/${plan.branchChange.before}`))
+    ) {
+      throw new WaldError(`Original branch still exists after rename: ${plan.branchChange.before}`);
+    }
+    if (plan.branchChange.renamed) {
+      await this.assertExclusiveRenameBranch(workspace, {
+        ...plan.worktree,
+        path: worktreePath,
+        branch: plan.branchChange.after,
+        branchRef: `refs/heads/${plan.branchChange.after}`,
+      });
+    }
+  }
+
+  private async assertExclusiveRenameBranch(
+    workspace: Workspace,
+    worktree: Worktree,
+  ): Promise<void> {
+    if (
+      (await this.list(workspace)).some(
+        (candidate) =>
+          candidate.path !== worktree.path && candidate.branchRef === worktree.branchRef,
+      )
+    ) {
+      throw new WaldError(
+        `Cannot rename a branch checked out in multiple worktrees: ${worktree.branch}`,
+      );
+    }
+  }
+
+  private async validateRenameBranch(workspace: Workspace, branch: string): Promise<void> {
+    // Check the literal ref too: --branch alone expands shorthand such as @{-1}.
+    await this.validateBranch(workspace, branch);
+    if (
+      !(await this.git.succeeds(["check-ref-format", `refs/heads/${branch}`], {
+        gitDir: workspace.gitDir,
+      }))
+    ) {
+      throw new WaldError(`Invalid branch name: ${branch}`);
+    }
+  }
+
+  private async assertRenameBranchAvailable(workspace: Workspace, branch: string): Promise<void> {
+    const ref = `refs/heads/${branch}`;
+    const refs = await this.git.run(["for-each-ref", "--format=%(refname)", "refs/heads/"], {
+      gitDir: workspace.gitDir,
+    });
+    if (
+      refs.stdout
+        .split("\n")
+        .some(
+          (existing) =>
+            existing === ref || existing.startsWith(`${ref}/`) || ref.startsWith(`${existing}/`),
+        )
+    ) {
+      throw new WaldError(
+        `Local branch already exists or conflicts with the requested name: ${branch}`,
+      );
+    }
+    // Git moves the entire branch config section. Do not merge it with orphaned target settings.
+    const escaped = branch.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+    const config = await this.git.run(["config", "--get-regexp", `^branch\\.${escaped}\\.`], {
+      gitDir: workspace.gitDir,
+      reject: false,
+    });
+    if (config.exitCode !== 1) {
+      throw new WaldError(
+        `Cannot safely rename to a branch with existing or unreadable configuration: ${branch}`,
+      );
+    }
+  }
+
+  private async inspectMoveIdentity(
+    workspace: Workspace,
+    worktree: Worktree,
+    cwd: string,
+  ): Promise<{ gitPath: string; directoryId: string; tracking: BranchTracking }> {
+    const listed = await this.list(workspace);
+    const actual = listed.find((candidate) => candidate.path === worktree.path);
+    const current = await this.currentFromList(listed, cwd);
+    if (
+      !actual ||
+      actual.head !== worktree.head ||
+      actual.branchRef !== worktree.branchRef ||
+      !actual.head ||
+      actual.role === "primary" ||
+      actual.path === current?.path ||
+      actual.locked ||
+      actual.state === "missing" ||
+      actual.state === "unavailable" ||
+      (await canonicalPath(path.dirname(actual.path))) !==
+        (await canonicalPath(workspace.worktreeDir)) ||
+      (await canonicalPath(actual.path)) !== actual.path ||
+      (await this.hasSubmodules(actual))
+    ) {
+      throw new WaldError(`Worktree identity or movable state changed: ${worktree.path}`);
+    }
+    const head = await this.git.run(["rev-parse", "--verify", "HEAD^{commit}"], {
+      cwd: actual.path,
+    });
+    const symbolic = await this.git.run(["symbolic-ref", "--quiet", "HEAD"], {
+      cwd: actual.path,
+      reject: false,
+    });
+    if (
+      head.stdout !== worktree.head ||
+      (worktree.branchRef
+        ? symbolic.exitCode !== 0 || symbolic.stdout !== worktree.branchRef
+        : symbolic.exitCode !== 1)
+    ) {
+      throw new WaldError(`Worktree HEAD or branch identity changed: ${worktree.path}`);
+    }
+    const gitPath = await this.git.run(["rev-parse", "--absolute-git-dir"], { cwd: actual.path });
+    const common = await this.git.run(["rev-parse", "--git-common-dir"], { cwd: actual.path });
+    if (
+      (await canonicalPath(path.resolve(actual.path, common.stdout))) !==
+      (await canonicalPath(workspace.gitDir))
+    ) {
+      throw new WaldError(`Worktree belongs to a different Git repository: ${actual.path}`);
+    }
+    if (worktree.branchRef) {
+      if (worktree.branchRef !== `refs/heads/${worktree.branch}`) {
+        throw new WaldError(`Branch identity is not a local branch: ${worktree.branch}`);
+      }
+      const ref = await this.git.run(["rev-parse", "--verify", worktree.branchRef], {
+        gitDir: workspace.gitDir,
+      });
+      const alias = await this.git.run(["symbolic-ref", "--quiet", worktree.branchRef], {
+        gitDir: workspace.gitDir,
+        reject: false,
+      });
+      if (ref.stdout !== worktree.head || alias.exitCode !== 1) {
+        throw new WaldError(`Local branch identity changed: ${worktree.branch}`);
+      }
+    }
+    const directory = await fs.stat(actual.path);
+    return {
+      gitPath: await canonicalPath(gitPath.stdout),
+      directoryId: `${directory.dev}:${directory.ino}`,
+      tracking: await this.readBranchTracking(worktree.branch, actual.path),
+    };
+  }
+
+  private async readBranchTracking(
+    branch: string | null,
+    worktreePath: string,
+  ): Promise<BranchTracking> {
+    if (branch === null) return { remote: "", merge: "", upstream: null, upstreamRef: null };
+    const values: string[] = [];
+    for (const key of ["remote", "merge"]) {
+      const result = await this.git.run(
+        ["config", "--null", "--get-all", `branch.${branch}.${key}`],
+        {
+          cwd: worktreePath,
+          reject: false,
+          stripFinalNewline: false,
+        },
+      );
+      if (result.exitCode !== 0 && result.exitCode !== 1) {
+        throw new WaldError(`Cannot read upstream configuration for branch: ${branch}`);
+      }
+      values.push(result.stdout);
+    }
+    const upstream = await this.git.run(
+      ["for-each-ref", "--format=%(refname)%00%(upstream)", `refs/heads/${branch}`],
+      { cwd: worktreePath },
+    );
+    const entry = upstream.stdout
+      .split("\n")
+      .find((line) => line.startsWith(`refs/heads/${branch}\0`));
+    if (entry === undefined) throw new WaldError(`Cannot read upstream for branch: ${branch}`);
+    return {
+      remote: values[0] ?? "",
+      merge: values[1] ?? "",
+      upstream: entry.split("\0")[1]?.replace(/^refs\/(?:heads|remotes)\//u, "") || null,
+      upstreamRef: entry.split("\0")[1] || null,
+    };
+  }
+
+  private async verifyMove(
+    workspace: Workspace,
+    plan: MoveWorktreePlan,
+    target: string,
+    branch: string | null,
+  ): Promise<Worktree> {
+    if ((await canonicalPath(workspace.worktreeDir)) !== plan.worktreeRoot) {
+      throw new WaldError("Configured worktree root changed during rename.");
+    }
+    const expected = {
+      ...plan.worktree,
+      path: target,
+      branch,
+      branchRef: branch === null ? null : `refs/heads/${branch}`,
+    };
+    const identity = await this.inspectMoveIdentity(workspace, expected, plan.cwd);
+    if (
+      identity.gitPath !== plan.gitPath ||
+      identity.directoryId !== plan.directoryId ||
+      !sameTracking(identity.tracking, plan.tracking)
+    ) {
+      throw new WaldError(`Worktree Git identity or upstream changed: ${target}`);
+    }
+    const actual = (await this.list(workspace)).find((candidate) => candidate.path === target);
+    if (!actual || actual.head !== expected.head || actual.branchRef !== expected.branchRef) {
+      throw new WaldError(`Worktree identity changed: ${target}`);
+    }
+    return actual;
+  }
+
+  private async rollbackMove(workspace: Workspace, plan: MoveWorktreePlan): Promise<void> {
+    const locate = async () => {
+      const candidates = (await this.list(workspace)).filter(
+        (candidate) => candidate.path === plan.worktree.path || candidate.path === plan.target,
+      );
+      const matching: Worktree[] = [];
+      for (const candidate of candidates) {
+        if (
+          candidate.branch !== plan.branchChange.before &&
+          candidate.branch !== plan.branchChange.after
+        )
+          continue;
+        const gitPath = await this.git.run(["rev-parse", "--absolute-git-dir"], {
+          cwd: candidate.path,
+          reject: false,
+        });
+        if (gitPath.exitCode === 0 && (await canonicalPath(gitPath.stdout)) === plan.gitPath)
+          matching.push(candidate);
+      }
+      const candidate = matching[0];
+      if (matching.length !== 1 || !candidate)
+        throw new WaldError("Cannot uniquely identify the worktree for rollback.");
+      return await this.verifyMove(workspace, plan, candidate.path, candidate.branch);
+    };
+    const failures: string[] = [];
+    try {
+      const actual = await locate();
+      if (actual.path !== plan.worktree.path) {
+        if (
+          (await pathEntryExists(plan.worktree.path)) ||
+          (await this.list(workspace)).some((candidate) => candidate.path === plan.worktree.path)
+        ) {
+          throw new WaldError(`Original path is occupied: ${plan.worktree.path}`);
+        }
+        await this.git.run(["worktree", "move", actual.path, plan.worktree.path], {
+          gitDir: workspace.gitDir,
+        });
+      }
+    } catch (error) {
+      failures.push(toErrorMessage(error));
+    }
+    try {
+      const actual = await locate();
+      if (plan.branchChange.renamed && actual.branch === plan.branchChange.after) {
+        if (!plan.branchChange.before) throw new WaldError("Original branch is unavailable.");
+        await this.assertExclusiveRenameBranch(workspace, actual);
+        await this.assertRenameBranchAvailable(workspace, plan.branchChange.before);
+        await this.renameLocalBranch(workspace, actual.branch, plan.branchChange.before);
+      }
+    } catch (error) {
+      failures.push(toErrorMessage(error));
+    }
+    try {
+      await this.verifyMove(workspace, plan, plan.worktree.path, plan.branchChange.before);
+    } catch (error) {
+      failures.push(toErrorMessage(error));
+    }
+    if (
+      plan.branchChange.renamed &&
+      plan.branchChange.after &&
+      (await this.refExists(workspace, `refs/heads/${plan.branchChange.after}`))
+    ) {
+      failures.push(`The target branch still exists: ${plan.branchChange.after}`);
+    }
+    if (failures.length > 0) throw new WaldError(failures.join("; "));
   }
 
   async rollbackCreated(
@@ -641,6 +1058,14 @@ export class WorktreeService {
       gitDir: workspace.gitDir,
     });
   }
+}
+
+function sameTracking(left: BranchTracking, right: BranchTracking): boolean {
+  return (
+    left.remote === right.remote &&
+    left.merge === right.merge &&
+    left.upstreamRef === right.upstreamRef
+  );
 }
 
 export function slugifyBranch(branch: string): string {

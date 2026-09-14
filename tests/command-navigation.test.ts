@@ -4,6 +4,7 @@ import { handoffWorktree } from "../src/cli/commands/handoff.js";
 import { runProjectHook } from "../src/cli/commands/hook.js";
 import { openWorktree } from "../src/cli/commands/open.js";
 import { removeWorktrees } from "../src/cli/commands/remove.js";
+import { renameWorktree } from "../src/cli/commands/rename.js";
 import { runProjectTask } from "../src/cli/commands/run.js";
 import type { CliContext } from "../src/cli/context.js";
 import { chooseBranch } from "../src/cli/helpers.js";
@@ -115,6 +116,43 @@ describe("interactive command navigation", () => {
     await expect(
       chooseBranch(workspace, worktrees as unknown as CliContext["worktrees"]),
     ).resolves.toBe("existing");
+  });
+
+  it("renames the selected worktree and branch without an extra confirmation", async () => {
+    prompts.worktreeSelections.push(feature);
+    prompts.promptTexts.push("review");
+    const plan = {
+      worktree: feature,
+      target: review.path,
+      branchChange: { before: "feature", after: "review", renamed: true, upstream: null },
+    };
+    const prepareMove = vi.fn().mockResolvedValue(plan);
+    const move = vi.fn().mockResolvedValue(review);
+    const context = commandContext(workspace, null, [feature], {
+      worktrees: { listMoveCandidates: vi.fn().mockResolvedValue([feature]), prepareMove, move },
+    });
+
+    await renameWorktree({}, context);
+
+    expect(prepareMove).toHaveBeenCalledWith(workspace, "feature", "review", undefined, {
+      branch: undefined,
+      keepBranch: undefined,
+    });
+    expect(move).toHaveBeenCalledWith(workspace, plan);
+    expect(prompts.confirmationQuestions).toEqual([]);
+  });
+
+  it("cancels rename input before preparing or mutating the worktree", async () => {
+    prompts.worktreeSelections.push(feature);
+    prompts.promptTexts.push(new PromptBackError());
+    const prepareMove = vi.fn();
+    const move = vi.fn();
+    const context = commandContext(workspace, null, [feature], {
+      worktrees: { listMoveCandidates: vi.fn().mockResolvedValue([feature]), prepareMove, move },
+    });
+    await expect(renameWorktree({}, context)).rejects.toBeInstanceOf(PromptBackError);
+    expect(prepareMove).not.toHaveBeenCalled();
+    expect(move).not.toHaveBeenCalled();
   });
 
   it("confirms an interactively selected create plan with Yes by default", async () => {

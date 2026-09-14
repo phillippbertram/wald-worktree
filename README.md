@@ -133,6 +133,11 @@ Need to move unfinished code into a clean branch? `wald handoff feature/review` 
 unstaged, and non-ignored untracked file contents into a new worktree while leaving the source
 unchanged. It transfers code, not a running editor, process, or agent session.
 
+`wald rename feature-payment payment-review` renames both the linked worktree directory and its local
+branch. Use `--branch feature/payment-review` for a different branch name or `--keep-branch` to move
+only the directory. Upstream tracking stays unchanged; remotes are never modified. See
+[Rename reference](docs/cli-reference.md#wald-rename) for safety rules and JSON output.
+
 ## Wald Flow
 
 Wald Flow is the recommended physical layout. It is not a branching or release strategy.

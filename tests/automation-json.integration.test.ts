@@ -63,17 +63,23 @@ describe("automation JSON contracts", { timeout: 20_000 }, () => {
     expect(renamed.exitCode, renamed.stderr).toBe(0);
     expect(JSON.parse(renamed.stdout)).toMatchObject({
       action: "renamed",
-      before: { name: "feature-handoff" },
-      worktree: { name: "review-ready", branch: "feature/handoff" },
+      before: { name: "feature-handoff", branch: "feature/handoff" },
+      worktree: { name: "review-ready", branch: "review-ready" },
+      branchChange: {
+        before: "feature/handoff",
+        after: "review-ready",
+        renamed: true,
+        upstream: null,
+      },
     });
 
     const removed = await runCli(workspace, "remove", "review-ready", "--yes", "--json");
     expect(removed.exitCode, removed.stderr).toBe(0);
     expect(JSON.parse(removed.stdout)).toMatchObject({
       action: "removed",
-      worktrees: [{ name: "review-ready", branch: "feature/handoff" }],
+      worktrees: [{ name: "review-ready", branch: "review-ready" }],
       deletedBranches: [],
-      keptBranches: ["feature/handoff"],
+      keptBranches: ["review-ready"],
     });
   });
 
@@ -103,6 +109,86 @@ describe("automation JSON contracts", { timeout: 20_000 }, () => {
       ],
       deletedBranches: ["feature/one", "feature/two"],
       keptBranches: [],
+    });
+  });
+
+  it("exposes custom, kept, default and detached rename branches in terminal and JSON output", async () => {
+    const workspace = path.join(temporaryRoot, "workspace");
+    await runCli(temporaryRoot, "init", repository.remote, workspace, "--json");
+    await runCli(workspace, "create", "feature/payment", "--no-fetch", "--json");
+    await execa("git", ["branch", "--set-upstream-to=origin/main", "feature/payment"], {
+      cwd: path.join(workspace, "feature-payment"),
+    });
+    const renamed = await runCli(
+      workspace,
+      "rename",
+      "feature-payment",
+      "review",
+      "--branch",
+      "feature/payment-review",
+    );
+    expect(renamed.exitCode, renamed.stderr).toBe(0);
+    expect(renamed.stdout).toContain("Branch renamed: feature/payment → feature/payment-review");
+    expect(renamed.stdout).toContain("Upstream kept: origin/main");
+
+    const kept = await runCli(
+      workspace,
+      "rename",
+      "review",
+      "review-ready",
+      "--keep-branch",
+      "--json",
+    );
+    expect(kept.exitCode, kept.stderr).toBe(0);
+    expect(JSON.parse(kept.stdout)).toMatchObject({
+      before: { name: "review", branch: "feature/payment-review" },
+      branchChange: {
+        before: "feature/payment-review",
+        after: "feature/payment-review",
+        renamed: false,
+        upstream: "origin/main",
+      },
+      worktree: { name: "review-ready", branch: "feature/payment-review" },
+    });
+
+    const keptText = await runCli(
+      workspace,
+      "rename",
+      "review-ready",
+      "review-final",
+      "--keep-branch",
+    );
+    expect(keptText.exitCode, keptText.stderr).toBe(0);
+    expect(keptText.stdout).toContain("Branch kept: feature/payment-review");
+    await execa("git", ["checkout", "--detach"], { cwd: path.join(workspace, "review-final") });
+    const detached = await runCli(
+      workspace,
+      "rename",
+      "review-final",
+      "detached-review",
+      "--keep-branch",
+      "--json",
+    );
+    expect(detached.exitCode, detached.stderr).toBe(0);
+    expect(JSON.parse(detached.stdout)).toMatchObject({
+      before: { branch: null },
+      branchChange: { before: null, after: null, renamed: false, upstream: null },
+      worktree: { name: "detached-review", branch: null },
+    });
+
+    await runCli(workspace, "create", "main", "--no-fetch", "--json");
+    const keptDefault = await runCli(
+      workspace,
+      "rename",
+      "main",
+      "main-checkout",
+      "--keep-branch",
+      "--json",
+    );
+    expect(keptDefault.exitCode, keptDefault.stderr).toBe(0);
+    expect(JSON.parse(keptDefault.stdout)).toMatchObject({
+      branchChange: { before: "main", after: "main", renamed: false },
+      worktree: { name: "main-checkout", branch: "main" },
     });
   });
 

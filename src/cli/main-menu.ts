@@ -127,7 +127,7 @@ export async function runMainMenu(program: Command, context: CliContext): Promis
             {
               label: "Rename worktree",
               value: "rename",
-              description: "Rename a checkout directory while keeping its branch.",
+              description: "Rename a checkout directory and its local branch.",
               group: "Maintenance",
             },
             {

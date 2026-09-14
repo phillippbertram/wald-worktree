@@ -355,22 +355,58 @@ as the general hook command.
 ## `wald rename`
 
 ```text
-wald rename [worktree] [new-name] [--json]
+wald rename [worktree] [new-name] [--branch <new-branch>] [--keep-branch] [--json]
 ```
 
-Renames only a linked worktree directory through Git; the branch, upstream, `HEAD`, index, and files
-stay unchanged. Both arguments are required without a terminal. Interactive use selects an eligible
-worktree and asks for the new directory name.
+Renames a linked worktree directory and its local branch through Git. By default, `new-name` is used
+for both. `--branch <new-branch>` supplies a different local branch name, including names with `/`.
+`--keep-branch` moves only the directory, preserving the current branch or detached `HEAD`.
+The two options are mutually exclusive. The configured default branch and detached worktrees require
+`--keep-branch` even when a separate `--branch` is supplied.
+
+Both arguments are required without a terminal. Interactive use selects an eligible worktree and
+asks for the new directory and branch name, with no additional confirmation. `wald rename
+--keep-branch` also offers eligible default-branch and detached worktrees. The main menu uses the
+default of renaming both; completion reflects the selected mode.
 
 Only direct children of the configured worktree directory are eligible. Wald refuses the primary or
-current checkout, external, missing, or locked worktrees, and worktrees whose index contains a
+current checkout, external, missing, unavailable, or locked worktrees, and worktrees whose index contains a
 submodule. The destination uses the normal worktree-name and path validation and must not already
 exist, including as a dangling symlink. Dirty worktrees are allowed. There is no `--force` option
-and rename runs no project hooks or trusted executable configuration.
-JSON mode requires both arguments and emits the previous name/path plus the resulting worktree.
+and rename runs no project hooks or trusted executable configuration. The new local branch must
+have a valid literal Git ref name and must not collide with a local branch or existing target branch
+configuration. A branch checked out in multiple worktrees cannot be renamed.
+
+Wald checks the path, branch identity, `HEAD`, and upstream before mutation. It renames the local
+branch first, moves the directory, then verifies the resulting path, ref, `HEAD`, and upstream.
+If a later step fails, it attempts to restore both steps after checking their identity. Concurrent
+changes or an occupied original path/ref can prevent safe rollback; the error reports concrete
+recovery guidance. Index, files, and file modes are preserved, including uncommitted work.
+
+Upstream tracking stays unchanged: `payment-review` can still track `origin/feature/payment`.
+Remote branches are never created, deleted, fetched, or pushed by rename. Human-readable output
+shows `Branch renamed: feature/payment → payment-review` and, if configured,
+`Upstream kept: origin/feature/payment`. Directory-only renames show `Branch kept: …`.
+
+JSON mode requires both arguments and emits the previous name/path/branch plus the resulting
+worktree and `branchChange`. `before` and `after` in `branchChange` are local branch names, or `null`
+for a detached worktree. `upstream` is the existing tracking target, including a gone upstream, or
+`null` when none is configured. `renamed` is false when the branch is kept or already has the requested name.
 
 ```sh
 wald rename feature-payment payment-review
+wald rename feature-payment payment-review --branch feature/payment-review
+wald rename feature-payment payment-review --keep-branch
+wald rename main main-checkout --keep-branch --json
+```
+
+```json
+{
+  "action": "renamed",
+  "before": { "name": "feature-payment", "path": "/dev/project/feature-payment", "branch": "feature/payment" },
+  "branchChange": { "before": "feature/payment", "after": "payment-review", "renamed": true, "upstream": "origin/feature/payment" },
+  "worktree": { "name": "payment-review", "path": "/dev/project/payment-review", "branch": "payment-review", "role": "linked", "state": "modified", "head": "abc123" }
+}
 ```
 
 ## `wald remove`

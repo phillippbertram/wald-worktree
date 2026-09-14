@@ -35,7 +35,10 @@ do not run repairs or trust commands without the authority required for that mut
 Use `wald create <new-branch> --carry` or `wald handoff <new-branch>` only from the source worktree.
 Both copy its staged, unstaged, and non-ignored untracked code into a fresh worktree while preserving
 the source; they do not move a running process or agent session. Use `wald rename <worktree>
-<new-name>` to rename an eligible linked worktree directory without renaming its branch.
+<new-name>` to rename an eligible linked worktree directory and its local branch. Use `--branch
+<new-branch>` for a different branch name or `--keep-branch` to move only the directory; these options
+are mutually exclusive. Default-branch and detached worktrees require `--keep-branch`. Upstream
+tracking stays unchanged and remotes are never modified. See [Worktree operations](references/worktrees.md).
 For machine-readable mutations, use `--json` with explicit arguments. It still performs the action,
 never prompts, and never grants confirmation: removal additionally requires `--yes`. Do not combine
 create or handoff JSON mode with `--cd`, `--open`, or `--tool`.

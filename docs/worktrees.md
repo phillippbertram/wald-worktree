@@ -350,7 +350,7 @@ Wald uses Git for the underlying repository operations and adds the workspace ru
 | Understand the current context | `wald status` | Local Git status, tracking refs, and Wald configuration |
 | Find all checkouts | `wald list` | `git worktree list` plus Wald state |
 | Enter a checkout | `wald cd <worktree>` | Resolve and print its canonical path |
-| Rename a checkout directory | `wald rename <worktree> <new-name>` | Validated `git worktree move` |
+| Rename a checkout and branch | `wald rename <worktree> <new-name>` | Verified local `git branch --move` and `git worktree move` |
 | Run hooks, setup, or tasks | `wald hook run`, `wald setup`, `wald run` | Trusted effective project behavior |
 | Finish with a checkout | `wald remove <worktree>` | Safety inspection and `git worktree remove` |
 | Clean stale metadata | `wald prune` | Preview-first `git worktree prune` |
@@ -382,8 +382,15 @@ conflicting environment at a time.
 ### Can I move or delete a worktree folder manually?
 
 Do not move or delete it manually. Git keeps administrative links between the shared repository and
-each worktree. Use `wald rename` for an eligible linked worktree directory and `wald remove` for normal
-cleanup. If a directory is already missing, preview its stale registration with `wald prune`; that
+each worktree. Use `wald rename` for an eligible linked worktree and `wald remove` for normal
+cleanup. Rename uses the new directory name as the new local branch name. Use
+`--branch feature/payment-review` for a different branch name, or `--keep-branch` to move only the
+directory; these options cannot be combined. The default branch and detached worktrees require
+`--keep-branch`. Dirty files, the index, `HEAD`, file modes, and upstream tracking stay unchanged.
+Rename never changes remotes and attempts an identity-checked rollback after a failure. See the
+[rename reference](cli-reference.md#wald-rename) for all safety checks and recovery behavior.
+
+If a directory is already missing, preview its stale registration with `wald prune`; that
 repairs Git metadata without touching surviving worktrees or branches.
 
 ### Does removing a worktree delete its branch?

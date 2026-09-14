@@ -50,14 +50,29 @@ the latter phase fails, keep the created checkout, inspect the error, fix the
 cause, and retry the printed `wald setup <worktree>` command. To test hooks independently after a
 configuration change, use `wald hook run <event> <worktree>`; this runs no Git creation or removal.
 
-Rename an eligible linked worktree directory without changing its branch, `HEAD`, index, or files:
+Rename an eligible linked worktree directory and its local branch, preserving `HEAD`, index, files,
+file modes, and upstream tracking:
 
 ```sh
 wald rename <worktree> <new-name>
+wald rename <worktree> <new-name> --branch feature/payment-review
+wald rename <worktree> <new-name> --keep-branch
 ```
 
-Rename refuses the primary or current checkout, external, missing, locked, and submodule-containing
-worktrees. It accepts dirty worktrees and runs no lifecycle hooks.
+The default uses `new-name` for both directory and local branch. `--branch` supplies a different
+branch name, including `/`; `--keep-branch` moves only the directory. These options are mutually
+exclusive. Default-branch and detached worktrees require `--keep-branch`.
+
+Rename refuses the primary or current checkout, external, missing, unavailable, locked, and
+submodule-containing worktrees. It checks the destination, local branch collisions, literal Git ref
+format, `HEAD`, branch identity, and upstream before mutation. Dirty worktrees are allowed. Rename
+runs no lifecycle hooks and never creates, deletes, fetches, or pushes remote branches. Existing
+tracking stays unchanged, so `payment-review` may continue to track `origin/feature/payment`.
+
+On failure, Wald attempts an identity-checked rollback of both steps. If rollback is incomplete,
+inspect the reported paths and refs and follow the recovery guidance; do not force or overwrite
+concurrent work. `--json` adds `before.branch` and `branchChange: { before, after, renamed, upstream }`
+to the result. Branch names and upstream are `null` when not applicable.
 
 ## Execute and remove
 

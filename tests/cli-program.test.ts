@@ -67,6 +67,30 @@ describe("CLI contract", () => {
     );
   });
 
+  it("documents the rename default and rejects conflicting or empty branch options", async () => {
+    const output = new PassThrough();
+    const program = createProgram({ stdout: output, stderr: output });
+    const rename = program.commands.find((command) => command.name() === "rename");
+    expect(rename?.description()).toBe("Rename a linked worktree directory and its local branch");
+    expect(rename?.helpInformation()).toContain("--branch <new-branch>");
+    expect(rename?.helpInformation()).toContain("--keep-branch");
+    await expect(
+      program.parseAsync([
+        "node",
+        "wald",
+        "rename",
+        "feature",
+        "review",
+        "--branch",
+        "other",
+        "--keep-branch",
+      ]),
+    ).rejects.toThrow(/Cannot be combined with --keep-branch/u);
+    await expect(
+      program.parseAsync(["node", "wald", "rename", "feature", "review", "--branch", ""]),
+    ).rejects.toThrow(/Cannot be empty/u);
+  });
+
   it("requires --apply for uninitialization confirmation and force", async () => {
     const output = new PassThrough();
     const program = createProgram({ stdout: output, stderr: output });

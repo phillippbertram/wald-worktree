@@ -205,12 +205,27 @@ tools:
       expect.arrayContaining(["main", "feature-local"]),
     );
 
-    for (const command of ["cd", "open", "setup", "rename", "remove", "exec"]) {
+    for (const command of ["cd", "open", "setup", "remove", "exec"]) {
       const worktrees = await runCli(workspace, "complete", "--", command, "");
       expect(worktrees.exitCode, worktrees.stderr).toBe(0);
       expect(worktrees.stdout).toMatch(/feature-local\tfeature\/local \(modified\)/u);
       expect(worktrees.stdout).toMatch(/main\tmain \(modified\)/u);
     }
+  });
+
+  it("completes rename options and filters worktrees for the selected branch mode", async () => {
+    const renamed = await runCli(workspace, "complete", "--", "rename", "");
+    expect(renamed.exitCode, renamed.stderr).toBe(0);
+    expect(renamed.stdout).toMatch(/feature-local\tfeature\/local \(modified\)/u);
+    expect(suggestionValues(renamed.stdout)).not.toContain("main");
+    const keepBranch = await runCli(workspace, "complete", "--", "rename", "--keep-branch", "");
+    expect(keepBranch.exitCode, keepBranch.stderr).toBe(0);
+    expect(keepBranch.stdout).toMatch(/main\tmain \(modified\)/u);
+    const renameOptions = await runCli(workspace, "complete", "--", "rename", "--");
+    expect(renameOptions.exitCode, renameOptions.stderr).toBe(0);
+    expect(suggestionValues(renameOptions.stdout)).toEqual(
+      expect.arrayContaining(["--branch", "--keep-branch", "--json"]),
+    );
   });
 
   it("completes configured tasks, worktree positions, and available tools", async () => {

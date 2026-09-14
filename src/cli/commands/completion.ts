@@ -54,7 +54,11 @@ export function registerCompletionCommand(program: Command, context: CliContext)
       ? args.filter((value): value is string => typeof value === "string")
       : [];
     const kinds = requestedCompletionKinds(request);
-    const candidates = await loadCompletionCandidates(kinds, context);
+    const candidates = await loadCompletionCandidates(
+      kinds,
+      context,
+      request.includes("--keep-branch"),
+    );
     applyDynamicHandlers(completion, candidates);
   });
 }
@@ -120,6 +124,7 @@ function requestedCompletionKinds(args: string[]): Set<CompletionKind> {
 async function loadCompletionCandidates(
   kinds: Set<CompletionKind>,
   context: CliContext,
+  keepBranch: boolean,
 ): Promise<CompletionCandidates> {
   const candidates = emptyCompletionCandidates();
   if (kinds.size === 0) return candidates;
@@ -131,7 +136,7 @@ async function loadCompletionCandidates(
   const [worktrees, renamableWorktrees, branchCandidates] = await Promise.all([
     needsWorktrees ? context.worktrees.list(workspace) : Promise.resolve([]),
     kinds.has("renamableWorktrees")
-      ? context.worktrees.listMoveCandidates(workspace)
+      ? context.worktrees.listMoveCandidates(workspace, undefined, { keepBranch })
       : Promise.resolve([]),
     kinds.has("branches") ? context.worktrees.listBranchCandidates(workspace) : Promise.resolve([]),
   ]);

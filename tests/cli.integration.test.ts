@@ -26,7 +26,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     await fs.rm(temporaryRoot, { force: true, recursive: true });
   });
 
-  it("carries local code through create and handoff, then renames only the directory", async () => {
+  it("carries local code through create and handoff, then renames the directory and branch", async () => {
     const workspace = path.join(temporaryRoot, "carry-workspace");
     await execa(process.execPath, cliArguments("init", repository.remote, workspace), {
       cwd: temporaryRoot,
@@ -88,7 +88,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     );
     expect(renamed.exitCode, renamed.stderr).toBe(0);
     expect(renamed.stdout).toContain("Renamed feature-carried to review-ready");
-    expect(renamed.stdout).toContain("Branch kept: feature/carried");
+    expect(renamed.stdout).toContain("Branch renamed: feature/carried → review-ready");
     await expect(fs.stat(carriedPath)).rejects.toMatchObject({ code: "ENOENT" });
     expect(await fs.readFile(path.join(workspace, "review-ready", "README.md"), "utf8")).toBe(
       "# staged\nunstaged\n",
@@ -98,7 +98,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     });
     expect(JSON.parse(status.stdout).current).toMatchObject({
       name: "review-ready",
-      branch: "feature/carried",
+      branch: "review-ready",
       state: "modified",
     });
     const listed = await execa(process.execPath, cliArguments("list", "--json"), {
@@ -106,7 +106,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     });
     expect(JSON.parse(listed.stdout)).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ name: "review-ready", branch: "feature/carried" }),
+        expect.objectContaining({ name: "review-ready", branch: "review-ready" }),
       ]),
     );
   });
