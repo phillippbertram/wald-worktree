@@ -87,7 +87,7 @@ describe("doctor", { timeout: 15_000 }, () => {
     const workspace = await context.workspaces.initialize(repository.remote, workspaceRoot);
     const created = await context.worktrees.add(workspace, { branch: "main", fetch: false });
     await fs.rm(created.path, { recursive: true });
-    const registrationsBefore = await context.git.run(["worktree", "list", "--porcelain", "-z"], {
+    const registrationsBefore = await context.git.run(["worktree", "list", "--porcelain"], {
       gitDir: workspace.gitDir,
     });
 
@@ -102,7 +102,7 @@ describe("doctor", { timeout: 15_000 }, () => {
       }),
     );
     expect(
-      await context.git.run(["worktree", "list", "--porcelain", "-z"], {
+      await context.git.run(["worktree", "list", "--porcelain"], {
         gitDir: workspace.gitDir,
       }),
     ).toEqual(registrationsBefore);

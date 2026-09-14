@@ -65,14 +65,9 @@ export class WorktreeService {
   constructor(private readonly git: GitClient) {}
 
   async list(workspace: Workspace, options: ListWorktreeOptions = {}): Promise<Worktree[]> {
-    const args = ["worktree", "list", "--porcelain", "-z"];
-    if (options.expire) {
-      args.push("--expire", options.expire);
-    }
-    const result = await this.git.run(args, {
-      gitDir: workspace.gitDir,
-    });
-    const parsed = parseWorktreePorcelain(result.stdout).filter((worktree) => !worktree.bare);
+    const parsed = (await listWorktreePorcelain(this.git, workspace.gitDir, options)).filter(
+      (worktree) => !worktree.bare,
+    );
 
     return await Promise.all(
       parsed.map(async (worktree): Promise<Worktree> => {
@@ -687,7 +682,10 @@ function hasControlCharacters(value: string): boolean {
 }
 
 export function parseWorktreePorcelain(output: string): ParsedWorktree[] {
-  const records = output.split("\0\0").filter(Boolean);
+  const nulDelimited = output.includes("\0");
+  const records = nulDelimited
+    ? output.split("\0\0").filter(Boolean)
+    : output.split(/\r?\n\r?\n/u).filter(Boolean);
   return records.map((record) => {
     let worktreePath: string | null = null;
     let head: string | null = null;
@@ -697,12 +695,13 @@ export function parseWorktreePorcelain(output: string): ParsedWorktree[] {
     let prunable = false;
     let bare = false;
 
-    for (const field of record.split("\0").filter(Boolean)) {
+    const fields = nulDelimited ? record.split("\0") : record.split(/\r?\n/u);
+    for (const field of fields.filter(Boolean)) {
       const [key, ...rest] = field.split(" ");
       const value = rest.join(" ") || null;
       switch (key) {
         case "worktree":
-          worktreePath = value;
+          worktreePath = value ? decodeGitPath(value) : null;
           break;
         case "HEAD":
           head = value;
@@ -738,6 +737,64 @@ export function parseWorktreePorcelain(output: string): ParsedWorktree[] {
       bare,
     };
   });
+}
+
+export async function listWorktreePorcelain(
+  git: GitClient,
+  gitDir: string,
+  options: ListWorktreeOptions = {},
+): Promise<ParsedWorktree[]> {
+  const args = ["worktree", "list", "--porcelain"];
+  if (options.expire) args.push("--expire", options.expire);
+
+  const nulResult = await git.run([...args, "-z"], { gitDir, reject: false });
+  if (nulResult.exitCode === 0) return parseWorktreePorcelain(nulResult.stdout);
+
+  const legacyResult = await git.run(args, { gitDir });
+  return parseWorktreePorcelain(legacyResult.stdout);
+}
+
+function decodeGitPath(value: string): string {
+  if (!value.startsWith('"') || !value.endsWith('"')) return value;
+
+  const bytes: number[] = [];
+  const escaped = value.slice(1, -1);
+  const escapeBytes: Record<string, number> = {
+    a: 0x07,
+    b: 0x08,
+    t: 0x09,
+    n: 0x0a,
+    v: 0x0b,
+    f: 0x0c,
+    r: 0x0d,
+    '"': 0x22,
+    "\\": 0x5c,
+  };
+
+  for (let index = 0; index < escaped.length; index += 1) {
+    const character = escaped[index];
+    if (character === "\\") {
+      const escapedCharacter = escaped[index + 1];
+      if (escapedCharacter === undefined) break;
+      const octal = escaped.slice(index + 1).match(/^[0-7]{1,3}/u)?.[0];
+      if (octal) {
+        bytes.push(Number.parseInt(octal, 8));
+        index += octal.length;
+        continue;
+      }
+      bytes.push(escapeBytes[escapedCharacter] ?? escapedCharacter.charCodeAt(0));
+      index += 1;
+      continue;
+    }
+
+    const codePoint = escaped.codePointAt(index);
+    if (codePoint === undefined) break;
+    const plainCharacter = String.fromCodePoint(codePoint);
+    bytes.push(...Buffer.from(plainCharacter));
+    index += plainCharacter.length - 1;
+  }
+
+  return Buffer.from(bytes).toString("utf8");
 }
 
 async function pathExists(target: string): Promise<boolean> {

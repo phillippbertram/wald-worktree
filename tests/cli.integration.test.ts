@@ -169,6 +169,12 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
       "unmerged\n",
       "utf8",
     );
+    await execa("git", ["config", "user.email", "tests@example.invalid"], {
+      cwd: path.join(workspace, "feature-direct-cd"),
+    });
+    await execa("git", ["config", "user.name", "wald tests"], {
+      cwd: path.join(workspace, "feature-direct-cd"),
+    });
     await execa("git", ["add", "feature.txt"], {
       cwd: path.join(workspace, "feature-direct-cd"),
     });

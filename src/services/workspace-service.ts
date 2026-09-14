@@ -6,7 +6,7 @@ import type { Workspace, WorkspaceConfig, WorkspaceRemote, Worktree } from "../d
 import type { GitClient } from "../infrastructure/git-client.js";
 import { humanizeRepositoryName, isPathInsideOrEqual } from "../infrastructure/path-utils.js";
 import { ConfigService, workspaceConfigFileName } from "./config-service.js";
-import { type ParsedWorktree, parseWorktreePorcelain } from "./worktree-service.js";
+import { listWorktreePorcelain, type ParsedWorktree } from "./worktree-service.js";
 
 export type AdoptionOptions = {
   worktreeDir?: string;
@@ -986,8 +986,7 @@ export class WorkspaceService {
   }
 
   private async readGitWorktrees(gitDir: string): Promise<ParsedWorktree[]> {
-    const result = await this.git.run(["worktree", "list", "--porcelain", "-z"], { gitDir });
-    return parseWorktreePorcelain(result.stdout);
+    return await listWorktreePorcelain(this.git, gitDir);
   }
 
   private async readRemotes(gitDir: string): Promise<string[]> {

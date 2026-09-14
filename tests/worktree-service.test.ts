@@ -6,6 +6,7 @@ import { WaldError } from "../src/domain/errors.js";
 import type { Workspace } from "../src/domain/types.js";
 import type { GitClient } from "../src/infrastructure/git-client.js";
 import {
+  listWorktreePorcelain,
   parseWorktreePorcelain,
   slugifyBranch,
   validateWorktreeName,
@@ -42,6 +43,48 @@ describe("worktree domain", () => {
         lockReason: "maintenance",
       }),
     ]);
+  });
+
+  it("parses the line-delimited porcelain format used by Git 2.31", () => {
+    const output = [
+      'worktree "/tmp/w\\303\\244ld worktree"',
+      "HEAD abc123",
+      "branch refs/heads/main",
+      "",
+      "worktree /tmp/feature",
+      "HEAD def456",
+      "detached",
+      "prunable gitdir file points to a missing location",
+    ].join("\n");
+
+    expect(parseWorktreePorcelain(output)).toEqual([
+      expect.objectContaining({ path: "/tmp/wäld worktree", branch: "main" }),
+      expect.objectContaining({ path: "/tmp/feature", branch: null, prunable: true }),
+    ]);
+  });
+
+  it("falls back to line-delimited porcelain when Git does not support -z", async () => {
+    const git = {
+      run: vi
+        .fn()
+        .mockResolvedValueOnce({ stdout: "", stderr: "error: unknown switch `z'", exitCode: 129 })
+        .mockResolvedValueOnce({
+          stdout: "worktree /tmp/main\nHEAD abc123\nbranch refs/heads/main",
+          stderr: "",
+          exitCode: 0,
+        }),
+    } as unknown as GitClient;
+
+    await expect(listWorktreePorcelain(git, "/tmp/repo.git")).resolves.toEqual([
+      expect.objectContaining({ path: "/tmp/main", branch: "main" }),
+    ]);
+    expect(git.run).toHaveBeenNthCalledWith(1, ["worktree", "list", "--porcelain", "-z"], {
+      gitDir: "/tmp/repo.git",
+      reject: false,
+    });
+    expect(git.run).toHaveBeenNthCalledWith(2, ["worktree", "list", "--porcelain"], {
+      gitDir: "/tmp/repo.git",
+    });
   });
 
   it("reports an existing worktree as unavailable when git status fails", async () => {

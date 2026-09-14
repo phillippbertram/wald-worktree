@@ -9,6 +9,9 @@ on:
 permissions:
   contents: read
 
+env:
+  NO_COLOR: "1"
+
 jobs:
   validate:
     strategy:
@@ -85,6 +88,7 @@ jobs:
           git -C "$RUNNER_TEMP/source" branch -M main
           git -C "$RUNNER_TEMP/source" remote add origin "$RUNNER_TEMP/remote.git"
           git -C "$RUNNER_TEMP/source" push -u origin main
+          git --git-dir="$RUNNER_TEMP/remote.git" symbolic-ref HEAD refs/heads/main
           "$RUNNER_TEMP/wald-bin/wald" init "$RUNNER_TEMP/remote.git" "$RUNNER_TEMP/workspace"
           cd "$RUNNER_TEMP/workspace"
           "$RUNNER_TEMP/wald-bin/wald" create main --no-fetch

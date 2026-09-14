@@ -48,12 +48,12 @@ production, review a pull request, or give an agent an isolated folder.
 All worktrees still share one repository's objects, refs, remotes, and history. Git remains the
 source of truth; Wald handles worktree paths, setup, and removal around it.
 
-| When this happens | Instead of | Use |
-| --- | --- | --- |
-| Production breaks during feature work | Stash, switch, rebuild context | A hotfix worktree |
-| A review needs a clean checkout | Disturb your current index | A review worktree |
-| A long test must run in parallel | Wait or duplicate the clone | An experiment worktree |
-| Two agents need the same repository | Share files and staging state | One worktree per agent |
+| When this happens                     | Instead of                     | Use                    |
+| ------------------------------------- | ------------------------------ | ---------------------- |
+| Production breaks during feature work | Stash, switch, rebuild context | A hotfix worktree      |
+| A review needs a clean checkout       | Disturb your current index     | A review worktree      |
+| A long test must run in parallel      | Wait or duplicate the clone    | An experiment worktree |
+| Two agents need the same repository   | Share files and staging state  | One worktree per agent |
 
 New to the idea? Start with [Worktrees explained](docs/worktrees.md).
 
@@ -209,8 +209,11 @@ project checks before opening a pull request:
 pnpm run ci
 ```
 
-If Wald saves you a few stashes or context switches, you can also
-[buy me a coffee](https://www.buymeacoffee.com/phillippbertram).
+If Wald saves you a few stashes or context switches, you can also buy me a coffee ☕️😇
+
+<a href="https://www.buymeacoffee.com/phillippbertram" target="_blank">
+  <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="60" width="217" />
+</a>
 
 ## License
 
