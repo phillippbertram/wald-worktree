@@ -11,6 +11,7 @@ const handoffInputSchema = z
     branch: nonEmptyCliString.optional(),
     name: nonEmptyCliString.optional(),
     fetch: z.boolean().optional(),
+    skipHooks: z.boolean().default(false),
     cd: z.boolean().default(false),
     open: z.boolean().default(false),
     tool: nonEmptyCliString.optional(),
@@ -42,7 +43,10 @@ const handoffInputSchema = z
     }
   });
 
-export type HandoffInput = Omit<z.output<typeof handoffInputSchema>, "json"> & { json?: boolean };
+export type HandoffInput = Omit<z.output<typeof handoffInputSchema>, "json" | "skipHooks"> & {
+  json?: boolean;
+  skipHooks?: boolean;
+};
 
 export function registerHandoffCommand(program: Command, context: CliContext): void {
   program
@@ -52,6 +56,7 @@ export function registerHandoffCommand(program: Command, context: CliContext): v
     .option("--name <directory>", "Override the worktree directory name")
     .option("--fetch", "Fetch before checking that the new branch name is available")
     .option("--no-fetch", "Do not fetch before checking the new branch name")
+    .option("--skip-hooks", "Skip all pre_create and post_create steps, including copy and symlink")
     .option("--cd", "Enter after handoff; requires shell integration")
     .option("--open", "Open after handoff with the configured or selected tool")
     .option("--tool <profile>", "Tool profile to open; implies --open")
@@ -67,6 +72,7 @@ export function registerHandoffCommand(program: Command, context: CliContext): v
         options: {
           name?: unknown;
           fetch?: boolean;
+          skipHooks?: unknown;
           cd?: unknown;
           open?: unknown;
           tool?: unknown;

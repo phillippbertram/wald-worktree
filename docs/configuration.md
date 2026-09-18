@@ -492,11 +492,19 @@ colored in a terminal while redirected output remains readable plain text.
 
 ### Lifecycle
 
-Creation runs in this order:
+By default, creation runs in this order:
 
 ```text
 resolve branch/config -> trust -> pre_create -> git worktree add -> post_create
 ```
+
+`create`, its alias `plant`, and `handoff` accept `--skip-hooks` to skip both create events,
+including command, copy, and symlink steps. The guided create and handoff flows offer the same
+choice when hooks are configured. Skipping needs no creation-time trust approval and does not
+change saved trust; configuration validation and carry checks remain active. Opening a tool still
+requires its usual trust check. This choice is per invocation: `wald setup <worktree>` can run
+`post_create` later after trust approval. See the [create reference](cli-reference.md#wald-create)
+for flags and navigation.
 
 Removal runs:
 
@@ -506,7 +514,7 @@ safety inspection -> trust -> pre_remove -> git worktree remove -> post_remove -
 
 ```mermaid
 flowchart LR
-    subgraph Creation
+    subgraph Creation[Creation with hooks enabled]
       C1[Resolve repository base and local overrides] --> C2[Validate and trust]
       C2 --> C3[pre_create]
       C3 --> C4[git worktree add]

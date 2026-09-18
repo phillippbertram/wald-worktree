@@ -228,13 +228,17 @@ transfer failure before `post_create` rolls back the fresh worktree and branch w
 `post_create` failure keeps the verified target for `wald setup`. After success, the changes exist in
 both worktrees. `handoff` does not move an editor, process, or agent session.
 
-When the branch was chosen interactively, Wald shows the complete create plan and confirms it before
-trust, hooks, branch creation, or checkout creation. Explicit branch commands remain prompt-free.
+When the branch was chosen interactively, Wald offers whether to run configured create hooks, then
+shows and confirms the complete plan before trust, hooks, branch creation, or checkout creation.
+`--skip-hooks` bypasses all create-hook steps, including copies and symlinks, and the hook question.
+See the [create reference](cli-reference.md#wald-create) for trust behavior and back navigation.
+Explicit branch commands do not add these questions.
 
 ## The worktree lifecycle
 
 Creation and removal follow the same path in every supported workspace layout. **Wald Flow** is the
 name of the recommended flat layout, not a branching model or this create-to-remove sequence.
+The diagram shows creation with hooks enabled; skipping them preserves Git creation and carry checks.
 
 ```mermaid
 flowchart TB

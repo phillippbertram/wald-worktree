@@ -128,6 +128,7 @@ wald create [branch] [options]
 | `--name <directory>` | Override the directory derived from the branch. |
 | `--fetch` / `--no-fetch` | Override the project fetch default. |
 | `--carry` | Create a new branch at the current `HEAD` and copy its local code state. |
+| `--skip-hooks` | Skip all `pre_create` and `post_create` steps for this invocation, including commands, copies, and symlinks. |
 | `--cd` | Enter through shell integration after setup. |
 | `--open` | Open with the configured or interactively selected tool. |
 | `--tool <profile>` | Open with a specific built-in or project profile; implies `--open`. |
@@ -136,11 +137,20 @@ wald create [branch] [options]
 `--cd` cannot be combined with `--open` or `--tool`. Without a branch, a terminal offers local and
 remote candidates plus new-branch creation; non-interactive use requires a branch.
 
-After an interactive branch selection, Wald prints one shared create plan and asks
-`Create this worktree?` with `Yes` selected by default. `Esc` returns to branch selection while
-retaining the previous value. `No` performs no branch, worktree, trust, or hook mutation; if plan
-preparation already ran the configured fetch, Wald states that only remote refs were updated.
-Explicit branch invocations do not add this prompt.
+After an interactive branch selection, Wald prepares the create plan. If create hooks are configured
+and `--skip-hooks` was not passed, it asks `Run create hooks?` with the pre-create and post-create
+step counts and `Yes` selected by default. Choosing `No` skips all these steps.
+The plan shows the choice before `Create this worktree?`, also defaulting to `Yes`.
+`Esc` from confirmation returns to the hook choice, or to branch selection if no hook choice was
+offered; `Esc` from the hook choice returns to branch selection. Previous values are retained.
+Revisiting the hook choice does not prepare or fetch the same plan again. Declining creation performs
+no branch, worktree, trust, or hook mutation; if preparation already fetched, Wald states that only
+remote refs were updated. Explicit branch invocations do not add either question.
+
+Skipping hooks needs no trust approval for creation and does not save or change configuration trust.
+Configuration validation, Git safety checks, and carry verification still apply. Opening afterward
+with `--open` or `--tool` retains its own trust check. Run `wald setup <worktree>` later to execute
+`post_create` with the usual trust requirement; skipping is not persisted.
 
 JSON mode requires a branch and cannot be combined with `--cd`, `--open`, `--tool`, or the internal
 shell-integration option `--print-path`.
@@ -161,8 +171,8 @@ keeps the fully transferred worktree and reports
 `wald setup <worktree>` as usual.
 
 Resolution order is local branch, matching configured remote branch, then a new branch from
-`--from` or the default branch. Creation runs trusted `pre_create`, Git checkout creation, then
-`post_create`. A matching remote branch tracks its same-named remote ref. A new branch has no
+`--from` or the default branch. By default, creation runs trusted `pre_create`, Git checkout creation,
+then `post_create`. A matching remote branch tracks its same-named remote ref. A new branch has no
 upstream: its start point determines history only and never implies tracking, including when the
 start point is `origin/<default-branch>`. With a configured remote, Wald prints
 `git push -u <remote> HEAD` as the explicit publish command. A failed `post_create` keeps the
@@ -175,6 +185,7 @@ wald create feature/payment --cd
 wald create hotfix/payment --from release/1.x --cd
 wald create feature/review --tool codex
 wald create feature/review --carry --cd
+wald create feature/minimal --skip-hooks --cd
 ```
 
 ## `wald handoff`
@@ -184,11 +195,12 @@ wald handoff [branch] [options]
 ```
 
 `handoff` delegates to the exact `create --carry` lifecycle. It accepts `--name`,
-`--fetch`/`--no-fetch`, `--cd`, `--open`, and `--tool`; carry is implicit and `--from` is not
-available. Without a branch, a terminal asks only for a new branch name. Without a navigation
+`--fetch`/`--no-fetch`, `--skip-hooks`, `--cd`, `--open`, and `--tool`; carry is implicit and `--from`
+is not available. Without a branch, a terminal asks for a new branch name. Without a navigation
 option, the result includes the matching `wald cd` command.
 
-The interactive handoff uses the same create-plan confirmation and back navigation as `create`.
+The interactive handoff uses the same hook choice, create-plan confirmation, and back navigation as
+`create`.
 `--json` requires a branch and has the same destination-option conflicts as create.
 
 This is a code handoff only. It copies local Git and file state while keeping the source unchanged;

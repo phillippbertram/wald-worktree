@@ -8,8 +8,8 @@ import { renameWorktree } from "../src/cli/commands/rename.js";
 import { runProjectTask } from "../src/cli/commands/run.js";
 import type { CliContext } from "../src/cli/context.js";
 import { chooseBranch } from "../src/cli/helpers.js";
-import type { Workspace, Worktree } from "../src/domain/types.js";
-import { PromptBackError } from "../src/ui/terminal.js";
+import type { ProjectConfigDocument, Workspace, Worktree } from "../src/domain/types.js";
+import { PromptBackError, PromptExitError } from "../src/ui/terminal.js";
 
 const prompts = vi.hoisted(() => ({
   confirmations: [] as Array<boolean | Error>,
@@ -223,6 +223,144 @@ describe("interactive command navigation", () => {
 
     expect(prompts.confirmationQuestions).toEqual([]);
     expect(executeCreate).toHaveBeenCalledOnce();
+  });
+
+  it.each([true, false])(
+    "offers create hooks with Yes by default and accepts %s",
+    async (runHooks) => {
+      prompts.searchSelections.push("feature");
+      prompts.confirmations.push(runHooks, true);
+      const executeCreate = vi.fn().mockResolvedValue(feature);
+      const context = createContextForCreate(workspace, feature, executeCreate, null, null, true);
+
+      await createWorktree({ carry: false, cd: false, open: false, printPath: false }, context);
+
+      expect(prompts.confirmationQuestions).toEqual([
+        "Run create hooks? (1 pre-create, 1 post-create steps)",
+        "Create this worktree?",
+      ]);
+      expect(prompts.confirmationDefaults).toEqual([true, true]);
+      expect(executeCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ skipHooks: !runHooks }),
+        expect.any(Object),
+      );
+      expect(context.configs.isTrusted).toHaveBeenCalledTimes(runHooks ? 1 : 0);
+    },
+  );
+
+  it("returns to the hook choice without preparing or fetching the plan again", async () => {
+    prompts.searchSelections.push("feature");
+    prompts.confirmations.push(false, new PromptBackError(), true, true);
+    const executeCreate = vi.fn().mockResolvedValue(feature);
+    const context = createContextForCreate(workspace, feature, executeCreate, null, "origin", true);
+
+    await createWorktree({ carry: false, cd: false, open: false, printPath: false }, context);
+
+    expect(prompts.confirmationDefaults).toEqual([true, true, false, true]);
+    expect(context.workflow.planCreate).toHaveBeenCalledOnce();
+    expect(context.worktrees.listBranchCandidates).toHaveBeenCalledOnce();
+    expect(executeCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ skipHooks: false }),
+      expect.any(Object),
+    );
+  });
+
+  it("retains the branch and hook choice when backing out of hook selection", async () => {
+    prompts.searchSelections.push("feature", "feature");
+    prompts.confirmations.push(false, new PromptBackError(), new PromptBackError(), false, true);
+    const executeCreate = vi.fn().mockResolvedValue(feature);
+    const context = createContextForCreate(workspace, feature, executeCreate, null, null, true);
+
+    await createWorktree({ carry: false, cd: false, open: false, printPath: false }, context);
+
+    expect(prompts.searchPromptOptions[1]).toMatchObject({ initialValue: "feature" });
+    expect(prompts.confirmationDefaults).toEqual([true, true, false, false, true]);
+    expect(context.workflow.planCreate).toHaveBeenCalledTimes(2);
+    expect(executeCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ skipHooks: true }),
+      expect.any(Object),
+    );
+  });
+
+  it("skips hook selection when the flag is supplied", async () => {
+    prompts.searchSelections.push("feature");
+    prompts.confirmations.push(true);
+    const executeCreate = vi.fn().mockResolvedValue(feature);
+    const context = createContextForCreate(workspace, feature, executeCreate, null, null, true);
+
+    await createWorktree(
+      { carry: false, cd: false, open: false, printPath: false, skipHooks: true },
+      context,
+    );
+
+    expect(prompts.confirmationQuestions).toEqual(["Create this worktree?"]);
+    expect(context.configs.isTrusted).not.toHaveBeenCalled();
+    expect(executeCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ skipHooks: true }),
+      expect.any(Object),
+    );
+  });
+
+  it.each([false, true])(
+    "does not ask about hooks for an explicit branch (skip: %s)",
+    async (skipHooks) => {
+      const executeCreate = vi.fn().mockResolvedValue(feature);
+      const context = createContextForCreate(workspace, feature, executeCreate, null, null, true);
+
+      await createWorktree(
+        { branch: "feature", carry: false, cd: false, open: false, printPath: false, skipHooks },
+        context,
+      );
+
+      expect(prompts.confirmationQuestions).toEqual([]);
+      expect(executeCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ skipHooks }),
+        expect.any(Object),
+      );
+    },
+  );
+
+  it("cancels a plan with skipped hooks before trust or execution", async () => {
+    prompts.searchSelections.push("feature");
+    prompts.confirmations.push(false, false);
+    const executeCreate = vi.fn();
+    const context = createContextForCreate(workspace, feature, executeCreate, null, null, true);
+
+    await expect(
+      createWorktree({ carry: false, cd: false, open: false, printPath: false }, context),
+    ).resolves.toBeNull();
+
+    expect(context.configs.isTrusted).not.toHaveBeenCalled();
+    expect(executeCreate).not.toHaveBeenCalled();
+  });
+
+  it("interrupts hook selection before trust or execution", async () => {
+    prompts.searchSelections.push("feature");
+    prompts.confirmations.push(new PromptExitError());
+    const executeCreate = vi.fn();
+    const context = createContextForCreate(workspace, feature, executeCreate, null, null, true);
+
+    await expect(
+      createWorktree({ carry: false, cd: false, open: false, printPath: false }, context),
+    ).rejects.toBeInstanceOf(PromptExitError);
+
+    expect(context.configs.isTrusted).not.toHaveBeenCalled();
+    expect(executeCreate).not.toHaveBeenCalled();
+  });
+
+  it("offers the shared hook choice for a guided handoff", async () => {
+    prompts.promptTexts.push("review");
+    prompts.confirmations.push(false, true);
+    const executeCreate = vi.fn().mockResolvedValue(review);
+    const context = createContextForCreate(workspace, review, executeCreate, primary, null, true);
+
+    await handoffWorktree({ cd: false, open: false, printPath: false }, context);
+
+    expect(prompts.confirmationQuestions[0]).toContain("Run create hooks?");
+    expect(executeCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ skipHooks: true, carrySource: primary }),
+      expect.any(Object),
+    );
   });
 
   it("confirms an interactively entered handoff branch before carrying changes", async () => {
@@ -584,6 +722,7 @@ function createContextForCreate(
   executeCreate: ReturnType<typeof vi.fn>,
   carrySource: Worktree | null = null,
   fetchedRemote: string | null = null,
+  withHooks = false,
 ): CliContext {
   const completeWorkspace = {
     ...workspace,
@@ -598,8 +737,9 @@ function createContextForCreate(
       projectRevision: `refs/heads/${created.branch}`,
       strategy: { type: "local" },
     },
-    project: null,
+    project: withHooks ? createHookProject() : null,
     trusted: true,
+    skipHooks: false,
     carrySource,
     fetchedRemote,
     current: carrySource,
@@ -616,8 +756,36 @@ function createContextForCreate(
     },
     configs: { isTrusted: vi.fn().mockReturnValue(true) },
     workflow: {
-      planCreate: vi.fn().mockResolvedValue(plan),
+      planCreate: vi.fn(async (_workspace: Workspace, options: { skipHooks?: boolean }) => ({
+        ...plan,
+        skipHooks: options.skipHooks ?? false,
+      })),
       executeCreate,
     },
   });
+}
+
+function createHookProject(): ProjectConfigDocument {
+  return {
+    path: "/workspace/.wald/project.yml",
+    hash: "a".repeat(64),
+    requiresTrust: true,
+    sources: { repository: null, workspace: "/workspace/.wald/project.yml" },
+    config: {
+      version: 1,
+      defaults: { fetch: false },
+      hooks: {
+        pre_create: [
+          { type: "command", argv: ["node", "--version"], env: {}, continueOnError: false },
+        ],
+        post_create: [
+          { type: "command", argv: ["node", "--version"], env: {}, continueOnError: false },
+        ],
+        pre_remove: [],
+        post_remove: [],
+      },
+      tasks: {},
+      tools: {},
+    },
+  };
 }

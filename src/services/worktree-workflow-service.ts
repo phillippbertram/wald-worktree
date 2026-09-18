@@ -27,6 +27,7 @@ export type CreatePlan = WorktreeContext & {
   prepared: PreparedAddWorktree;
   project: ProjectConfigDocument | null;
   trusted: boolean;
+  skipHooks: boolean;
   carrySource: Worktree | null;
   fetchedRemote: string | null;
 };
@@ -40,6 +41,7 @@ export type CreatedWorktree = Worktree & {
 
 export type CreateWorktreeOptions = AddWorktreeOptions & {
   carry?: boolean;
+  skipHooks?: boolean;
 };
 
 export type RemovePlan = WorktreeContext & {
@@ -92,6 +94,7 @@ export class WorktreeWorkflowService {
       prepared,
       project,
       trusted: this.configs.isTrusted(workspace, project),
+      skipHooks: options.skipHooks ?? false,
       carrySource: options.carry ? context.current : null,
       fetchedRemote: fetch && workspace.config.remote ? workspace.config.remote.name : null,
       ...context,
@@ -105,25 +108,28 @@ export class WorktreeWorkflowService {
       output?: NodeJS.WritableStream;
     } = {},
   ): Promise<CreatedWorktree> {
-    await this.ensureTrusted(plan.workspace, plan.project, options.trustProjectConfig);
-    const preCreateContext = this.automationContext(
-      plan,
-      "pre_create",
-      plan.prepared.branch,
-      plan.prepared.target,
-      options.output,
-    );
-    await this.automation.runHook(plan.project, "pre_create", preCreateContext);
+    if (!plan.skipHooks) {
+      await this.ensureTrusted(plan.workspace, plan.project, options.trustProjectConfig);
+      const preCreateContext = this.automationContext(
+        plan,
+        "pre_create",
+        plan.prepared.branch,
+        plan.prepared.target,
+        options.output,
+      );
+      await this.automation.runHook(plan.project, "pre_create", preCreateContext);
+    }
 
     let snapshot: WorktreeTransferSnapshot | undefined;
     if (plan.carrySource) {
+      const previousPhase = plan.skipHooks ? "preparation" : "pre-create";
       const sourceProject = await this.configs.resolveProjectConfig(
         plan.workspace,
         plan.carrySource.path,
       );
       if ((sourceProject?.hash ?? null) !== (plan.project?.hash ?? null)) {
         throw new WaldError(
-          "The effective project configuration changed after pre-create. Review and trust it, then retry the carry.",
+          `The effective project configuration changed after ${previousPhase}. ${plan.skipHooks ? "Review it" : "Review and trust it"}, then retry the carry.`,
         );
       }
       snapshot = await this.transfers.capture(plan.carrySource.path);
@@ -136,7 +142,7 @@ export class WorktreeWorkflowService {
         plan.prepared.strategy.base !== snapshot.head
       ) {
         throw new WaldError(
-          "The source worktree or its HEAD changed after pre-create. Review it, then retry the carry.",
+          `The source worktree or its HEAD changed after ${previousPhase}. Review it, then retry the carry.`,
         );
       }
     }
@@ -166,24 +172,26 @@ export class WorktreeWorkflowService {
       throw error;
     }
 
-    try {
-      const postContext: AutomationContext = {
-        ...this.automationContext(
-          plan,
-          "post_create",
-          created.branch,
-          created.path,
-          options.output,
-        ),
-        defaultWorktree:
-          created.branch === plan.workspace.config.defaultBranch ? created : plan.defaultWorktree,
-      };
-      await this.automation.runHook(targetProject, "post_create", postContext);
-    } catch (error) {
-      throw new WaldError(
-        `Worktree was created at ${created.path}, but post-create setup failed: ${toErrorMessage(error)}\nRetry with: wald setup ${shellQuote(created.name)}`,
-        { cause: error },
-      );
+    if (!plan.skipHooks) {
+      try {
+        const postContext: AutomationContext = {
+          ...this.automationContext(
+            plan,
+            "post_create",
+            created.branch,
+            created.path,
+            options.output,
+          ),
+          defaultWorktree:
+            created.branch === plan.workspace.config.defaultBranch ? created : plan.defaultWorktree,
+        };
+        await this.automation.runHook(targetProject, "post_create", postContext);
+      } catch (error) {
+        throw new WaldError(
+          `Worktree was created at ${created.path}, but post-create setup failed: ${toErrorMessage(error)}\nRetry with: wald setup ${shellQuote(created.name)}`,
+          { cause: error },
+        );
+      }
     }
 
     return snapshot

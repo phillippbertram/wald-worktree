@@ -197,6 +197,10 @@ describe("CLI contract", () => {
     const configInitHelp = captureHelp(configInit);
     const hookRunHelp = captureHelp(hookRun);
 
+    expect(createHelp).toContain("Usage: wald create|plant");
+    expect(createHelp).toContain("--skip-hooks");
+    expect(handoffHelp).toContain("--skip-hooks");
+
     expect(rootHelp).toContain("Usage: wald");
     expect(rootHelp).toContain(
       "🌲 Where Git worktrees grow — safe, guided workspaces for parallel work.",

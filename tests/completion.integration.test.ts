@@ -152,12 +152,30 @@ tools:
     const aliasOptions = await runCli(temporaryRoot, "complete", "--", "ls", "--");
     expect(suggestionValues(aliasOptions.stdout)).toEqual(expect.arrayContaining(["--json"]));
     expect(suggestionValues(options.stdout)).toEqual(
-      expect.arrayContaining(["--from", "--name", "--carry", "--tool", "--json", "--help"]),
+      expect.arrayContaining([
+        "--from",
+        "--name",
+        "--carry",
+        "--skip-hooks",
+        "--tool",
+        "--json",
+        "--help",
+      ]),
     );
     const plantOptions = await runCli(temporaryRoot, "complete", "--", "plant", "--");
     expect(suggestionValues(plantOptions.stdout)).toEqual(
-      expect.arrayContaining(["--from", "--name", "--carry", "--tool", "--json", "--help"]),
+      expect.arrayContaining([
+        "--from",
+        "--name",
+        "--carry",
+        "--skip-hooks",
+        "--tool",
+        "--json",
+        "--help",
+      ]),
     );
+    const handoffOptions = await runCli(temporaryRoot, "complete", "--", "handoff", "--");
+    expect(suggestionValues(handoffOptions.stdout)).toContain("--skip-hooks");
     expect(suggestionValues(doctorOptions.stdout)).toEqual(
       expect.arrayContaining(["--json", "--verbose", "--help"]),
     );

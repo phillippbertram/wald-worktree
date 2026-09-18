@@ -28,6 +28,7 @@ const createInputSchema = z
     name: nonEmptyCliString.optional(),
     fetch: z.boolean().optional(),
     carry: z.boolean().default(false),
+    skipHooks: z.boolean().default(false),
     cd: z.boolean().default(false),
     open: z.boolean().default(false),
     tool: nonEmptyCliString.optional(),
@@ -66,7 +67,10 @@ const createInputSchema = z
     }
   });
 
-export type CreateInput = Omit<z.output<typeof createInputSchema>, "json"> & { json?: boolean };
+export type CreateInput = Omit<z.output<typeof createInputSchema>, "json" | "skipHooks"> & {
+  json?: boolean;
+  skipHooks?: boolean;
+};
 
 export function registerCreateCommand(program: Command, context: CliContext): void {
   program
@@ -79,6 +83,7 @@ export function registerCreateCommand(program: Command, context: CliContext): vo
     .option("--fetch", "Fetch before resolving the branch")
     .option("--no-fetch", "Do not fetch before resolving the branch")
     .option("--carry", "Carry staged, unstaged, and untracked changes from the current worktree")
+    .option("--skip-hooks", "Skip all pre_create and post_create steps, including copy and symlink")
     .option("--cd", "Enter after creation; requires shell integration")
     .option("--open", "Open after creation with the configured or selected tool")
     .option("--tool <profile>", "Tool profile to open; implies --open")
@@ -96,6 +101,7 @@ export function registerCreateCommand(program: Command, context: CliContext): vo
           name?: unknown;
           fetch?: boolean;
           carry?: unknown;
+          skipHooks?: unknown;
           cd?: unknown;
           open?: unknown;
           tool?: unknown;
@@ -121,6 +127,7 @@ export async function createWorktree(
   const workspace = await context.workspaces.find();
   const promptedForBranch = input.branch === undefined;
   const branchState: { selectedValue?: string; branchValue?: string } = {};
+  const hookState = { runHooks: true };
   let plan: CreatePlan;
   while (true) {
     const branch =
@@ -130,9 +137,8 @@ export async function createWorktree(
         : await chooseBranch(workspace, context.worktrees, branchState));
     plan = await prepareCreatePlan(workspace, branch, input, context);
     if (!promptedForBranch) break;
-    printCreatePlan(plan, createDestination(input), context.output);
     try {
-      if (await confirm("Create this worktree?", true, { navigation: "back" })) break;
+      if (await confirmCreatePlan(plan, input, context, hookState)) break;
       writeLine(context.output.stdout, createCancellationMessage(plan));
       return null;
     } catch (error) {
@@ -140,7 +146,9 @@ export async function createWorktree(
       throw error;
     }
   }
-  await ensureTrusted(workspace, plan.project, context, { nonInteractive: input.json });
+  if (!plan.skipHooks) {
+    await ensureTrusted(workspace, plan.project, context, { nonInteractive: input.json });
+  }
   const created = await context.workflow.executeCreate(plan, {
     output: context.output.stderr,
   });
@@ -244,8 +252,37 @@ async function prepareCreatePlan(
       name: input.name,
       fetch: input.fetch,
       carry: input.carry,
+      skipHooks: input.skipHooks,
     });
   return input.json ? await prepare() : await runTask("Preparing worktree", prepare);
+}
+
+async function confirmCreatePlan(
+  plan: CreatePlan,
+  input: CreateInput,
+  context: CliContext,
+  hookState: { runHooks: boolean },
+): Promise<boolean> {
+  const preCreateCount = plan.project?.config.hooks.pre_create.length ?? 0;
+  const postCreateCount = plan.project?.config.hooks.post_create.length ?? 0;
+  const promptForHooks = !input.skipHooks && preCreateCount + postCreateCount > 0;
+  while (true) {
+    if (promptForHooks) {
+      hookState.runHooks = await confirm(
+        `Run create hooks? (${preCreateCount} pre-create, ${postCreateCount} post-create steps)`,
+        hookState.runHooks,
+        { navigation: "back" },
+      );
+      plan.skipHooks = !hookState.runHooks;
+    }
+    printCreatePlan(plan, createDestination(input), context.output);
+    try {
+      return await confirm("Create this worktree?", true, { navigation: "back" });
+    } catch (error) {
+      if (isPromptBackError(error) && promptForHooks) continue;
+      throw error;
+    }
+  }
 }
 
 function createDestination(input: CreateInput): CreateDestination {

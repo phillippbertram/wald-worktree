@@ -18,6 +18,7 @@ source, and executable diagnosis. Review its suggestions before applying any rep
 wald create <branch>
 wald create <new-branch> --from <commit-ish>
 wald create <new-branch> --carry
+wald create <branch> --skip-hooks
 wald handoff <new-branch>
 ```
 
@@ -29,9 +30,10 @@ Do not publish it unless the user explicitly requests that external change; Wald
 `git push -u <remote> HEAD` command for an authorized first push. Existing remote branches continue
 to track their same-named remote ref.
 
-An interactive branch or handoff choice is followed by a create-plan confirmation before trust,
-hooks, or Git mutation. `Esc` retains the previous branch input; `No` cancels the mutation. Explicit
-branch commands do not prompt. In automation, `create` and `handoff --json` require a branch and
+An interactive branch or handoff choice offers whether to run configured create hooks, then a
+create-plan confirmation before trust, hooks, or Git mutation. `Esc` returns to the preceding choice
+and retains previous values; declining creation cancels the mutation. Explicit branch commands do
+not add these questions. In automation, `create` and `handoff --json` require a branch and
 cannot be combined with navigation or tool-opening options.
 
 Fetching follows the effective project-configuration default. Override it only when the task
@@ -45,10 +47,16 @@ not move an editor, process, or agent session. If transfer fails before `post_cr
 the fresh target and branch when it can do so safely; a `post_create` failure keeps the transferred
 target for `wald setup` recovery.
 
-Creation runs trusted `pre_create` before Git creates the checkout, followed by `post_create`. If
-the latter phase fails, keep the created checkout, inspect the error, fix the
+By default, creation runs trusted `pre_create` before Git creates the checkout, followed by
+`post_create`. If the latter phase fails, keep the created checkout, inspect the error, fix the
 cause, and retry the printed `wald setup <worktree>` command. To test hooks independently after a
 configuration change, use `wald hook run <event> <worktree>`; this runs no Git creation or removal.
+
+When the task calls for skipping setup, `create`, `plant`, and `handoff` accept `--skip-hooks`.
+It skips both create events and all their command, copy, and symlink steps for that invocation.
+Creation then needs no trust approval and does not alter saved trust; validation and carry checks
+still apply. Tool opening retains its trust check. `wald setup <worktree>` can run `post_create`
+later with the usual trust requirement.
 
 Rename an eligible linked worktree directory and its local branch, preserving `HEAD`, index, files,
 file modes, and upstream tracking:

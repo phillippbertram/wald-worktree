@@ -22,7 +22,9 @@ export function printCreatePlan(
     ["Project config", trustLabel(plan)],
     [
       "Automation",
-      `${plan.project?.config.hooks.pre_create.length ?? 0} pre-create, ${plan.project?.config.hooks.post_create.length ?? 0} post-create steps`,
+      plan.skipHooks
+        ? "skipped (pre_create and post_create, including copy and symlink)"
+        : `${plan.project?.config.hooks.pre_create.length ?? 0} pre-create, ${plan.project?.config.hooks.post_create.length ?? 0} post-create steps`,
     ],
     ["After creation", destinationLabel(destination)],
   ];
@@ -69,6 +71,7 @@ function startingRef(plan: CreatePlan): string {
 }
 
 function trustLabel(plan: CreatePlan): string {
+  if (plan.skipHooks) return "not required for creation (hooks skipped)";
   if (!plan.project?.requiresTrust) return "not required";
   return plan.trusted ? "trusted" : "approval required";
 }

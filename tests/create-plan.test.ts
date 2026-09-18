@@ -36,6 +36,21 @@ describe("create plan presentation", () => {
     expect(labels[0]).toContain("check out an existing local branch");
     expect(labels[1]).toContain("track a branch from origin");
   });
+
+  it("shows skipped automation without claiming the configuration is trusted", () => {
+    const output = new PassThrough();
+    printCreatePlan(
+      { ...plan({ type: "local" }), skipHooks: true },
+      { type: "open", tool: "codex" },
+      { stdout: output },
+    );
+
+    const rendered = readOutput(output);
+    expect(rendered).toContain("skipped (pre_create and post_create, including copy and symlink)");
+    expect(rendered).toContain("not required for creation (hooks skipped)");
+    expect(rendered).not.toContain("approval required");
+    expect(rendered).toContain("open with codex");
+  });
 });
 
 function readOutput(output: PassThrough): string {
@@ -93,6 +108,7 @@ function plan(strategy: CreatePlan["prepared"]["strategy"]): CreatePlan {
       },
     },
     trusted: false,
+    skipHooks: false,
     carrySource: {
       name: "main",
       role: "linked",

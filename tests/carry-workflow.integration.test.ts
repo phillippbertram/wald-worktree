@@ -145,7 +145,7 @@ hooks:
     expect(created.state).toBe("clean");
   });
 
-  it("rolls back its fresh worktree and branch when transfer fails before post-create", async () => {
+  it.each([false, true])("rolls back failed carry (skip: %s)", async (skipHooks) => {
     const workspace = await workspaces.initialize(
       repository.remote,
       path.join(temporaryRoot, "rollback-workspace"),
@@ -162,6 +162,7 @@ hooks:
       branch: "feature/rollback",
       carry: true,
       fetch: false,
+      skipHooks,
     });
 
     await expect(workflow.executeCreate(plan)).rejects.toThrow(
@@ -178,7 +179,7 @@ hooks:
     expect(await fs.readFile(path.join(source.path, "local.txt"), "utf8")).toBe("keep source\n");
   });
 
-  it("rechecks uncommitted source configuration after pre-create before creating anything", async () => {
+  it.each([false, true])("rejects source config drift (skip: %s)", async (skipHooks) => {
     const workspace = await workspaces.initialize(
       repository.remote,
       path.join(temporaryRoot, "config-drift-workspace"),
@@ -205,12 +206,17 @@ hooks:
       branch: "feature/config-drift",
       carry: true,
       fetch: false,
+      skipHooks,
     });
     if (!plan.project) throw new Error("Expected source configuration.");
-    await configs.trust(workspace, plan.project);
+    if (skipHooks) {
+      await fs.writeFile(configPath, "version: 1\n", "utf8");
+    } else {
+      await configs.trust(workspace, plan.project);
+    }
 
     await expect(workflow.executeCreate(plan)).rejects.toThrow(
-      /effective project configuration changed after pre-create/u,
+      /effective project configuration changed after (pre-create|preparation)/u,
     );
     expect((await worktrees.list(workspace)).map((worktree) => worktree.path)).toEqual([
       source.path,
@@ -260,7 +266,7 @@ hooks:
     expect(await fs.readFile(path.join(source.path, "local.txt"), "utf8")).toBe("carried\n");
   });
 
-  it("preserves the carry target when a transfer may already have written changes", async () => {
+  it.each([false, true])("keeps unsafe carry targets (skip: %s)", async (skipHooks) => {
     const workspace = await workspaces.initialize(
       repository.remote,
       path.join(temporaryRoot, "unsafe-transfer-workspace"),
@@ -278,6 +284,7 @@ hooks:
       branch: "feature/preserved-transfer",
       carry: true,
       fetch: false,
+      skipHooks,
     });
 
     await expect(workflow.executeCreate(plan)).rejects.toThrow(
