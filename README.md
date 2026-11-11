@@ -120,6 +120,10 @@ configured default branch. Add `--from HEAD` when new work should begin at the c
 
 ## A typical day
 
+Run `wald` for the guided menu: create a worktree, select an existing checkout for its actions,
+or manage project settings and maintenance. Each prompt shows how to go back; completed actions
+offer explicit navigation choices. See [CLI reference](docs/cli-reference.md#general-behavior).
+
 ```sh
 wald status
 wald list

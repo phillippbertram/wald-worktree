@@ -97,40 +97,74 @@ export async function initializeProjectConfiguration(
 
   const inspect = () => context.projectConfigs.inspect(root);
   const inspection = options.quiet ? await inspect() : await runTask("Inspecting project", inspect);
-  let templateOptions = options.yes ? detectedDefaults(inspection) : undefined;
-  let promptState: TemplatePromptState | undefined;
-  let resumeAtLastStep = false;
-
-  while (!templateOptions) {
-    const prompted = await promptForTemplate(inspection, promptState, resumeAtLastStep);
-    promptState = prompted.state;
-    templateOptions = prompted.options;
-    const config = createGeneratedConfiguration(
-      inspection,
-      templateOptions,
-      options.scope,
-      context,
-    );
-
-    await printKeyValueTable([
-      ["Package manager", inspection.packageManager ?? "none"],
-      ["Install hook", templateOptions.install ? "yes" : "no"],
-      ["Environment copy", templateOptions.copyEnvironment ? "yes" : "no"],
-      ["Verify scripts", templateOptions.scripts.join(", ") || "none"],
-      ["Development task", templateOptions.development ? "dev" : "none"],
-      ["Default tool", templateOptions.tool ?? "none"],
-    ]);
-    writeLine(context.output.stdout, "");
-    context.output.stdout.write(formatConfiguration(config, options.scope, context));
-    try {
-      if (!(await confirm(`Write ${configFileName}?`, true, { navigation: "back" }))) {
-        writeLine(context.output.stdout, "Cancelled.");
+  let templateOptions = detectedDefaults(inspection);
+  let promptState: TemplatePromptState = {
+    fetch: templateOptions.fetch,
+    install: templateOptions.install,
+    copyEnvironment: templateOptions.copyEnvironment,
+    development: templateOptions.development,
+    createVerification: templateOptions.scripts.length > 0,
+    scripts: templateOptions.scripts,
+    tool: templateOptions.tool ?? "__none__",
+  };
+  if (!options.yes) {
+    while (true) {
+      const config = createGeneratedConfiguration(
+        inspection,
+        templateOptions,
+        options.scope,
+        context,
+      );
+      await printKeyValueTable([
+        ["Configuration file", configPath],
+        ["Fetch before creation", templateOptions.fetch ? "yes" : "no"],
+        [
+          "Install after creation",
+          templateOptions.install ? (inspection.installCommand?.join(" ") ?? "none") : "none",
+        ],
+        [
+          "Environment copy",
+          templateOptions.copyEnvironment ? `${inspection.environmentExample} → .env` : "none",
+        ],
+        ["Verify scripts", templateOptions.scripts.join(", ") || "none"],
+        [
+          "Development task",
+          templateOptions.development ? (inspection.developmentScript ?? "dev") : "none",
+        ],
+        ["Default tool", templateOptions.tool ?? "none"],
+      ]);
+      const action = await selectValue(
+        "Configure › Review · Use these settings?",
+        [
+          {
+            label: "Use these settings",
+            value: "write",
+            description: `Write ${configFileName}; executable actions still require trust.`,
+          },
+          { label: "Customize…", value: "customize" },
+          { label: "Show configuration", value: "show" },
+          { label: "Cancel", value: "cancel" },
+        ],
+        { navigation: "back", initialValue: "write" },
+      );
+      if (action === "cancel") {
+        writeLine(context.output.stdout, "Cancelled. No configuration was written.");
         return null;
       }
-    } catch (error) {
-      if (!isPromptBackError(error)) throw error;
-      templateOptions = undefined;
-      resumeAtLastStep = true;
+      if (action === "write") break;
+      if (action === "show") {
+        context.output.stdout.write(formatConfiguration(config, options.scope, context));
+        continue;
+      }
+      if (action === "customize") {
+        try {
+          const prompted = await promptForTemplate(inspection, promptState, false);
+          promptState = prompted.state;
+          templateOptions = prompted.options;
+        } catch (error) {
+          if (!isPromptBackError(error)) throw error;
+        }
+      }
     }
   }
 

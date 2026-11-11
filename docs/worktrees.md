@@ -228,11 +228,12 @@ transfer failure before `post_create` rolls back the fresh worktree and branch w
 `post_create` failure keeps the verified target for `wald setup`. After success, the changes exist in
 both worktrees. `handoff` does not move an editor, process, or agent session.
 
-When the branch was chosen interactively, Wald offers whether to run configured create hooks, then
-shows and confirms the complete plan before trust, hooks, branch creation, or checkout creation.
-`--skip-hooks` bypasses all create-hook steps, including copies and symlinks, and the hook question.
+When the branch was chosen interactively, Wald shows the complete plan before trust, hooks, branch
+creation, or checkout creation. **Change options…** lets you adjust the directory, setup, and opening
+behavior before choosing **Create worktree**. `--skip-hooks`, or skipping hooks in the review,
+bypasses all create-hook steps, including copies and symlinks.
 See the [create reference](cli-reference.md#wald-create) for trust behavior and back navigation.
-Explicit branch commands do not add these questions.
+Explicit branch commands do not add this review.
 
 ## The worktree lifecycle
 
@@ -400,8 +401,10 @@ repairs Git metadata without touching surviving worktrees or branches.
 ### Does removing a worktree delete its branch?
 
 Not by default. `wald remove` removes the linked checkout after safety checks and keeps its branch.
-In a terminal, Wald also offers eligible local branches for deletion before final confirmation; no
-branch is preselected. An unmerged branch is offered only with `--force` and is clearly labeled.
+In a terminal, Wald previews the target and offers **Cancel**, removal while keeping branches, or
+removal with eligible local branch deletion. Cancel is selected by default. Multiple worktrees allow
+choosing branches before a final confirmation; no branch is preselected. An unmerged branch is
+offered only with `--force` and is clearly labeled.
 Scripts can request the same behavior explicitly with `--delete-branch --yes`, adding `--force`
 when the branch is unmerged. The configured default branch, detached checkouts, and remote branches
 are never deleted. `wald prune` removes only stale administrative metadata and never deletes an

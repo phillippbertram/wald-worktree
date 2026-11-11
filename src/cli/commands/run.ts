@@ -6,6 +6,7 @@ import { isInteractiveTerminal, isPromptBackError, searchSelect } from "../../ui
 import type { CliContext } from "../context.js";
 import { ensureTrusted, resolveWorktree, success } from "../helpers.js";
 import { nonEmptyCliString, parseCliInput } from "../input.js";
+import { offerProjectConfiguration } from "./config.js";
 
 const runInputSchema = z
   .object({
@@ -45,9 +46,14 @@ export async function runProjectTask(input: RunInput, context: CliContext): Prom
     });
     initialPath = worktree.path;
     const project = await context.workflow.projectForWorktree(workspace, worktree);
-    if (!project) throw new WaldError(`No project configuration found for ${worktree.path}`);
-    if (Object.keys(project.config.tasks).length === 0) {
-      throw new WaldError("No tasks are configured in the effective project configuration.");
+    if (!project || Object.keys(project.config.tasks).length === 0) {
+      const message = project
+        ? "No tasks are configured in the effective project configuration."
+        : `No project configuration found for ${worktree.path}`;
+      if (input.task || !isInteractiveTerminal()) throw new WaldError(message);
+      if (await offerProjectConfiguration(worktree, "No project tasks configured.", context))
+        continue;
+      return;
     }
     while (true) {
       let task = input.task;

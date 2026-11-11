@@ -9,17 +9,20 @@ import {
   select,
   text,
 } from "@clack/prompts";
+import pc from "picocolors";
 import { WaldError } from "../domain/errors.js";
 import type { Worktree } from "../domain/types.js";
+import { redactSensitiveText, sanitizeTerminalText } from "../infrastructure/safe-text.js";
 import { style } from "./style.js";
 import { renderTable } from "./table.js";
 
-type Choice = {
+export type Choice = {
   label: string;
   value: string;
   description?: string;
   checked?: boolean;
   group?: string;
+  disabled?: boolean;
 };
 
 type ClackChoice = {
@@ -35,6 +38,10 @@ type PromptOptions = {
   navigation?: PromptNavigation;
   initialValue?: string;
   initialValues?: string[];
+  initialSearch?: string;
+  createChoice?: (search: string) => Choice | undefined;
+  validate?: (value: string) => string | undefined;
+  validateAsync?: (value: string) => Promise<void>;
 };
 
 export class PromptBackError extends Error {
@@ -79,10 +86,11 @@ export async function runTask<T>(label: string, task: () => Promise<T>): Promise
 export async function confirm(
   question: string,
   defaultValue = false,
-  _options: PromptOptions = {},
+  options: PromptOptions = {},
 ): Promise<boolean> {
-  return await promptWithNavigation((signal) =>
-    clackConfirm({ message: question, initialValue: defaultValue, signal }),
+  return await promptWithNavigation(
+    (signal) => clackConfirm({ message: question, initialValue: defaultValue, signal }),
+    options.navigation,
   );
 }
 
@@ -107,14 +115,16 @@ export async function selectValue(
   choices: Choice[],
   options: PromptOptions = {},
 ): Promise<string> {
-  return await promptWithNavigation((signal) =>
-    select({
-      message: question,
-      options: toClackChoices(choices, true),
-      initialValue: options.initialValue,
-      maxItems: 10,
-      signal,
-    }),
+  return await promptWithNavigation(
+    (signal) =>
+      select({
+        message: question,
+        options: toClackChoices(choices, true),
+        initialValue: options.initialValue,
+        maxItems: 10,
+        signal,
+      }),
+    options.navigation,
   );
 }
 
@@ -123,24 +133,35 @@ export async function searchSelect(
   choices: Choice[],
   options: PromptOptions = {},
 ): Promise<string> {
-  const choicesByValue = new Map(choices.map((choice) => [choice.value, choice]));
-  return await promptWithNavigation((signal) =>
-    autocomplete({
-      message: question,
-      options: toClackChoices(choices, false),
-      initialValue: options.initialValue,
-      maxItems: 10,
-      signal,
-      filter: (term, option) => {
-        const choice = choicesByValue.get(option.value);
-        const searchable = choice
-          ? `${choice.label} ${choice.description ?? ""} ${choice.value}`
-          : `${option.label ?? ""} ${option.hint ?? ""} ${option.value}`;
-        return stripVTControlCharacters(searchable)
-          .toLocaleLowerCase()
-          .includes(term.trim().toLocaleLowerCase());
-      },
-    }),
+  const matches = (term: string, choice: Choice): boolean =>
+    stripVTControlCharacters(`${choice.label} ${choice.description ?? ""} ${choice.value}`)
+      .toLocaleLowerCase()
+      .includes(term.trim().toLocaleLowerCase());
+  return await promptWithNavigation(
+    (signal) =>
+      autocomplete({
+        message: question,
+        options: options.createChoice
+          ? function () {
+              const matching = choices.filter((choice) => matches(this.userInput, choice));
+              const created = options.createChoice?.(this.userInput.trim());
+              return toClackChoices(created ? [created, ...matching] : matching, false);
+            }
+          : toClackChoices(choices, false),
+        initialValue: options.initialValue,
+        initialUserInput: options.initialSearch,
+        maxItems: 10,
+        signal,
+        filter: (term, option) => {
+          if (options.createChoice) return true;
+          return matches(term, {
+            label: option.label ?? "",
+            value: option.value,
+            description: option.hint,
+          });
+        },
+      }),
+    options.navigation,
   );
 }
 
@@ -149,17 +170,19 @@ export async function selectManyValues(
   choices: Choice[],
   options: PromptOptions = {},
 ): Promise<string[]> {
-  return await promptWithNavigation((signal) =>
-    multiselect({
-      message: question,
-      options: toClackChoices(choices, false),
-      initialValues:
-        options.initialValues ??
-        choices.filter((choice) => choice.checked).map((choice) => choice.value),
-      maxItems: 10,
-      required: false,
-      signal,
-    }),
+  return await promptWithNavigation(
+    (signal) =>
+      multiselect({
+        message: question,
+        options: toClackChoices(choices, false),
+        initialValues:
+          options.initialValues ??
+          choices.filter((choice) => choice.checked).map((choice) => choice.value),
+        maxItems: 10,
+        required: false,
+        signal,
+      }),
+    options.navigation,
   );
 }
 
@@ -183,17 +206,60 @@ export async function selectManyWorktrees(
 export async function promptText(
   question: string,
   defaultValue?: string,
-  _options: PromptOptions = {},
+  options: PromptOptions = {},
 ): Promise<string> {
-  return (
-    await promptWithNavigation((signal) =>
-      text({ message: question, initialValue: defaultValue, signal }),
-    )
-  ).trim();
+  let value = defaultValue;
+  while (true) {
+    value = (
+      await promptWithNavigation(
+        (signal) =>
+          text({
+            message: question,
+            initialValue: value,
+            validate: options.validate
+              ? (input) => options.validate?.((input ?? "").trim())
+              : undefined,
+            signal,
+          }),
+        options.navigation,
+      )
+    ).trim();
+    try {
+      await options.validateAsync?.(value);
+      return value;
+    } catch (error) {
+      if (!(error instanceof WaldError) || error.exitCode === 130) throw error;
+      await printStatus(
+        "error",
+        sanitizeTerminalText(redactSensitiveText(error.message), { multiline: true }),
+      );
+    }
+  }
 }
 
 export async function printWorktreeTable(worktrees: Worktree[]): Promise<void> {
-  if ((process.stdout.columns ?? Number.POSITIVE_INFINITY) < 100) {
+  const table = renderTable(
+    ["NAME", "BRANCH", "ROLE", "STATUS", "PATH"],
+    worktrees.map((worktree) => [
+      worktree.name,
+      worktree.branch ?? "detached",
+      worktree.role,
+      worktree.state,
+      worktree.path,
+    ]),
+    (cell, column, row) => {
+      if (column === 0) return style.worktree(cell);
+      if (column === 1) return style.branch(cell);
+      if (column === 3) return style.state(cell, worktrees[row]?.state);
+      if (column === 4) return style.path(cell);
+      return cell;
+    },
+  );
+  const width = process.stdout.columns ?? Number.POSITIVE_INFINITY;
+  if (
+    width < 100 ||
+    table.split("\n").some((line) => stripVTControlCharacters(line).length > width)
+  ) {
     for (const [index, worktree] of worktrees.entries()) {
       if (index > 0) process.stdout.write("\n");
       process.stdout.write(`${style.worktree(worktree.name)}\n`);
@@ -204,25 +270,7 @@ export async function printWorktreeTable(worktrees: Worktree[]): Promise<void> {
     }
     return;
   }
-  process.stdout.write(
-    `${renderTable(
-      ["NAME", "BRANCH", "ROLE", "STATUS", "PATH"],
-      worktrees.map((worktree) => [
-        worktree.name,
-        worktree.branch ?? "detached",
-        worktree.role,
-        worktree.state,
-        worktree.path,
-      ]),
-      (cell, column, row) => {
-        if (column === 0) return style.worktree(cell);
-        if (column === 1) return style.branch(cell);
-        if (column === 3) return style.state(cell, worktrees[row]?.state);
-        if (column === 4) return style.path(cell);
-        return cell;
-      },
-    )}\n`,
-  );
+  process.stdout.write(`${table}\n`);
 }
 
 export async function printKeyValueTable(rows: Array<[string, string]>): Promise<void> {
@@ -256,6 +304,7 @@ function toClackChoices(choices: Choice[], includeGroups: boolean): ClackChoice[
       value: choice.value,
       label: choice.label,
       hint: choice.description,
+      ...(choice.disabled ? { disabled: true } : {}),
     });
     previousGroup = choice.group;
   }
@@ -264,7 +313,11 @@ function toClackChoices(choices: Choice[], includeGroups: boolean): ClackChoice[
 
 async function promptWithNavigation<T>(
   prompt: (signal: AbortSignal) => Promise<T | symbol>,
+  navigation: PromptNavigation = "cancel",
 ): Promise<T> {
+  if (isInteractiveTerminal()) {
+    process.stdout.write(pc.dim(`Esc: ${navigation} · Ctrl+C: exit\n`));
+  }
   const controller = new AbortController();
   let cancellation: "back" | "exit" | undefined;
   const onKeypress = (input: string, key: { name?: string; ctrl?: boolean } | undefined): void => {

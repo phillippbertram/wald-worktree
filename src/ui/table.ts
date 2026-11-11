@@ -1,3 +1,4 @@
+import { stripVTControlCharacters } from "node:util";
 import Table from "cli-table3";
 import pc from "picocolors";
 
@@ -23,10 +24,28 @@ export function renderTable(
   headers: string[],
   rows: string[][],
   formatCell: (cell: string, column: number, row: number) => string = (cell) => cell,
+  width = process.stdout.isTTY ? process.stdout.columns : undefined,
 ): string {
+  const naturalWidths = headers.map((header, index) =>
+    Math.max(
+      header.length,
+      ...rows.map((row) => stripVTControlCharacters(row[index] ?? "").length),
+    ),
+  );
+  const needsWrapping =
+    width !== undefined &&
+    naturalWidths.reduce((sum, value) => sum + value, 0) + (headers.length - 1) * 2 > width;
+  const firstWidth = Math.min(naturalWidths[0] ?? 0, Math.floor((width ?? 80) / 3));
   const table = new Table({
     chars: borderlessChars,
     head: headers.map((header) => pc.cyan(pc.bold(header))),
+    ...(needsWrapping && headers.length === 2
+      ? {
+          colWidths: [Math.max(1, firstWidth), Math.max(1, (width ?? 80) - firstWidth - 2)],
+          wordWrap: true,
+          wrapOnWordBoundary: false,
+        }
+      : {}),
     style: {
       border: [],
       head: [],

@@ -5,7 +5,7 @@ import { style } from "./style.js";
 
 export type WelcomeSummary = {
   workspaceRoot: string;
-  current: Pick<Worktree, "name" | "branch"> | null;
+  current: (Pick<Worktree, "name" | "branch"> & Partial<Pick<Worktree, "state">>) | null;
   worktreeCount: number;
 };
 
@@ -61,4 +61,10 @@ function renderSummary(summary: WelcomeSummary): string {
     `${style.label("Current")} ${current}`,
     `${style.value(summary.worktreeCount)} ${worktreeLabel}`,
   ].join(` ${separator} `);
+}
+
+export function renderWorkspaceContext(summary: WelcomeSummary): string {
+  const current = summary.current;
+  const state = current?.state ? ` · ${style.state(current.state, current.state)}` : "";
+  return `\n${style.heading("Wald")} · ${style.path(path.basename(summary.workspaceRoot))}\n${style.label("Current:")} ${current ? `${style.worktree(current.name)} (${style.branch(current.branch ?? "detached")})` : "workspace root"}${state} · ${summary.worktreeCount} ${summary.worktreeCount === 1 ? "worktree" : "worktrees"}\n`;
 }

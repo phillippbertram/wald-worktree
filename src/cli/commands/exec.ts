@@ -59,7 +59,10 @@ export async function executeCommand(
       rawCommand = await promptText(
         `Execute › Command · Command to run in ${selected.name}:`,
         rawCommand,
-        { navigation: canChooseWorktree ? "back" : "cancel" },
+        {
+          navigation: canChooseWorktree ? "back" : "cancel",
+          validate: (value) => (value ? undefined : "Enter a command to run."),
+        },
       );
     } catch (error) {
       if (!isPromptBackError(error) || !canChooseWorktree) throw error;

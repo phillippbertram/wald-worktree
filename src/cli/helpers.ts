@@ -5,6 +5,7 @@ import { summarizeExecutableConfig } from "../services/config-service.js";
 import type { WorktreeService } from "../services/worktree-service.js";
 import { style } from "../ui/style.js";
 import {
+  type Choice,
   confirm,
   isInteractiveTerminal,
   isPromptBackError,
@@ -96,15 +97,21 @@ export function printTrustSummary(project: ProjectConfigDocument, output: CliOut
 export async function chooseBranch(
   workspace: Workspace,
   worktrees: WorktreeService,
-  state: { selectedValue?: string; branchValue?: string } = {},
+  state: { selectedValue?: string; branchValue?: string; searchValue?: string } = {},
 ): Promise<string> {
   if (!isInteractiveTerminal()) throw new WaldError("Branch is required without a TTY.");
-  const unique = new Map<string, { label: string; value: string }>();
+  const checkedOut = new Map(
+    (await worktrees.list(workspace))
+      .filter((item) => item.branch)
+      .map((item) => [item.branch, item]),
+  );
+  const unique = new Map<string, Choice>();
   for (const candidate of await worktrees.listBranchCandidates(workspace)) {
     if (!unique.has(candidate.name) || candidate.source === "local") {
       unique.set(candidate.name, {
-        label: `${style.branch(candidate.name)}${candidate.label.slice(candidate.name.length)}`,
+        label: `${style.branch(candidate.name)}${candidate.label.slice(candidate.name.length)}${checkedOut.has(candidate.name) ? ` (in ${style.worktree(checkedOut.get(candidate.name)?.name ?? "worktree")})` : ""}`,
         value: candidate.name,
+        disabled: checkedOut.has(candidate.name),
       });
     }
   }
@@ -113,13 +120,47 @@ export async function chooseBranch(
     const selected = await searchSelect(
       "Create › Branch · Select a branch or create a new one:",
       [{ label: "Create a new branch", value: createValue }, ...unique.values()],
-      { navigation: "cancel", initialValue: state.selectedValue },
+      {
+        navigation: "cancel",
+        initialValue: state.selectedValue,
+        initialSearch: state.searchValue,
+        createChoice: (search) => {
+          state.searchValue = search;
+          return search && !unique.has(search)
+            ? {
+                label: `Create branch ${style.branch(search)}`,
+                value: `new:${search}`,
+              }
+            : undefined;
+        },
+      },
     );
     state.selectedValue = selected;
+    if (selected.startsWith("new:")) {
+      const branch = selected.slice(4);
+      try {
+        await worktrees.validateBranch(workspace, branch);
+        return branch;
+      } catch (error) {
+        if (!(error instanceof WaldError)) throw error;
+        await printStatus("error", style.danger(error.message));
+        state.searchValue = branch;
+        continue;
+      }
+    }
     if (selected !== createValue) return selected;
     try {
       const branch = await promptText("Create › New branch · Branch name:", state.branchValue, {
         navigation: "back",
+        validate: (value) =>
+          value ? undefined : "Enter a branch name, for example feature/payment.",
+        validateAsync: async (value) => {
+          await worktrees.validateBranch(workspace, value);
+          if (checkedOut.has(value))
+            throw new WaldError(
+              `Branch ${value} is already checked out in ${checkedOut.get(value)?.name}. Choose another branch or open its worktree.`,
+            );
+        },
       });
       state.branchValue = branch;
       if (!branch) throw new WaldError("Branch cannot be empty.");
@@ -134,9 +175,14 @@ export async function chooseBranch(
 export async function chooseNewBranch(
   prompt = "Create › New branch · Branch name:",
   state: { branchValue?: string } = {},
+  validateAsync?: (value: string) => Promise<void>,
 ): Promise<string> {
   if (!isInteractiveTerminal()) throw new WaldError("Branch is required without a TTY.");
-  const branch = await promptText(prompt, state.branchValue, { navigation: "cancel" });
+  const branch = await promptText(prompt, state.branchValue, {
+    navigation: "cancel",
+    validate: (value) => (value ? undefined : "Enter a new branch name."),
+    validateAsync,
+  });
   state.branchValue = branch;
   if (!branch) throw new WaldError("Branch cannot be empty.");
   return branch;

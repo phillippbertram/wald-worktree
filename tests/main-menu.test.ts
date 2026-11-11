@@ -9,9 +9,13 @@ import { PromptBackError } from "../src/ui/terminal.js";
 
 const interactions = vi.hoisted(() => ({
   interactive: true,
+  worktreeSelections: [] as Array<Worktree | Error>,
+  openWorktree: vi.fn(),
+  runProjectTask: vi.fn(),
+  runDoctor: vi.fn(),
   selections: [] as Array<string | Error>,
   selectCalls: [] as Array<{
-    options: Array<{ label: string; description?: string; group?: string }>;
+    options: Array<{ label: string; value: string; description?: string; group?: string }>;
     navigation?: string;
   }>,
   events: [] as string[],
@@ -30,15 +34,23 @@ vi.mock("../src/ui/terminal.js", async (importOriginal) => {
   return {
     ...actual,
     isInteractiveTerminal: () => interactions.interactive,
+    selectWorktree: async () => {
+      const selected = interactions.worktreeSelections.shift();
+      if (selected instanceof Error) throw selected;
+      if (!selected) throw new PromptBackError();
+      return selected;
+    },
     selectValue: async (
       _question: string,
-      options: Array<{ label: string; description?: string; group?: string }>,
+      options: Array<{ label: string; value: string; description?: string; group?: string }>,
       promptOptions?: { navigation?: string },
     ) => {
       interactions.events.push("prompt");
       interactions.selectCalls.push({ options, navigation: promptOptions?.navigation });
       const selection = interactions.selections.shift() ?? "exit";
       if (selection instanceof Error) throw selection;
+      if (!options.some((option) => option.value === selection))
+        throw new Error(`Selection not offered: ${selection}`);
       return selection;
     },
   };
@@ -108,9 +120,17 @@ vi.mock("../src/cli/commands/uninit.js", async (importOriginal) => {
   };
 });
 
+vi.mock("../src/cli/commands/open.js", () => ({ openWorktree: interactions.openWorktree }));
+vi.mock("../src/cli/commands/run.js", () => ({ runProjectTask: interactions.runProjectTask }));
+vi.mock("../src/cli/commands/doctor.js", () => ({ runDoctor: interactions.runDoctor }));
+
 describe("interactive main menu", () => {
   beforeEach(() => {
     interactions.interactive = true;
+    interactions.worktreeSelections = [];
+    interactions.openWorktree.mockReset();
+    interactions.runProjectTask.mockReset();
+    interactions.runDoctor.mockReset();
     interactions.selections = ["exit"];
     interactions.selectCalls = [];
     interactions.events = [];
@@ -127,215 +147,190 @@ describe("interactive main menu", () => {
     interactions.uninitializeWorkspace.mockReset();
   });
 
-  it("shows workspace context before prompting", async () => {
-    const workspace = { root: "/tmp/wald-project" } as Workspace;
-    const current = {
-      name: "main",
-      branch: "main",
-    } as Worktree;
+  const workspace = { root: "/tmp/wald-project" } as Workspace;
+  const primary = {
+    name: "main",
+    branch: "main",
+    path: "/tmp/wald-project/main",
+    role: "primary",
+    state: "clean",
+  } as Worktree;
+  const feature = {
+    name: "feature",
+    branch: "feature/work",
+    path: "/tmp/wald-project/feature",
+    role: "linked",
+    state: "clean",
+  } as Worktree;
+
+  it("keeps the first menu to seven task-oriented actions", async () => {
     interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
-    const context = createContext(current, [current]);
-
-    await runMainMenu(new Command().name("wald"), context);
-
-    expect(interactions.events[0]).toContain("Where Git worktrees grow.");
+    await runMainMenu(new Command().name("wald"), createContext(primary, [primary, feature]));
     expect(interactions.events[0]).toContain(
-      "Workspace wald-project · Current main (main) · 1 worktree",
+      "Workspace wald-project · Current main (main) · 2 worktrees",
     );
-    expect(interactions.events[1]).toBe("prompt");
-    expect(interactions.selectCalls[0]).toMatchObject({
-      navigation: "exit",
-      options: expect.arrayContaining([
-        expect.objectContaining({
-          label: "🌱 Create worktree",
-          description: "Create an isolated checkout for a branch.",
-          group: "Common",
-        }),
-        expect.objectContaining({
-          label: "Run lifecycle hook",
-          description: "Run a configured hook without changing Git state.",
-          group: "Project automation",
-        }),
-        expect.objectContaining({
-          label: "Hand off current work",
-          group: "Common",
-        }),
-        expect.objectContaining({
-          label: "Rename worktree",
-          group: "Maintenance",
-        }),
-      ]),
-    });
+    expect(interactions.selectCalls[0]?.options.map(({ value }) => value)).toEqual([
+      "create",
+      "worktrees",
+      "handoff",
+      "tasks",
+      "settings",
+      "maintenance",
+      "exit",
+    ]);
+    expect(interactions.selectCalls[0]?.navigation).toBe("exit");
   });
 
-  it("runs guided handoff and rename only when their context is available", async () => {
-    const workspace = { root: "/tmp/wald-project" } as Workspace;
-    const current = { name: "main", branch: "main" } as Worktree;
-    const linked = { name: "feature", branch: "feature/work", role: "linked" } as Worktree;
+  it("hides current-work handoff outside a checkout", async () => {
     interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
-    interactions.selections = [
-      "handoff",
-      new PromptBackError(),
-      "rename",
-      new PromptBackError(),
-      "exit",
-    ];
+    await runMainMenu(new Command().name("wald"), createContext(null, []));
+    expect(interactions.selectCalls[0]?.options.map(({ value }) => value)).not.toContain("handoff");
+  });
 
-    await runMainMenu(new Command().name("wald"), createContext(current, [current, linked]));
+  it.each(["back", new PromptBackError()])(
+    "refreshes context without repeating the welcome after returning: %s",
+    async (back) => {
+      interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
+      interactions.selections = ["create", back, "exit"];
+      interactions.createWorktree.mockResolvedValue(feature);
+      await runMainMenu(new Command().name("wald"), createContext(primary, [primary]));
+      expect(interactions.findWorkspaceOrNull).toHaveBeenCalledTimes(2);
+      expect(
+        interactions.events.filter((event) => event.includes("Where Git worktrees grow.")),
+      ).toHaveLength(1);
+      expect(interactions.selectCalls[1]?.options.map(({ value }) => value)).toEqual([
+        "open",
+        "navigate",
+        "back",
+        "exit",
+      ]);
+    },
+  );
 
-    expect(interactions.handoffWorktree).toHaveBeenCalledWith(
-      { cd: false, open: false, printPath: false },
+  it("opens the created worktree directly from its result", async () => {
+    interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
+    interactions.selections = ["create", "open", "navigate", "exit"];
+    interactions.createWorktree.mockResolvedValue(feature);
+    await runMainMenu(new Command().name("wald"), createContext(primary, [primary]));
+    expect(interactions.openWorktree).toHaveBeenCalledWith(
+      feature.path,
+      undefined,
       expect.anything(),
     );
-    expect(interactions.renameWorktree).toHaveBeenCalledWith({}, expect.anything());
-    expect(interactions.selectCalls.flatMap((call) => call.options)).toContainEqual(
-      expect.objectContaining({
-        value: "rename",
-        description: "Rename a checkout directory and its local branch.",
-      }),
-    );
+    expect(interactions.events.join("\n")).toContain(`cd '${feature.path}'`);
   });
 
-  it("hides handoff outside a worktree and rename without a valid target", async () => {
-    const workspace = { root: "/tmp/wald-project" } as Workspace;
-    interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
-
-    await runMainMenu(new Command().name("wald"), createContext(null, []));
-
-    const labels = interactions.selectCalls[0]?.options.map((option) => option.label) ?? [];
-    expect(labels).not.toContain("Hand off current work");
-    expect(labels).not.toContain("Rename worktree");
-  });
-
-  it("keeps action output visible until Escape refreshes the menu", async () => {
-    const workspace = { root: "/tmp/wald-project" } as Workspace;
-    interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
-    interactions.selections = ["create", new PromptBackError(), "exit"];
-    interactions.createWorktree.mockResolvedValue({ name: "feature" });
-    const context = createContext(null, []);
-
-    await runMainMenu(new Command().name("wald"), context);
-
-    expect(interactions.createWorktree).toHaveBeenCalledOnce();
-    expect(interactions.findWorkspaceOrNull).toHaveBeenCalledTimes(2);
-    expect(interactions.events.filter((event) => event === "prompt")).toHaveLength(3);
-    expect(interactions.selectCalls[1]).toMatchObject({
-      navigation: "back",
-      options: [
-        {
-          label: "Exit",
-          description: "Close the interactive Wald session.",
-        },
-      ],
-    });
-  });
-
-  it("keeps the worktree list visible until Escape returns to the menu", async () => {
-    const workspace = { root: "/tmp/wald-project" } as Workspace;
-    interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
-    interactions.selections = ["list", new PromptBackError(), "exit"];
-    const context = createContext(null, []);
-
-    await runMainMenu(new Command().name("wald"), context);
-
-    expect(interactions.listWorktrees).toHaveBeenCalledWith({ json: false }, context);
-    expect(interactions.findWorkspaceOrNull).toHaveBeenCalledTimes(2);
-    expect(interactions.events.filter((event) => event === "prompt")).toHaveLength(3);
-    expect(interactions.selectCalls[1]).toMatchObject({
-      navigation: "back",
-      options: [
-        {
-          label: "Exit",
-          description: "Close the interactive Wald session.",
-        },
-      ],
-    });
-  });
-
-  it("exits from the worktree list without reopening the main menu", async () => {
-    const workspace = { root: "/tmp/wald-project" } as Workspace;
-    interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
-    interactions.selections = ["list", "exit"];
-    const context = createContext(null, []);
-
-    await runMainMenu(new Command().name("wald"), context);
-
-    expect(interactions.listWorktrees).toHaveBeenCalledOnce();
-    expect(interactions.findWorkspaceOrNull).toHaveBeenCalledOnce();
-    expect(interactions.events.filter((event) => event === "prompt")).toHaveLength(2);
-  });
-
-  it("keeps an expected action error visible until the result view is closed", async () => {
-    const workspace = { root: "/tmp/wald-project" } as Workspace;
+  it("keeps operational errors visible and provides a way back", async () => {
     interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
     interactions.selections = ["create", "exit"];
     interactions.createWorktree.mockRejectedValue(new WaldError("Creation failed."));
-
     await runMainMenu(new Command().name("wald"), createContext(null, []));
-
     expect(interactions.events.join("\n")).toContain("Error: Creation failed.");
-    expect(interactions.findWorkspaceOrNull).toHaveBeenCalledOnce();
-    expect(interactions.events.filter((event) => event === "prompt")).toHaveLength(2);
+    expect(interactions.selectCalls[1]?.options.map(({ value }) => value)).toEqual([
+      "back",
+      "exit",
+    ]);
   });
 
-  it("returns from a nested prompt and exits cleanly from the main menu", async () => {
-    const workspace = { root: "/tmp/wald-project" } as Workspace;
+  it("returns from a cancelled command straight to the menu", async () => {
     interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
     interactions.selections = ["create", new PromptBackError()];
     interactions.createWorktree.mockRejectedValue(new PromptBackError());
-
     await runMainMenu(new Command().name("wald"), createContext(null, []));
-
-    expect(interactions.createWorktree).toHaveBeenCalledOnce();
-    expect(interactions.events.filter((event) => event === "prompt")).toHaveLength(2);
+    expect(interactions.selectCalls).toHaveLength(2);
   });
 
-  it("runs the general lifecycle hook flow from the main menu", async () => {
-    const workspace = { root: "/tmp/wald-project" } as Workspace;
-    const current = { name: "main", branch: "main" } as Worktree;
+  it("selects a worktree before opening, even inside the primary checkout", async () => {
     interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
-    interactions.selections = ["hook", "exit"];
-
-    await runMainMenu(new Command().name("wald"), createContext(current, [current]));
-
-    expect(interactions.runProjectHook).toHaveBeenCalledWith({}, expect.anything());
+    interactions.worktreeSelections = [feature];
+    interactions.selections = ["worktrees", "open", "exit"];
+    await runMainMenu(new Command().name("wald"), createContext(primary, [primary, feature]));
+    expect(interactions.openWorktree).toHaveBeenCalledWith(
+      feature.path,
+      undefined,
+      expect.anything(),
+    );
   });
 
-  it("closes the menu after the workspace is uninitialized", async () => {
-    const workspace = { root: "/tmp/wald-project" } as Workspace;
+  it("does not offer rename or removal for the primary checkout", async () => {
     interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
-    interactions.selections = ["uninit"];
+    interactions.worktreeSelections = [primary, new PromptBackError()];
+    interactions.selections = ["worktrees", "back", "exit"];
+    await runMainMenu(new Command().name("wald"), createContext(primary, [primary, feature]));
+    expect(interactions.selectCalls[1]?.options.map(({ value }) => value)).not.toEqual(
+      expect.arrayContaining(["rename", "remove"]),
+    );
+  });
+
+  it("returns from worktree actions to selection before the main menu", async () => {
+    interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
+    interactions.worktreeSelections = [feature, new PromptBackError()];
+    interactions.selections = ["worktrees", new PromptBackError(), "exit"];
+    await runMainMenu(new Command().name("wald"), createContext(primary, [primary, feature]));
+    expect(interactions.findWorkspaceOrNull).toHaveBeenCalledTimes(2);
+    expect(interactions.openWorktree).not.toHaveBeenCalled();
+  });
+
+  it("chooses a target before running project tasks", async () => {
+    interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
+    interactions.worktreeSelections = [feature];
+    interactions.selections = ["tasks", "exit"];
+    await runMainMenu(new Command().name("wald"), createContext(primary, [primary, feature]));
+    expect(interactions.runProjectTask).toHaveBeenCalledWith(
+      { worktree: feature.path },
+      expect.anything(),
+    );
+  });
+
+  it("provides listing and diagnostics in maintenance", async () => {
+    interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
+    interactions.selections = ["maintenance", "list", "back", "doctor", "exit"];
+    const context = createContext(null, []);
+    await runMainMenu(new Command().name("wald"), context);
+    expect(interactions.listWorktrees).toHaveBeenCalledWith({ json: false }, context);
+    expect(interactions.runDoctor).toHaveBeenCalledWith({ json: false, verbose: false }, context);
+  });
+
+  it("runs lifecycle hooks through advanced automation for a selected target", async () => {
+    interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
+    interactions.worktreeSelections = [feature];
+    interactions.selections = ["maintenance", "advanced", "hook", "exit"];
+    await runMainMenu(new Command().name("wald"), createContext(primary, [primary, feature]));
+    expect(interactions.runProjectHook).toHaveBeenCalledWith(
+      { worktree: feature.path },
+      expect.anything(),
+    );
+  });
+
+  it("shows shell setup instructions without modifying a shell profile", async () => {
+    interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
+    interactions.selections = ["settings", "shell", "exit"];
+    await runMainMenu(new Command().name("wald"), createContext(null, []));
+    expect(interactions.events.join("\n")).toContain('eval "$(wald completion zsh)"');
+  });
+
+  it("closes the session after disconnecting the workspace", async () => {
+    interactions.findWorkspaceOrNull.mockResolvedValue(workspace);
+    interactions.selections = ["maintenance", "uninit"];
     interactions.uninitializeWorkspace.mockResolvedValue(true);
-
     await runMainMenu(new Command().name("wald"), createContext(null, []));
-
     expect(interactions.uninitializeWorkspace).toHaveBeenCalledWith(
       { apply: true, force: false, yes: false, json: false },
       expect.anything(),
     );
-    expect(interactions.findWorkspaceOrNull).toHaveBeenCalledOnce();
   });
 
-  it("shows the welcome page before starting guided initialization", async () => {
+  it("shows the welcome before initializing outside a workspace", async () => {
     interactions.findWorkspaceOrNull.mockResolvedValue(null);
-
     await runMainMenu(new Command().name("wald"), createContext(null, []));
-
     expect(interactions.events[0]).toContain("Where Git worktrees grow.");
-    expect(interactions.events[0]).not.toContain("Workspace");
     expect(interactions.events[1]).toBe("init");
-    expect(interactions.events).not.toContain("prompt");
   });
 
   it("prints only help without a TTY", async () => {
     interactions.interactive = false;
-    const program = new Command().name("wald").description("Wald help");
-
-    await runMainMenu(program, createContext(null, []));
-
-    const output = interactions.events.join("\n");
-    expect(output).toContain("Usage: wald");
-    expect(output).not.toContain("Where Git worktrees grow.");
+    await runMainMenu(new Command().name("wald").description("Wald help"), createContext(null, []));
+    expect(interactions.events.join("\n")).toContain("Usage: wald");
     expect(interactions.findWorkspaceOrNull).not.toHaveBeenCalled();
   });
 });
@@ -350,6 +345,7 @@ function createContext(current: Worktree | null, worktrees: Worktree[]): CliCont
 
   return {
     output: { stdout: output, stderr: output },
+    workspaces: { find: vi.fn().mockResolvedValue({ root: "/tmp/wald-project" }) },
     worktrees: {
       current: vi.fn().mockResolvedValue(current),
       list: vi.fn().mockResolvedValue(worktrees),

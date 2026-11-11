@@ -1,9 +1,15 @@
 import type { Command } from "commander";
 import { z } from "zod";
 import { WaldError } from "../../domain/errors.js";
+import type { Worktree } from "../../domain/types.js";
 import { workspaceProjectConfigPath } from "../../services/config-service.js";
 import { style } from "../../ui/style.js";
-import { confirm, isInteractiveTerminal, isPromptBackError } from "../../ui/terminal.js";
+import {
+  confirm,
+  isInteractiveTerminal,
+  isPromptBackError,
+  selectValue,
+} from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
 import {
   printTrustSummary,
@@ -69,19 +75,7 @@ export function registerConfigCommand(program: Command, context: CliContext): vo
     .option("--yes", "Trust without prompting")
     .action(async (options: unknown) => {
       const input = parseCliInput(confirmationInputSchema, options);
-      const workspace = await context.workspaces.find();
-      const project = await resolveProjectConfiguration(workspace, context);
-      if (!project) throw new WaldError("No effective project configuration found.");
-      printTrustSummary(project, context.output);
-      if (!input.yes) {
-        if (!isInteractiveTerminal()) throw new WaldError("Non-interactive trust requires --yes.");
-        if (!(await confirm("Trust this project configuration until its behavior changes?"))) {
-          writeLine(context.output.stdout, "Cancelled.");
-          return;
-        }
-      }
-      await context.configs.trust(workspace, project);
-      await success(`Trusted ${style.path(project.path)}`, context.output);
+      await trustConfiguration(input.yes, context);
     });
 
   config
@@ -90,15 +84,34 @@ export function registerConfigCommand(program: Command, context: CliContext): vo
     .option("--yes", "Remove trust without prompting")
     .action(async (options: unknown) => {
       const input = parseCliInput(confirmationInputSchema, options);
-      const workspace = await context.workspaces.find();
-      if (!input.yes) {
-        if (!isInteractiveTerminal())
-          throw new WaldError("Non-interactive untrust requires --yes.");
-        if (!(await confirm("Remove trust for the project configuration?"))) return;
-      }
-      await context.configs.untrust(workspace);
-      await success("Project configuration is no longer trusted.", context.output);
+      await untrustConfiguration(input.yes, context);
     });
+}
+
+export async function trustConfiguration(yes: boolean, context: CliContext): Promise<void> {
+  const workspace = await context.workspaces.find();
+  const project = await resolveProjectConfiguration(workspace, context);
+  if (!project) throw new WaldError("No effective project configuration found.");
+  printTrustSummary(project, context.output);
+  if (!yes) {
+    if (!isInteractiveTerminal()) throw new WaldError("Non-interactive trust requires --yes.");
+    if (!(await confirm("Trust this project configuration until its behavior changes?"))) {
+      writeLine(context.output.stdout, "Cancelled.");
+      return;
+    }
+  }
+  await context.configs.trust(workspace, project);
+  await success(`Trusted ${style.path(project.path)}`, context.output);
+}
+
+export async function untrustConfiguration(yes: boolean, context: CliContext): Promise<void> {
+  const workspace = await context.workspaces.find();
+  if (!yes) {
+    if (!isInteractiveTerminal()) throw new WaldError("Non-interactive untrust requires --yes.");
+    if (!(await confirm("Remove trust for the project configuration?"))) return;
+  }
+  await context.configs.untrust(workspace);
+  await success("Project configuration is no longer trusted.", context.output);
 }
 
 export async function initializeProjectConfigurationForWorktree(
@@ -124,6 +137,32 @@ export async function initializeProjectConfigurationForWorktree(
       forcePrompt = true;
     }
   }
+}
+
+export async function offerProjectConfiguration(
+  worktree: Worktree,
+  message: string,
+  context: CliContext,
+): Promise<boolean> {
+  writeLine(context.output.stdout, message);
+  const action = await selectValue(
+    "Project automation › What next?",
+    [
+      { label: "Configure project automation", value: "configure" },
+      { label: "Back", value: "back" },
+    ],
+    { navigation: "back" },
+  );
+  if (action !== "configure") return false;
+  const workspace = await context.workspaces.find();
+  return Boolean(
+    await initializeProjectConfiguration(
+      workspace,
+      worktree.path,
+      { force: false, yes: false, scope: "workspace", fromProject: false },
+      context,
+    ),
+  );
 }
 
 export async function showConfiguration(context: CliContext, json = false): Promise<void> {
