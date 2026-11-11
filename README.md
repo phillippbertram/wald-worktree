@@ -124,6 +124,9 @@ Run `wald` for the guided menu: create a worktree, select an existing checkout f
 or manage project settings and maintenance. Each prompt shows how to go back; completed actions
 offer explicit navigation choices. See [CLI reference](docs/cli-reference.md#general-behavior).
 
+Use `wald -C ~/dev/project status` to target another workspace without changing your shell directory.
+The same global option works with every command and with the guided menu.
+
 ```sh
 wald status
 wald list

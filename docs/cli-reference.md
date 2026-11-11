@@ -12,7 +12,7 @@ resolution ([release notes](https://github.com/git/git/blob/master/Documentation
 ## General behavior
 
 ```text
-wald [--version] [--help] <command>
+wald [-C <path>] [--version] [--help] <command>
 ```
 
 Run `wald` without a command for the guided menu. Choose **Worktrees…** to select a checkout first,
@@ -44,6 +44,32 @@ terminal, ambiguous selection is an error.
 
 Commands discover the workspace from its root, a linked worktree, or a retained primary checkout.
 Failures use a non-zero exit status. Interrupted foreground tasks exit with status 130.
+
+### Working directory
+
+Use the global `-C <path>` or `--directory <path>` option to run Wald from an existing directory.
+Workspace discovery, the current worktree, and relative input paths use that directory. Without a
+command, `wald -C <path>` opens the guided menu there. `handoff` and `create --carry` use the selected
+worktree as their source; their preservation and trust checks remain unchanged.
+
+```sh
+wald -C ~/dev/project status
+wald -C ~/dev/project create feature/payment
+wald -C ~/dev/project/main handoff feature/review
+wald -C ~/dev/project -C main status --json
+```
+
+Relative paths resolve from the current directory. Repeated `-C` options resolve in order, each
+relative to the preceding directory. Absolute paths replace that context; symlinks resolve to their
+actual directory. Empty, missing, inaccessible, or non-directory paths fail before command execution.
+`-Cpath` and `--directory=path` are also supported. Quote paths containing spaces. Global options may
+appear before or after the subcommand; arguments after `--` are not interpreted as Wald options.
+
+`-C` alone does not change the invoking shell's directory. With shell integration, `wald -C <path>
+cd <worktree>` and `wald -C <path> create <branch> --cd` explicitly navigate after success. A failed
+command leaves the shell in its previous directory. `-C` grants neither confirmation nor trust.
+
+### Output
 
 `--json` changes representation only: it is not a dry run and never grants confirmation or trust.
 JSON mode never prompts. Successful commands write exactly one JSON document to stdout. Hook and
@@ -561,8 +587,13 @@ Prints the navigation function and dynamic completion definitions used by `wald 
 `wald create --cd`, and interactive tab completion.
 
 Zsh completion requires `compinit` to be initialized before loading the generated definitions.
-Bash Tab completion requires Bash 4 or newer (for `compopt`) and bash-completion to be loaded.
-The navigation wrapper also works in Apple's Bash 3.2, but its Tab completion is not fully supported.
+Bash navigation and completion work in Apple's Bash 3.2 and newer versions. When bash-completion
+is loaded, Wald uses its word parsing helper; otherwise it uses Bash's completion words directly.
+
+Completion offers directory paths for `-C` and `--directory`, then resolves branches, worktrees,
+tasks, and tools in the selected workspace. Repeated directory options use the same relative-path
+semantics as execution. Completion requests pass arguments literally, including spaces and shell
+metacharacters. Reload the generated integration in existing shells after updating Wald.
 
 ```sh
 eval "$(wald completion zsh)"

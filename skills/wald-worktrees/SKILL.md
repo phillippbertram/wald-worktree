@@ -21,6 +21,9 @@ Use `status` for the current context and local tracking comparison, then `list` 
 worktree records and paths. Resolve locations with `wald cd`; do not derive directory names from
 branches. Prefer direct commands in non-interactive agent sessions and include required
 confirmation flags explicitly.
+Use `wald -C <directory> ...` to choose the workspace or source worktree for an invocation without
+changing the calling shell's directory. Relative inputs then resolve there. `-C` does not grant
+trust or destructive confirmation; see [Worktree operations](references/worktrees.md).
 Use `doctor` when discovery, configuration, runtime versions, paths, worktree registrations, trust,
 file sources, or configured executables may be inconsistent. Treat its suggestions as proposals;
 do not run repairs or trust commands without the authority required for that mutation.

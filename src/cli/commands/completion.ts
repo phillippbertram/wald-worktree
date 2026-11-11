@@ -1,8 +1,13 @@
 import type { RootCommand } from "@bomb.sh/tab";
 import tab from "@bomb.sh/tab/commander";
-import type { Command } from "commander";
+import { type Command, Option } from "commander";
+import { WaldError } from "../../domain/errors.js";
 import { hookEvents } from "../../domain/types.js";
+import { completeDirectories } from "../../infrastructure/directory-completion.js";
+import { parseCompletionRequest } from "../completion-request.js";
+import { decodeCompletionWord } from "../completion-word.js";
 import type { CliContext } from "../context.js";
+import { applyDirectories } from "../directory-option.js";
 import { findWorkspaceOrNull } from "../helpers.js";
 
 const supportedShells = ["zsh", "bash", "fish"] as const;
@@ -18,6 +23,13 @@ export function registerCompletionCommand(program: Command, context: CliContext)
   registerCompletionAlias(completion, "list", "ls");
   const publicCommand = findRegisteredCommand(program, "completion");
   const runtimeCommand = findRegisteredCommand(program, "complete");
+  runtimeCommand.addOption(
+    new Option("--shell <shell>", "Completion input quoting").choices(["bash"]),
+  );
+  const directoryOption = completion.options.get("directory");
+  if (!directoryOption) throw new Error("Missing global directory completion option.");
+  for (const command of completion.commands.values())
+    command.options.set("directory", directoryOption);
 
   publicCommand
     .description(completionDescription)
@@ -28,6 +40,9 @@ export function registerCompletionCommand(program: Command, context: CliContext)
     .hook("preAction", (_thisCommand, actionCommand) => {
       const shell = actionCommand.processedArgs[0];
       if (typeof shell === "string") context.output.stdout.write(context.shells.render(shell));
+    })
+    .action((shell: string) => {
+      context.output.stdout.write(context.shells.renderCompletion(shell));
     });
 
   const shellArgument = publicCommand.registeredArguments[0];
@@ -48,18 +63,47 @@ export function registerCompletionCommand(program: Command, context: CliContext)
     for (const event of hookEvents) complete(event, "lifecycle hook");
   };
 
-  runtimeCommand.hook("preAction", async (_thisCommand, actionCommand) => {
-    const args = actionCommand.processedArgs[0];
+  runtimeCommand.action(async (args: unknown, options: { shell?: string }) => {
     const request = Array.isArray(args)
       ? args.filter((value): value is string => typeof value === "string")
       : [];
-    const kinds = requestedCompletionKinds(request);
+    const rawArgs = "rawArgs" in program && Array.isArray(program.rawArgs) ? program.rawArgs : [];
+    if (request.length === 1 && !rawArgs.includes("--")) {
+      program.error(
+        "error: completion requests are called like `complete -- [args]`.\n(Did you mean `completion` to generate a shell script?)",
+      );
+    }
+    const parsed = parseCompletionRequest(
+      options.shell === "bash" ? request.map(decodeCompletionWord) : request,
+      program,
+    );
+    try {
+      await applyDirectories(parsed.directories);
+    } catch (error) {
+      if (!(error instanceof WaldError)) throw error;
+      context.output.stdout.write(":4\n");
+      return;
+    }
+    if (parsed.directoryInput) {
+      const { value, prefix } = parsed.directoryInput;
+      for (const candidate of await completeDirectories(value)) {
+        context.output.stdout.write(`${prefix}${candidate}\tdirectory\n`);
+      }
+      context.output.stdout.write(":4\n");
+      return;
+    }
+    if (parsed.afterSeparator) {
+      context.output.stdout.write(":4\n");
+      return;
+    }
+    const kinds = requestedCompletionKinds(parsed.args);
     const candidates = await loadCompletionCandidates(
       kinds,
       context,
-      request.includes("--keep-branch"),
+      parsed.args.includes("--keep-branch"),
     );
     applyDynamicHandlers(completion, candidates);
+    completion.parse(parsed.args);
   });
 }
 

@@ -86,6 +86,12 @@ to the result. Branch names and upstream are `null` when not applicable.
 
 ## Execute and remove
 
+The global `-C <path>` / `--directory <path>` option selects the working directory before discovery
+or mutation. For example, `wald -C /dev/project/main handoff feature/review --json` copies changes
+from `main`, regardless of the agent's own directory. The directory must already exist. Repeated
+relative options resolve from the preceding selection. Arguments after `--` stay with the child
+command, so `wald -C /dev/project exec main -- tool -C other` passes `-C other` to `tool`.
+
 Pass command arguments after `--`:
 
 ```sh

@@ -85,6 +85,9 @@ not move between worktrees.
 
 ## Operating rules for agents
 
+- Use `wald -C <directory> ...` to select a workspace or source worktree without changing the
+  calling process's directory. See [working directory](cli-reference.md#working-directory) for
+  relative paths, repeated options, and shell navigation.
 - Start with `wald doctor --json` when runtime or workspace consistency is uncertain.
 - Use `wald status --json` to understand the current context and local tracking state.
 - Use `wald list --json` for complete worktree records; do not guess paths from branch names.
