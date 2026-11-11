@@ -11,6 +11,7 @@ permissions:
 
 env:
   NO_COLOR: "1"
+  VITEST_MAX_WORKERS: "2"
 
 jobs:
   validate:
@@ -19,15 +20,15 @@ jobs:
       matrix:
         os:
           - macos-latest
-          - ubuntu-latest
+          - ubuntu-24.04
         node:
           - 22.13.0
           - 24
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
           cache: pnpm
@@ -37,11 +38,11 @@ jobs:
       - run: node dist/cli.js --help
 
   minimum-git:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22.13.0
           cache: pnpm
@@ -61,11 +62,11 @@ jobs:
       - run: pnpm run ci
 
   shell-integration:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22.13.0
           cache: pnpm
@@ -92,7 +93,7 @@ jobs:
           "$RUNNER_TEMP/wald-bin/wald" init "$RUNNER_TEMP/remote.git" "$RUNNER_TEMP/workspace"
           cd "$RUNNER_TEMP/workspace"
           "$RUNNER_TEMP/wald-bin/wald" create main --no-fetch
-          "$RUNNER_TEMP/wald-bin/wald" complete -- doctor "" | grep -- "--json"
+          "$RUNNER_TEMP/wald-bin/wald" complete -- doctor "--" | grep -- "--json"
       - name: Load Bash completion and cd wrapper
         run: |
           eval "$(command wald completion bash)"
@@ -106,7 +107,7 @@ jobs:
       - name: Load Zsh completion and cd wrapper
         run: |
           autoload -Uz compinit
-          compinit -d "$RUNNER_TEMP/zcompdump"
+          compinit -i -d "$RUNNER_TEMP/zcompdump"
           eval "$(command wald completion zsh)"
           whence -w _wald >/dev/null
           cd "$RUNNER_TEMP/workspace"

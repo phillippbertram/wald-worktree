@@ -4,6 +4,22 @@ import type { DoctorReport } from "../src/services/doctor-service.js";
 import { renderDoctorReport } from "../src/ui/doctor.js";
 
 describe("doctor presentation", () => {
+  it("labels the standalone Bun runtime in compact and verbose output", () => {
+    const report: DoctorReport = {
+      status: "pass",
+      checks: [
+        {
+          id: "runtime.bun",
+          status: "pass",
+          summary: "Bun 1.4.4 provides the JavaScript runtime.",
+        },
+      ],
+    };
+
+    expect(plain(renderDoctorReport(report))).toContain("Runtime — Bun 1.4.4");
+    expect(plain(renderDoctorReport(report, { verbose: true }))).toContain("Bun (runtime.bun)");
+  });
+
   it("groups checks into a compact Flutter-style summary", () => {
     const output = plain(renderDoctorReport(outsideWorkspaceReport));
 

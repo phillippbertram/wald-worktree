@@ -1,13 +1,10 @@
-import path from "node:path";
 import { PassThrough } from "node:stream";
 import { stripVTControlCharacters } from "node:util";
 import { execa } from "execa";
 import { describe, expect, it } from "vitest";
 import { createProgram } from "../src/cli/create-program.js";
 
-const projectRoot = path.resolve(import.meta.dirname, "..");
-const cli = path.join(projectRoot, "src", "cli.ts");
-const tsxLoader = import.meta.resolve("tsx");
+import { cliArguments, cliExecutable, projectRoot } from "./helpers/cli.js";
 
 describe("CLI contract", () => {
   it("exposes only the intentional clean-break command surface", () => {
@@ -234,17 +231,17 @@ describe("CLI contract", () => {
   });
 
   it("colors root and subcommand help while respecting NO_COLOR", async () => {
-    const helpArguments = ["--import", tsxLoader, cli];
+    const helpArguments = cliArguments();
     const [root, subcommand, plain] = await Promise.all([
-      execa(process.execPath, [...helpArguments, "--help"], {
+      execa(cliExecutable, [...helpArguments, "--help"], {
         cwd: projectRoot,
         env: { FORCE_COLOR: "1", NO_COLOR: undefined },
       }),
-      execa(process.execPath, [...helpArguments, "create", "--help"], {
+      execa(cliExecutable, [...helpArguments, "create", "--help"], {
         cwd: projectRoot,
         env: { FORCE_COLOR: "1", NO_COLOR: undefined },
       }),
-      execa(process.execPath, [...helpArguments, "--help"], {
+      execa(cliExecutable, [...helpArguments, "--help"], {
         cwd: projectRoot,
         env: { FORCE_COLOR: undefined, NO_COLOR: "1" },
       }),

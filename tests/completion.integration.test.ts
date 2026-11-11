@@ -4,22 +4,15 @@ import path from "node:path";
 import { stripVTControlCharacters } from "node:util";
 import { execa } from "execa";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { cliArguments, cliExecutable, projectRoot } from "./helpers/cli.js";
 import {
   createRemoteBranch,
   createTestRepository,
   type TestRepository,
 } from "./helpers/git-repository.js";
 
-const projectRoot = path.resolve(import.meta.dirname, "..");
-const cli = path.join(projectRoot, "src", "cli.ts");
-const tsxLoader = import.meta.resolve("tsx");
-
-function cliArguments(...args: string[]): string[] {
-  return ["--import", tsxLoader, cli, ...args];
-}
-
 async function runCli(cwd: string, ...args: string[]) {
-  return await execa(process.execPath, cliArguments(...args), { cwd, reject: false });
+  return await execa(cliExecutable, cliArguments(...args), { cwd, reject: false });
 }
 
 function suggestionValues(output: string): string[] {
@@ -49,7 +42,8 @@ describe("shell completion scripts", () => {
   });
 });
 
-describe("dynamic shell completion", () => {
+// Each scenario starts multiple CLI processes; source execution is slower on CI runners.
+describe("dynamic shell completion", { timeout: 30_000 }, () => {
   let temporaryRoot: string;
   let repository: TestRepository;
   let workspace: string;
@@ -270,12 +264,12 @@ tools:
 
   it("colors human-readable output without formatting JSON", async () => {
     const env = { FORCE_COLOR: "1", NO_COLOR: undefined };
-    const colored = await execa(process.execPath, cliArguments("list"), {
+    const colored = await execa(cliExecutable, cliArguments("list"), {
       cwd: workspace,
       env,
       reject: false,
     });
-    const json = await execa(process.execPath, cliArguments("list", "--json"), {
+    const json = await execa(cliExecutable, cliArguments("list", "--json"), {
       cwd: workspace,
       env,
       reject: false,

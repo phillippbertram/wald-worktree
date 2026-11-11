@@ -8,6 +8,28 @@ import type { WorkspaceService } from "../src/services/workspace-service.js";
 import type { WorktreeService } from "../src/services/worktree-service.js";
 
 describe("DoctorService runtime boundaries", () => {
+  it("reports Bun instead of its emulated Node version", async () => {
+    const service = new DoctorService(
+      { run: vi.fn().mockResolvedValue({ stdout: "git version 2.31.0" }) } as unknown as GitClient,
+      {
+        find: vi.fn().mockRejectedValue(new WaldError("No wald workspace found.")),
+      } as unknown as WorkspaceService,
+      {} as WorktreeService,
+      {} as ConfigService,
+      {} as ToolService,
+      { nodeVersion: "22.0.0", bunVersion: "1.4.4" },
+    );
+
+    const report = await service.inspect("/outside");
+
+    expect(report.checks).toContainEqual({
+      id: "runtime.bun",
+      status: "pass",
+      summary: "Bun 1.4.4 provides the JavaScript runtime.",
+    });
+    expect(report.checks.some((check) => check.id === "runtime.node")).toBe(false);
+  });
+
   it.each([
     { node: "22.13.0", git: "2.31.0", nodeStatus: "pass", gitStatus: "pass" },
     { node: "22.12.9", git: "2.31.0", nodeStatus: "fail", gitStatus: "pass" },

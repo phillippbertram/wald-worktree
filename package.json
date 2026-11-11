@@ -17,6 +17,7 @@
   "packageManager": "pnpm@11.15.1",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "build:binary": "node scripts/build-binary.mjs",
     "ci": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "dev": "tsx src/cli.ts",
     "install:global": "pnpm build && pnpm add -g .",
@@ -24,6 +25,8 @@
     "lint:fix": "biome check --write .",
     "start": "node dist/cli.js",
     "test": "vitest run",
+    "test:binary": "WALD_TEST_BINARY=\"$PWD/dist/binary/wald\" vitest run tests/cli.integration.test.ts tests/completion.integration.test.ts tests/automation-json.integration.test.ts tests/status.integration.test.ts tests/workspace-project-config.integration.test.ts tests/skip-hooks.integration.test.ts tests/cli-program.test.ts",
+    "test:binary:smoke": "python3 scripts/smoke-binary.py dist/binary/wald",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "uninstall:global": "pnpm remove -g wald-worktree"
@@ -34,6 +37,7 @@
     "cli-table3": "^0.6.5",
     "commander": "^15.0.0",
     "execa": "^10.0.1",
+    "glob": "14.0.4",
     "picocolors": "^1.1.1",
     "yaml": "^2.8.1",
     "zod": "^4.4.3"

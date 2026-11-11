@@ -21,6 +21,7 @@ const sectionLabels: Record<DoctorSectionId, string> = {
 
 const checkLabels: Record<string, string> = {
   "runtime.node": "Node.js",
+  "runtime.bun": "Bun",
   "runtime.git": "Git",
   "workspace.discovery": "Workspace discovery",
   "workspace.configuration": "Workspace configuration",
@@ -130,7 +131,7 @@ function healthySectionSummary(section: DoctorSection): string {
   switch (section.id) {
     case "runtime":
       return section.checks
-        .flatMap((check) => check.summary.match(/^(?:Node\.js|Git)\s+[^\s]+/u)?.[0] ?? [])
+        .flatMap((check) => check.summary.match(/^(?:Node\.js|Bun|Git)\s+[^\s]+/u)?.[0] ?? [])
         .join(` ${pc.dim("·")} `);
     case "workspace":
       return "Configuration and paths are valid.";

@@ -83,6 +83,9 @@ pnpm run install:global
 wald --help
 ```
 
+An experimental [standalone binary build](docs/binary-packaging.md) bundles Wald with Bun so the
+target machine does not need Node.js or Bun. It is a packaging prototype, not a published release.
+
 ### Keep an existing checkout
 
 Run the guided setup inside a repository you already use:

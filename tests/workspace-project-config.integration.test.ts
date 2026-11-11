@@ -3,21 +3,14 @@ import os from "node:os";
 import path from "node:path";
 import { execa } from "execa";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { cliArguments, cliExecutable } from "./helpers/cli.js";
 import { createTestRepository, type TestRepository } from "./helpers/git-repository.js";
 
-const projectRoot = path.resolve(import.meta.dirname, "..");
-const cli = path.join(projectRoot, "src", "cli.ts");
-const tsxLoader = import.meta.resolve("tsx");
-
-function cliArguments(...args: string[]): string[] {
-  return ["--import", tsxLoader, cli, ...args];
-}
-
 async function runCli(cwd: string, ...args: string[]) {
-  return await execa(process.execPath, cliArguments(...args), { cwd, reject: false });
+  return await execa(cliExecutable, cliArguments(...args), { cwd, reject: false });
 }
 
-describe("workspace-local project configuration", { timeout: 15_000 }, () => {
+describe("workspace-local project configuration", { timeout: 30_000 }, () => {
   let temporaryRoot: string;
   let repository: TestRepository;
   let workspace: string;
@@ -35,6 +28,59 @@ describe("workspace-local project configuration", { timeout: 15_000 }, () => {
 
   afterEach(async () => {
     await fs.rm(temporaryRoot, { force: true, recursive: true });
+  });
+
+  it("copies explicit dotfile globs and rejects escaping symlinks before writing", async () => {
+    await fs.writeFile(
+      path.join(workspace, ".wald", "project.yml"),
+      `version: 1
+tasks:
+  snapshot-env:
+    steps:
+      - type: copy
+        source: shared
+        from: env
+        glob: "**/.env*"
+        to: snapshots
+  reject-escape:
+    steps:
+      - type: copy
+        source: shared
+        from: env
+        glob: "**/.env*"
+        to: blocked
+`,
+    );
+    const shared = path.join(workspace, ".wald", "shared", "env");
+    await fs.mkdir(path.join(shared, "app"), { recursive: true });
+    await fs.mkdir(path.join(shared, ".hidden"), { recursive: true });
+    await fs.writeFile(path.join(shared, ".env"), "ROOT=fixture\n");
+    await fs.writeFile(path.join(shared, "app", ".env.local"), "APP=fixture\n");
+    await fs.writeFile(path.join(shared, ".hidden", ".env"), "HIDDEN=fixture\n");
+    await fs.writeFile(path.join(shared, "visible.txt"), "unmatched\n");
+    const trusted = await runCli(workspace, "config", "trust", "--yes");
+    expect(trusted.exitCode, trusted.stderr).toBe(0);
+
+    const copied = await runCli(workspace, "run", "snapshot-env", "main");
+    expect(copied.exitCode, copied.stderr).toBe(0);
+    const snapshots = path.join(workspace, "main", "snapshots");
+    expect((await fs.readdir(snapshots)).sort()).toEqual([".env", "app"]);
+    expect(await fs.readFile(path.join(snapshots, ".env"), "utf8")).toBe("ROOT=fixture\n");
+    expect(await fs.readFile(path.join(snapshots, "app", ".env.local"), "utf8")).toBe(
+      "APP=fixture\n",
+    );
+
+    const outside = path.join(temporaryRoot, "outside.env");
+    await fs.writeFile(outside, "OUTSIDE=fixture\n");
+    await fs.symlink(outside, path.join(shared, ".env.escape"));
+    const rejected = await runCli(workspace, "run", "reject-escape", "main");
+    expect(rejected.exitCode).toBe(1);
+    expect(rejected.stderr).toContain("Glob match resolves outside");
+    await expect(fs.stat(path.join(workspace, "main", "blocked"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    expect(await fs.readFile(outside, "utf8")).toBe("OUTSIDE=fixture\n");
+    expect(await fs.readFile(path.join(snapshots, ".env"), "utf8")).toBe("ROOT=fixture\n");
   });
 
   it("writes repository configuration only when project scope is explicit", async () => {

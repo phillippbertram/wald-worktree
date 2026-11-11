@@ -218,10 +218,15 @@ wald doctor [--json] [--verbose]
 ```
 
 Runs a read-only diagnosis even outside a Wald workspace or when workspace configuration is invalid.
-Checks are `pass`, `warning`, `fail`, or `skipped` and cover Node.js 22.13.0, Git 2.31.0, workspace
+Checks are `pass`, `warning`, `fail`, or `skipped` and cover the JavaScript runtime, Git 2.31.0, workspace
 discovery, YAML syntax and schema, canonical path boundaries, Git common-directory and marker
 identity, remote/default-branch refs, worktree registrations and intentional locks, project trust,
 file-step sources, and configured argv/tool executables.
+
+Node installations check the minimum Node.js version of 22.13.0 (`runtime.node`). The experimental
+[Bun binary](binary-packaging.md) reports its bundled Bun version (`runtime.bun`) instead of Bun's
+emulated Node version. A separate Node installation is not required for the binary; configured
+hooks and tools can still require Node or other executables.
 
 Doctor never fetches, repairs, changes trust, or runs hooks. It does not print remote URLs or
 environment contents. Suggested commands such as `wald init`, `wald prune`, `git worktree repair`, or
@@ -531,6 +536,10 @@ wald completion <bash|zsh|fish>
 
 Prints the navigation function and dynamic completion definitions used by `wald cd`,
 `wald create --cd`, and interactive tab completion.
+
+Zsh completion requires `compinit` to be initialized before loading the generated definitions.
+Bash Tab completion requires Bash 4 or newer (for `compopt`) and bash-completion to be loaded.
+The navigation wrapper also works in Apple's Bash 3.2, but its Tab completion is not fully supported.
 
 ```sh
 eval "$(wald completion zsh)"

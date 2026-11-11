@@ -41,12 +41,15 @@ export class DoctorService {
     private readonly worktrees: WorktreeService,
     private readonly configs: ConfigService,
     private readonly tools: ToolService,
-    private readonly runtime: { nodeVersion: string } = { nodeVersion: process.versions.node },
+    private readonly runtime: { nodeVersion: string; bunVersion?: string } = {
+      nodeVersion: process.versions.node,
+      bunVersion: process.versions.bun,
+    },
   ) {}
 
   async inspect(startDirectory = process.cwd()): Promise<DoctorReport> {
     const checks: DoctorCheck[] = [];
-    checks.push(this.nodeCheck());
+    checks.push(this.runtimeCheck());
     checks.push(await this.gitVersionCheck());
 
     let workspace: Workspace;
@@ -107,7 +110,14 @@ export class DoctorService {
     return report(checks);
   }
 
-  private nodeCheck(): DoctorCheck {
+  private runtimeCheck(): DoctorCheck {
+    if (this.runtime.bunVersion) {
+      return {
+        id: "runtime.bun",
+        status: "pass",
+        summary: `Bun ${this.runtime.bunVersion} provides the JavaScript runtime.`,
+      };
+    }
     const version = parseVersion(this.runtime.nodeVersion);
     return version && versionAtLeast(version, minimumNodeVersion)
       ? {

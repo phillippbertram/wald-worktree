@@ -3,17 +3,10 @@ import os from "node:os";
 import path from "node:path";
 import { execa } from "execa";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { cliArguments, cliExecutable } from "./helpers/cli.js";
 import { createTestRepository, type TestRepository } from "./helpers/git-repository.js";
 
-const projectRoot = path.resolve(import.meta.dirname, "..");
-const cli = path.join(projectRoot, "src", "cli.ts");
-const tsxLoader = import.meta.resolve("tsx");
-
-function cliArguments(...args: string[]): string[] {
-  return ["--import", tsxLoader, cli, ...args];
-}
-
-describe("CLI smoke flow", { timeout: 15_000 }, () => {
+describe("CLI smoke flow", { timeout: 30_000 }, () => {
   let temporaryRoot: string;
   let repository: TestRepository;
 
@@ -28,10 +21,10 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
 
   it("carries local code through create and handoff, then renames the directory and branch", async () => {
     const workspace = path.join(temporaryRoot, "carry-workspace");
-    await execa(process.execPath, cliArguments("init", repository.remote, workspace), {
+    await execa(cliExecutable, cliArguments("init", repository.remote, workspace), {
       cwd: temporaryRoot,
     });
-    await execa(process.execPath, cliArguments("create", "main", "--no-fetch"), {
+    await execa(cliExecutable, cliArguments("create", "main", "--no-fetch"), {
       cwd: workspace,
     });
     const source = path.join(workspace, "main");
@@ -47,7 +40,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     );
 
     const carried = await execa(
-      process.execPath,
+      cliExecutable,
       cliArguments("create", "feature/carried", "--carry", "--no-fetch"),
       { cwd: source, reject: false },
     );
@@ -65,7 +58,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     expect(carriedStatus.stdout).toBe(sourceStatus.stdout);
 
     const handedOff = await execa(
-      process.execPath,
+      cliExecutable,
       cliArguments("handoff", "feature/handed", "--no-fetch"),
       { cwd: source, reject: false },
     );
@@ -74,7 +67,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     expect(handedOff.stdout).toContain(`Source kept unchanged: ${canonicalSource}`);
 
     const pathOnly = await execa(
-      process.execPath,
+      cliExecutable,
       cliArguments("handoff", "feature/path-only", "--no-fetch", "--cd", "--print-path"),
       { cwd: source, reject: false },
     );
@@ -82,7 +75,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     expect(pathOnly.stdout).toBe(await fs.realpath(path.join(workspace, "feature-path-only")));
 
     const renamed = await execa(
-      process.execPath,
+      cliExecutable,
       cliArguments("rename", "feature-carried", "review-ready"),
       { cwd: workspace, reject: false },
     );
@@ -93,7 +86,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     expect(await fs.readFile(path.join(workspace, "review-ready", "README.md"), "utf8")).toBe(
       "# staged\nunstaged\n",
     );
-    const status = await execa(process.execPath, cliArguments("status", "--json"), {
+    const status = await execa(cliExecutable, cliArguments("status", "--json"), {
       cwd: path.join(workspace, "review-ready"),
     });
     expect(JSON.parse(status.stdout).current).toMatchObject({
@@ -101,7 +94,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
       branch: "review-ready",
       state: "modified",
     });
-    const listed = await execa(process.execPath, cliArguments("list", "--json"), {
+    const listed = await execa(cliExecutable, cliArguments("list", "--json"), {
       cwd: workspace,
     });
     expect(JSON.parse(listed.stdout)).toEqual(
@@ -115,7 +108,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     const workspace = path.join(temporaryRoot, "workspace");
 
     const initialized = await execa(
-      process.execPath,
+      cliExecutable,
       cliArguments("init", repository.remote, workspace),
       {
         cwd: temporaryRoot,
@@ -127,7 +120,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     expect(initialized.stdout).toContain(`Next: cd '${await fs.realpath(workspace)}'`);
     expect(initialized.stdout).toContain("Then: wald create 'main' --cd");
 
-    const added = await execa(process.execPath, cliArguments("create", "main", "--no-fetch"), {
+    const added = await execa(cliExecutable, cliArguments("create", "main", "--no-fetch"), {
       cwd: workspace,
       reject: false,
     });
@@ -136,7 +129,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     expect(added.stdout).toContain("Without shell integration: cd");
 
     const directCd = await execa(
-      process.execPath,
+      cliExecutable,
       cliArguments("create", "feature/direct-cd", "--no-fetch", "--cd"),
       { cwd: workspace, reject: false },
     );
@@ -152,7 +145,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     );
     expect(directCdUpstream.exitCode).not.toBe(0);
 
-    const listed = await execa(process.execPath, cliArguments("list", "--json"), {
+    const listed = await execa(cliExecutable, cliArguments("list", "--json"), {
       cwd: workspace,
       reject: false,
     });
@@ -182,7 +175,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
       cwd: path.join(workspace, "feature-direct-cd"),
     });
     const refusedUnmergedBranchDeletion = await execa(
-      process.execPath,
+      cliExecutable,
       cliArguments("remove", "feature-direct-cd", "--delete-branch", "--yes"),
       { cwd: workspace, reject: false },
     );
@@ -195,7 +188,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     );
 
     const removedFeature = await execa(
-      process.execPath,
+      cliExecutable,
       cliArguments("remove", "feature-direct-cd", "--delete-branch", "--force", "--yes"),
       { cwd: workspace, reject: false },
     );
@@ -218,11 +211,10 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     );
     expect(deletedFeatureBranch.exitCode).toBe(1);
 
-    const configured = await execa(
-      process.execPath,
-      cliArguments("config", "init", "main", "--yes"),
-      { cwd: workspace, reject: false },
-    );
+    const configured = await execa(cliExecutable, cliArguments("config", "init", "main", "--yes"), {
+      cwd: workspace,
+      reject: false,
+    });
     expect(configured.exitCode, configured.stderr).toBe(0);
     expect(configured.stdout).toContain("Created");
     expect(configured.stdout).toContain("review the local project.yml");
@@ -233,14 +225,14 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
       code: "ENOENT",
     });
     const refusedOverwrite = await execa(
-      process.execPath,
+      cliExecutable,
       cliArguments("config", "init", "main", "--yes"),
       { cwd: workspace, reject: false },
     );
     expect(refusedOverwrite.exitCode).toBe(1);
     expect(refusedOverwrite.stderr).toContain("Use --force to replace it");
     const forcedOverwrite = await execa(
-      process.execPath,
+      cliExecutable,
       cliArguments("config", "init", "main", "--yes", "--force"),
       { cwd: workspace, reject: false },
     );
@@ -248,7 +240,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
 
     await fs.writeFile(path.join(workspace, "main", "untracked.txt"), "keep me\n", "utf8");
 
-    const refused = await execa(process.execPath, cliArguments("remove", "main", "--yes"), {
+    const refused = await execa(cliExecutable, cliArguments("remove", "main", "--yes"), {
       cwd: workspace,
       reject: false,
     });
@@ -256,7 +248,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     expect(refused.stderr).toContain("use --force only if this data can be discarded");
 
     const refusedDefaultBranchDeletion = await execa(
-      process.execPath,
+      cliExecutable,
       cliArguments("remove", "main", "--delete-branch", "--force", "--yes"),
       { cwd: workspace, reject: false },
     );
@@ -268,14 +260,10 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
       stat.isDirectory(),
     );
 
-    const removed = await execa(
-      process.execPath,
-      cliArguments("remove", "main", "--force", "--yes"),
-      {
-        cwd: workspace,
-        reject: false,
-      },
-    );
+    const removed = await execa(cliExecutable, cliArguments("remove", "main", "--force", "--yes"), {
+      cwd: workspace,
+      reject: false,
+    });
     expect(removed.exitCode, removed.stderr).toBe(0);
     expect(removed.stdout).toContain("Removed worktree main");
     expect(removed.stdout).toContain("Branch kept: main");
@@ -295,19 +283,19 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
 
   it("previews and explicitly prunes only stale worktree metadata", async () => {
     const workspace = path.join(temporaryRoot, "prune-workspace");
-    await execa(process.execPath, cliArguments("init", repository.remote, workspace), {
+    await execa(cliExecutable, cliArguments("init", repository.remote, workspace), {
       cwd: temporaryRoot,
     });
-    await execa(process.execPath, cliArguments("create", "main", "--no-fetch"), {
+    await execa(cliExecutable, cliArguments("create", "main", "--no-fetch"), {
       cwd: workspace,
     });
-    await execa(process.execPath, cliArguments("create", "feature/stale", "--no-fetch"), {
+    await execa(cliExecutable, cliArguments("create", "feature/stale", "--no-fetch"), {
       cwd: workspace,
     });
     const stalePath = path.join(workspace, "feature-stale");
     await fs.rm(stalePath, { recursive: true });
 
-    const preview = await execa(process.execPath, cliArguments("prune"), {
+    const preview = await execa(cliExecutable, cliArguments("prune"), {
       cwd: workspace,
       reject: false,
     });
@@ -315,7 +303,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     expect(preview.stdout).toContain("Stale worktree metadata:");
     expect(preview.stdout).toContain("feature-stale");
     expect(preview.stdout).toContain("Preview only");
-    const jsonPreview = await execa(process.execPath, cliArguments("prune", "--json"), {
+    const jsonPreview = await execa(cliExecutable, cliArguments("prune", "--json"), {
       cwd: workspace,
       reject: false,
     });
@@ -325,7 +313,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
         { name: "feature-stale", path: path.join(await fs.realpath(workspace), "feature-stale") },
       ],
     });
-    const jsonConfig = await execa(process.execPath, cliArguments("config", "--json"), {
+    const jsonConfig = await execa(cliExecutable, cliArguments("config", "--json"), {
       cwd: workspace,
       reject: false,
     });
@@ -339,14 +327,14 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     );
     expect(metadataBefore.stdout).toContain(stalePath);
 
-    const confirmationRequired = await execa(process.execPath, cliArguments("prune", "--apply"), {
+    const confirmationRequired = await execa(cliExecutable, cliArguments("prune", "--apply"), {
       cwd: workspace,
       reject: false,
     });
     expect(confirmationRequired.exitCode).toBe(1);
     expect(confirmationRequired.stderr).toContain("requires --apply --yes");
 
-    const applied = await execa(process.execPath, cliArguments("prune", "--apply", "--yes"), {
+    const applied = await execa(cliExecutable, cliArguments("prune", "--apply", "--yes"), {
       cwd: workspace,
       reject: false,
     });
@@ -373,7 +361,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     );
     expect(branch.exitCode).toBe(0);
 
-    const repeated = await execa(process.execPath, cliArguments("prune"), {
+    const repeated = await execa(cliExecutable, cliArguments("prune"), {
       cwd: workspace,
       reject: false,
     });
@@ -384,20 +372,20 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
   it("repairs an adopted workspace after its worktree directory was deleted and pruned", async () => {
     const worktreeDir = path.join(temporaryRoot, "repair-worktrees");
     const initialized = await execa(
-      process.execPath,
+      cliExecutable,
       cliArguments("init", "--adopt", repository.source, "--yes", "--worktrees-dir", worktreeDir),
       { cwd: temporaryRoot, reject: false },
     );
     expect(initialized.exitCode, initialized.stderr).toBe(0);
     const created = await execa(
-      process.execPath,
+      cliExecutable,
       cliArguments("create", "feature/stale", "--no-fetch"),
       { cwd: repository.source, reject: false },
     );
     expect(created.exitCode, created.stderr).toBe(0);
     await fs.rm(worktreeDir, { recursive: true });
 
-    const pruned = await execa(process.execPath, cliArguments("prune", "--apply", "--yes"), {
+    const pruned = await execa(cliExecutable, cliArguments("prune", "--apply", "--yes"), {
       cwd: repository.source,
       reject: false,
     });
@@ -405,7 +393,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     expect(pruned.stdout).toContain("Pruned 1 stale worktree registration");
 
     const repaired = await execa(
-      process.execPath,
+      cliExecutable,
       cliArguments("init", "--adopt", repository.source, "--yes", "--worktrees-dir", worktreeDir),
       { cwd: temporaryRoot, reject: false },
     );
@@ -421,21 +409,21 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
   it("previews and explicitly uninitializes while preserving Git and worktree directories", async () => {
     const worktreeDir = path.join(temporaryRoot, "uninit-worktrees");
     const initialized = await execa(
-      process.execPath,
+      cliExecutable,
       cliArguments("init", "--adopt", repository.source, "--yes", "--worktrees-dir", worktreeDir),
       { cwd: temporaryRoot, reject: false },
     );
     expect(initialized.exitCode, initialized.stderr).toBe(0);
     await fs.writeFile(path.join(repository.source, ".wald.yml"), "version: 1\n", "utf8");
 
-    const preview = await execa(process.execPath, cliArguments("uninit"), {
+    const preview = await execa(cliExecutable, cliArguments("uninit"), {
       cwd: repository.source,
       reject: false,
     });
     expect(preview.exitCode, preview.stderr).toBe(0);
     expect(preview.stdout).toContain("Wald workspace metadata:");
     expect(preview.stdout).toContain("Preview only");
-    const jsonPreview = await execa(process.execPath, cliArguments("uninit", "--json"), {
+    const jsonPreview = await execa(cliExecutable, cliArguments("uninit", "--json"), {
       cwd: repository.source,
       reject: false,
     });
@@ -448,7 +436,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
       stat.isDirectory(),
     );
 
-    const confirmationRequired = await execa(process.execPath, cliArguments("uninit", "--apply"), {
+    const confirmationRequired = await execa(cliExecutable, cliArguments("uninit", "--apply"), {
       cwd: repository.source,
       reject: false,
     });
@@ -458,18 +446,18 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     );
 
     const created = await execa(
-      process.execPath,
+      cliExecutable,
       cliArguments("create", "feature/keep", "--no-fetch"),
       { cwd: repository.source, reject: false },
     );
     expect(created.exitCode, created.stderr).toBe(0);
-    const blocked = await execa(process.execPath, cliArguments("uninit", "--apply", "--yes"), {
+    const blocked = await execa(cliExecutable, cliArguments("uninit", "--apply", "--yes"), {
       cwd: repository.source,
       reject: false,
     });
     expect(blocked.exitCode).toBe(1);
     expect(blocked.stderr).toContain("Registered worktrees remain: feature-keep");
-    const removed = await execa(process.execPath, cliArguments("remove", "feature-keep", "--yes"), {
+    const removed = await execa(cliExecutable, cliArguments("remove", "feature-keep", "--yes"), {
       cwd: repository.source,
       reject: false,
     });
@@ -477,17 +465,16 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
 
     const sharedFile = path.join(repository.source, ".git", "wald", "shared", "local.env");
     await fs.writeFile(sharedFile, "SECRET=kept-until-forced\n", "utf8");
-    const protectedData = await execa(
-      process.execPath,
-      cliArguments("uninit", "--apply", "--yes"),
-      { cwd: repository.source, reject: false },
-    );
+    const protectedData = await execa(cliExecutable, cliArguments("uninit", "--apply", "--yes"), {
+      cwd: repository.source,
+      reject: false,
+    });
     expect(protectedData.exitCode).toBe(1);
     expect(protectedData.stdout).toContain("shared/local.env");
     expect(protectedData.stderr).toContain("Use --force only if this data can be discarded");
 
     const applied = await execa(
-      process.execPath,
+      cliExecutable,
       cliArguments("uninit", "--apply", "--force", "--yes"),
       { cwd: repository.source, reject: false },
     );
@@ -511,13 +498,13 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
   it("uninitializes a standalone workspace without removing its Git database", async () => {
     const workspace = path.join(temporaryRoot, "standalone-uninit");
     const initialized = await execa(
-      process.execPath,
+      cliExecutable,
       cliArguments("init", repository.remote, workspace),
       { cwd: temporaryRoot, reject: false },
     );
     expect(initialized.exitCode, initialized.stderr).toBe(0);
 
-    const applied = await execa(process.execPath, cliArguments("uninit", "--apply", "--yes"), {
+    const applied = await execa(cliExecutable, cliArguments("uninit", "--apply", "--yes"), {
       cwd: workspace,
       reject: false,
     });
@@ -534,7 +521,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     const configPath = path.join(repository.source, ".git", "config");
     const configBefore = await fs.readFile(configPath, "utf8");
 
-    const implicit = await execa(process.execPath, cliArguments("init"), {
+    const implicit = await execa(cliExecutable, cliArguments("init"), {
       cwd: repository.source,
       reject: false,
     });
@@ -542,7 +529,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     expect(implicit.stderr).toContain("requires --adopt and --yes");
 
     const adopted = await execa(
-      process.execPath,
+      cliExecutable,
       cliArguments(
         "init",
         "--adopt",
@@ -564,7 +551,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     });
     expect(await fs.readFile(configPath, "utf8")).toBe(configBefore);
 
-    const listed = await execa(process.execPath, cliArguments("list", "--json"), {
+    const listed = await execa(cliExecutable, cliArguments("list", "--json"), {
       cwd: repository.source,
       reject: false,
     });
@@ -574,7 +561,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     ]);
 
     const refused = await execa(
-      process.execPath,
+      cliExecutable,
       cliArguments("remove", "source", "--force", "--yes"),
       {
         cwd: repository.source,
@@ -587,7 +574,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     const sharedDir = path.join(repository.source, ".git", "wald", "shared");
     await fs.rm(sharedDir, { recursive: true });
     const repeated = await execa(
-      process.execPath,
+      cliExecutable,
       cliArguments("init", "--adopt", repository.source, "--yes", "--config"),
       { cwd: temporaryRoot, reject: false },
     );
@@ -609,7 +596,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
   it("initializes a grouped standalone layout and reports its absolute paths", async () => {
     const workspace = path.join(temporaryRoot, "grouped-cli-workspace");
     const initialized = await execa(
-      process.execPath,
+      cliExecutable,
       cliArguments("init", repository.remote, workspace, "--worktrees-dir", "worktrees"),
       { cwd: temporaryRoot, reject: false },
     );
@@ -619,7 +606,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     ).resolves.toContain("worktrees: ../worktrees");
     expect((await fs.stat(path.join(workspace, ".wald", "shared"))).mode & 0o777).toBe(0o700);
 
-    const created = await execa(process.execPath, cliArguments("create", "main", "--no-fetch"), {
+    const created = await execa(cliExecutable, cliArguments("create", "main", "--no-fetch"), {
       cwd: workspace,
       reject: false,
     });
@@ -628,7 +615,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
       stat.isDirectory(),
     );
 
-    const configured = await execa(process.execPath, cliArguments("config"), {
+    const configured = await execa(cliExecutable, cliArguments("config"), {
       cwd: path.join(workspace, "worktrees", "main"),
       reject: false,
     });
@@ -644,14 +631,14 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
 
   it("uses the current worktree HEAD as an explicit base", async () => {
     const workspace = path.join(temporaryRoot, "head-workspace");
-    await execa(process.execPath, cliArguments("init", repository.remote, workspace), {
+    await execa(cliExecutable, cliArguments("init", repository.remote, workspace), {
       cwd: temporaryRoot,
     });
-    await execa(process.execPath, cliArguments("create", "main", "--no-fetch"), {
+    await execa(cliExecutable, cliArguments("create", "main", "--no-fetch"), {
       cwd: workspace,
     });
     await execa(
-      process.execPath,
+      cliExecutable,
       cliArguments("create", "feature/base", "--from", "main", "--no-fetch"),
       { cwd: workspace },
     );
@@ -664,7 +651,7 @@ describe("CLI smoke flow", { timeout: 15_000 }, () => {
     const baseHead = (await execa("git", ["rev-parse", "HEAD"], { cwd: basePath })).stdout;
 
     const stacked = await execa(
-      process.execPath,
+      cliExecutable,
       cliArguments("create", "feature/stacked", "--from", "HEAD", "--no-fetch"),
       { cwd: basePath, reject: false },
     );
@@ -708,20 +695,20 @@ tools:
 
     const workspace = path.join(temporaryRoot, "configured-workspace");
     const initialized = await execa(
-      process.execPath,
+      cliExecutable,
       cliArguments("init", repository.remote, workspace),
       { cwd: temporaryRoot, reject: false },
     );
     expect(initialized.exitCode, initialized.stderr).toBe(0);
 
-    const validated = await execa(process.execPath, cliArguments("config"), {
+    const validated = await execa(cliExecutable, cliArguments("config"), {
       cwd: workspace,
       reject: false,
     });
     expect(validated.exitCode, validated.stderr).toBe(0);
     expect(validated.stdout).toContain("origin/main:.wald.yml");
 
-    const untrusted = await execa(process.execPath, cliArguments("create", "main", "--no-fetch"), {
+    const untrusted = await execa(cliExecutable, cliArguments("create", "main", "--no-fetch"), {
       cwd: workspace,
       reject: false,
     });
@@ -729,14 +716,14 @@ tools:
     expect(untrusted.stderr).toContain("not trusted");
     await expect(fs.stat(path.join(workspace, "main"))).rejects.toMatchObject({ code: "ENOENT" });
 
-    const trusted = await execa(process.execPath, cliArguments("config", "trust", "--yes"), {
+    const trusted = await execa(cliExecutable, cliArguments("config", "trust", "--yes"), {
       cwd: workspace,
       reject: false,
     });
     expect(trusted.exitCode, trusted.stderr).toBe(0);
 
     const created = await execa(
-      process.execPath,
+      cliExecutable,
       cliArguments("create", "main", "--no-fetch", "--tool", "fixture-agent"),
       { cwd: workspace, reject: false },
     );
@@ -751,7 +738,7 @@ tools:
     );
 
     await fs.rm(path.join(workspace, "main", "hook.log"));
-    const setup = await execa(process.execPath, cliArguments("setup", "main"), {
+    const setup = await execa(cliExecutable, cliArguments("setup", "main"), {
       cwd: workspace,
       reject: false,
     });
@@ -760,7 +747,7 @@ tools:
     expect(setup.stderr).toMatch(/1\s+DONE\s+command/u);
     expect(await fs.readFile(path.join(workspace, "main", "hook.log"), "utf8")).toBe("post_create");
 
-    const task = await execa(process.execPath, cliArguments("run", "verify", "main"), {
+    const task = await execa(cliExecutable, cliArguments("run", "verify", "main"), {
       cwd: workspace,
       reject: false,
     });
@@ -770,7 +757,7 @@ tools:
     expect(task.stderr).toMatch(/1\s+DONE\s+command/u);
     expect(await fs.readFile(path.join(workspace, "main", "task.log"), "utf8")).toBe("task:verify");
 
-    const coloredTask = await execa(process.execPath, cliArguments("run", "verify", "main"), {
+    const coloredTask = await execa(cliExecutable, cliArguments("run", "verify", "main"), {
       cwd: workspace,
       reject: false,
       env: { FORCE_COLOR: "1", NO_COLOR: undefined },
@@ -780,7 +767,7 @@ tools:
     expect(coloredTask.stderr).toContain("RUNNING");
     expect(coloredTask.stderr).toContain("DONE");
 
-    const interrupted = await execa(process.execPath, cliArguments("run", "interrupt", "main"), {
+    const interrupted = await execa(cliExecutable, cliArguments("run", "interrupt", "main"), {
       cwd: workspace,
       reject: false,
     });
@@ -790,7 +777,7 @@ tools:
     expect(interrupted.stdout).not.toContain("Completed task interrupt");
 
     const executed = await execa(
-      process.execPath,
+      cliExecutable,
       cliArguments(
         "exec",
         "main",
@@ -808,7 +795,7 @@ tools:
 
     await fs.rm(path.join(workspace, "main", "tool.log"));
     const opened = await execa(
-      process.execPath,
+      cliExecutable,
       cliArguments("open", "main", "--tool", "fixture-agent"),
       { cwd: workspace, reject: false },
     );
@@ -818,7 +805,7 @@ tools:
     );
 
     const handedOff = await execa(
-      process.execPath,
+      cliExecutable,
       cliArguments("handoff", "feature/tool-handoff", "--no-fetch", "--tool", "fixture-agent"),
       { cwd: path.join(workspace, "main"), reject: false },
     );
