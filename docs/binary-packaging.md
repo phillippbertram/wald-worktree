@@ -79,9 +79,11 @@ It does not edit user shell profiles or global Git configuration. Its temporary 
 after the run, including on failure.
 
 The `Binary prototype` GitHub Actions workflow runs for pull requests, pushes to `main`, and manual
-dispatches. It builds native binaries on macOS and Ubuntu, runs both the binary integration suite
+dispatches. It builds native binaries on macOS and Ubuntu 24.04, runs both the binary integration suite
 and isolated shell/PTY smoke suite, and uploads archives preserving executable permissions. These
 checks execute the Linux binary on a Linux runner; they do not publish a release.
+The Ubuntu runner is pinned so changes to the `ubuntu-latest` alias cannot silently change the
+binary's build environment and system C library baseline.
 
 ## Local findings (2026-11-11)
 
