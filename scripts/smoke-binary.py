@@ -193,7 +193,8 @@ test "$PWD" = "$WALD_SMOKE_WORKSPACE/smoke-fish-handoff"; or exit 10
         else:
             prelude = ""
             if shell == "zsh":
-                prelude = 'autoload -Uz compinit; compinit -d "$HOME/zcompdump"\n'
+                # Ignore insecure host completion directories instead of prompting to trust them.
+                prelude = 'autoload -Uz compinit; compinit -i -d "$HOME/zcompdump"\n'
             completion = os.environ.get("BASH_COMPLETION_FILE") if shell == "bash" else None
             if completion:
                 shell_env["BASH_COMPLETION_FILE"] = str(Path(completion).resolve())
@@ -217,7 +218,7 @@ test "$PWD" = "$WALD_SMOKE_WORKSPACE/smoke-{shell}-handoff" || exit 9
             allowed_stderr=("Error: No worktree matches: absent-worktree\n",))
         print(f"PASS: {shell} completion registration/protocol, cd, plant --cd, handoff --cd and failed cd", flush=True)
     terminal(["zsh", "-f", "-i"], workspace, {**env, "PS1": "WALD_SMOKE> "}, [
-        ("WALD_SMOKE> ", b'autoload -Uz compinit; compinit -d "$HOME/zcompdump"; eval "$(wald completion zsh)"\r'),
+        ("WALD_SMOKE> ", b'autoload -Uz compinit; compinit -i -d "$HOME/zcompdump"; eval "$(wald completion zsh)"\r'),
         ("WALD_SMOKE> ", b"wald plant --j\t"),
         ("--json", b"\x15exit\r"),
     ])
