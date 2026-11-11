@@ -18,7 +18,7 @@ import {
   type TestRepository,
 } from "./helpers/git-repository.js";
 
-describe("carry worktree lifecycle", () => {
+describe("carry worktree lifecycle", { timeout: 30_000 }, () => {
   let previousCwd: string;
   let temporaryRoot: string;
   let repository: TestRepository;

@@ -13,7 +13,7 @@ import { WorktreeWorkflowService } from "../src/services/worktree-workflow-servi
 import { AutomationReporter } from "../src/ui/automation-reporter.js";
 import { createTestRepository, type TestRepository } from "./helpers/git-repository.js";
 
-describe("configured worktree workflows", () => {
+describe("configured worktree workflows", { timeout: 30_000 }, () => {
   let temporaryRoot: string;
   let repository: TestRepository;
   let git: GitClient;

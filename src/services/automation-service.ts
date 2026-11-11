@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { glob } from "glob";
 import { toErrorMessage, WaldError } from "../domain/errors.js";
 import type {
   AutomationStep,
@@ -344,10 +345,8 @@ async function runGlobFileStep(
     throw new WaldError(`Glob target must be a directory: ${targetDirectory}`);
   }
 
-  const matches: string[] = [];
-  for await (const match of fs.glob(step.glob, { cwd: sourceDirectory })) {
-    matches.push(match);
-  }
+  // Node 22.13's experimental fs.glob misses explicit dotfiles after a globstar.
+  const matches = await glob(step.glob, { cwd: sourceDirectory, follow: false });
   matches.sort((left, right) => left.localeCompare(right));
 
   const operations: PlannedFileOperation[] = [];

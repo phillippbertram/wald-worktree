@@ -12,7 +12,7 @@ import { WorktreeWorkflowService } from "../src/services/worktree-workflow-servi
 import { cliArguments, cliExecutable } from "./helpers/cli.js";
 import { createTestRepository } from "./helpers/git-repository.js";
 
-describe("skipping create hooks", () => {
+describe("skipping create hooks", { timeout: 30_000 }, () => {
   let temporaryRoot: string;
   let git: GitClient;
   let configs: ConfigService;

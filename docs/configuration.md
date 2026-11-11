@@ -402,6 +402,8 @@ targets, so a complete workspace remains relocatable.
 Without `glob`, `from` and `to` retain their exact file-or-directory behavior. With `glob`, `from`
 must be a directory and only matches that resolve to files are processed. The pattern cannot be
 absolute, negated, or contain a `..` path segment. Directories are not independent matches.
+Hidden files and directories require an explicit dot-prefixed pattern segment: `**/.env*`
+matches `.env` files at the source root and in visible subdirectories; `**/*` excludes them.
 
 All matches and destinations are sorted and validated before the first target is changed. A symlink
 that already resolves to the intended real source is idempotent and reports `UNCHANGED`, even with

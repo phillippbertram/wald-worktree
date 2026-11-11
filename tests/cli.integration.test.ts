@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { cliArguments, cliExecutable } from "./helpers/cli.js";
 import { createTestRepository, type TestRepository } from "./helpers/git-repository.js";
 
-describe("CLI smoke flow", { timeout: 15_000 }, () => {
+describe("CLI smoke flow", { timeout: 30_000 }, () => {
   let temporaryRoot: string;
   let repository: TestRepository;
 

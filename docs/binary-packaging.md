@@ -87,13 +87,15 @@ checks execute the Linux binary on a Linux runner; they do not publish a release
 
 Native verification used macOS ARM64 and Bun 1.4.4. The binary is approximately 86 MiB uncompressed.
 The standalone runtime works with the current Commander, Clack, Execa, YAML, Zod and completion
-dependencies. The only application adjustment is runtime reporting in `wald doctor`, which now
-identifies Bun instead of treating Bun's emulated Node version as an installed Node runtime.
+dependencies. Runtime reporting in `wald doctor` identifies Bun instead of treating Bun's emulated
+Node version as an installed Node runtime. File automation uses the `glob` package to keep explicit
+dotfile patterns such as `**/.env*` working across runtimes, including Node 22.13.0, whose experimental
+`fs.glob` misses these matches. The existing path validation and preflight checks still apply.
 
-The binary integration suite passed all 63 selected tests. Full validation passed with
-`VITEST_MAX_WORKERS=4 pnpm run ci`: lint, typecheck, all 321 tests and the TypeScript build.
-The initial unrestricted run hit two Git integration test timeouts; their timeout values were
-left unchanged.
+The binary integration suite also exercises dotfile copying and rejects source symlinks that
+escape their configured root before writing any targets. The Node CI caps Vitest at two workers, and
+multi-process integration suites that exceeded their previous limits allow 30 seconds per test.
+Unit-test timeouts and all behavioral assertions remain unchanged.
 
 The isolated smoke suite passed with Bash 5.3 and bash-completion 2.17.0, Zsh 5.9, and Fish 4.9.3.
 It exercised all shell navigation checks, real Bash/Zsh Tab input, Fish completion, guided creation,

@@ -11,7 +11,7 @@ import {
   type TestRepository,
 } from "./helpers/git-repository.js";
 
-describe("managed Git workspace", () => {
+describe("managed Git workspace", { timeout: 30_000 }, () => {
   let temporaryRoot: string;
   let repository: TestRepository;
   let workspaces: WorkspaceService;

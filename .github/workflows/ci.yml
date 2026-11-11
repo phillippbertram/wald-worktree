@@ -11,6 +11,7 @@ permissions:
 
 env:
   NO_COLOR: "1"
+  VITEST_MAX_WORKERS: "2"
 
 jobs:
   validate:
@@ -92,7 +93,7 @@ jobs:
           "$RUNNER_TEMP/wald-bin/wald" init "$RUNNER_TEMP/remote.git" "$RUNNER_TEMP/workspace"
           cd "$RUNNER_TEMP/workspace"
           "$RUNNER_TEMP/wald-bin/wald" create main --no-fetch
-          "$RUNNER_TEMP/wald-bin/wald" complete -- doctor "" | grep -- "--json"
+          "$RUNNER_TEMP/wald-bin/wald" complete -- doctor "--" | grep -- "--json"
       - name: Load Bash completion and cd wrapper
         run: |
           eval "$(command wald completion bash)"
@@ -106,7 +107,7 @@ jobs:
       - name: Load Zsh completion and cd wrapper
         run: |
           autoload -Uz compinit
-          compinit -d "$RUNNER_TEMP/zcompdump"
+          compinit -i -d "$RUNNER_TEMP/zcompdump"
           eval "$(command wald completion zsh)"
           whence -w _wald >/dev/null
           cd "$RUNNER_TEMP/workspace"

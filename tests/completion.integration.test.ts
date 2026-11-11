@@ -42,7 +42,8 @@ describe("shell completion scripts", () => {
   });
 });
 
-describe("dynamic shell completion", () => {
+// Each scenario starts multiple CLI processes; source execution is slower on CI runners.
+describe("dynamic shell completion", { timeout: 30_000 }, () => {
   let temporaryRoot: string;
   let repository: TestRepository;
   let workspace: string;
