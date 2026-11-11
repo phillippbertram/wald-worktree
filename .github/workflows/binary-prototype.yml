@@ -15,6 +15,7 @@ jobs:
     name: Binary (${{ matrix.os }})
     timeout-minutes: 15
     env:
+      NO_COLOR: "1"
       VITEST_MAX_WORKERS: "4"
     strategy:
       fail-fast: false
