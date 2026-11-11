@@ -27,6 +27,7 @@
     "test": "vitest run",
     "test:binary": "WALD_TEST_BINARY=\"$PWD/dist/binary/wald\" vitest run tests/cli.integration.test.ts tests/completion.integration.test.ts tests/automation-json.integration.test.ts tests/status.integration.test.ts tests/workspace-project-config.integration.test.ts tests/skip-hooks.integration.test.ts tests/cli-program.test.ts",
     "test:binary:smoke": "python3 scripts/smoke-binary.py dist/binary/wald",
+    "test:git": "vitest run tests/*.integration.test.ts tests/worktree-transfer-service.test.ts",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "uninstall:global": "pnpm remove -g wald-worktree"
