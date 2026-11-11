@@ -3,15 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { execa } from "execa";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { cliArguments, cliExecutable } from "./helpers/cli.js";
 import { createTestRepository, type TestRepository } from "./helpers/git-repository.js";
-
-const projectRoot = path.resolve(import.meta.dirname, "..");
-const cli = path.join(projectRoot, "src", "cli.ts");
-const tsxLoader = import.meta.resolve("tsx");
-
-function cliArguments(...args: string[]): string[] {
-  return ["--import", tsxLoader, cli, ...args];
-}
 
 describe("automation JSON contracts", { timeout: 20_000 }, () => {
   let temporaryRoot: string;
@@ -329,5 +322,5 @@ hooks:
 });
 
 async function runCli(cwd: string, ...args: string[]) {
-  return await execa(process.execPath, cliArguments(...args), { cwd, reject: false });
+  return await execa(cliExecutable, cliArguments(...args), { cwd, reject: false });
 }

@@ -4,18 +4,11 @@ import path from "node:path";
 import { stripVTControlCharacters } from "node:util";
 import { execa } from "execa";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { cliArguments, cliExecutable } from "./helpers/cli.js";
 import { createTestRepository, type TestRepository } from "./helpers/git-repository.js";
 
-const projectRoot = path.resolve(import.meta.dirname, "..");
-const cli = path.join(projectRoot, "src", "cli.ts");
-const tsxLoader = import.meta.resolve("tsx");
-
-function cliArguments(...args: string[]): string[] {
-  return ["--import", tsxLoader, cli, ...args];
-}
-
 async function runCli(cwd: string, ...args: string[]) {
-  return await execa(process.execPath, cliArguments(...args), { cwd, reject: false });
+  return await execa(cliExecutable, cliArguments(...args), { cwd, reject: false });
 }
 
 describe("wald status", { timeout: 30_000 }, () => {
@@ -43,7 +36,7 @@ describe("wald status", { timeout: 30_000 }, () => {
 
   it("prints a five-line dashboard and stable JSON for the current worktree", async () => {
     const human = await runCli(main, "status");
-    const json = await execa(process.execPath, cliArguments("status", "--json"), {
+    const json = await execa(cliExecutable, cliArguments("status", "--json"), {
       cwd: main,
       env: { FORCE_COLOR: "1", NO_COLOR: undefined },
       reject: false,

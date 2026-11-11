@@ -1,0 +1,55 @@
+name: Binary prototype
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  binary:
+    name: Binary (${{ matrix.os }})
+    timeout-minutes: 15
+    env:
+      VITEST_MAX_WORKERS: "4"
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - run: pnpm install --frozen-lockfile
+      - name: Install Linux shell test tools
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes bash-completion zsh fish
+          echo "BASH_COMPLETION_FILE=/usr/share/bash-completion/bash_completion" >> "$GITHUB_ENV"
+      - name: Install macOS shell test tools
+        if: runner.os == 'macOS'
+        run: |
+          brew install bash bash-completion@2 fish
+          echo "BASH_BINARY=$(brew --prefix bash)/bin/bash" >> "$GITHUB_ENV"
+          echo "BASH_COMPLETION_FILE=$(brew --prefix bash-completion@2)/share/bash-completion/bash_completion" >> "$GITHUB_ENV"
+      - run: pnpm build:binary
+      - run: pnpm test:binary
+      - run: pnpm test:binary:smoke
+      - name: Archive executable with permissions
+        run: tar -czf dist/wald-binary.tar.gz -C dist/binary wald
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wald-${{ runner.os }}-${{ runner.arch }}
+          path: dist/wald-binary.tar.gz

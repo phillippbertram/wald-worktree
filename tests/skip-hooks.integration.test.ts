@@ -9,10 +9,8 @@ import { ConfigService } from "../src/services/config-service.js";
 import { WorkspaceService } from "../src/services/workspace-service.js";
 import { WorktreeService } from "../src/services/worktree-service.js";
 import { WorktreeWorkflowService } from "../src/services/worktree-workflow-service.js";
+import { cliArguments, cliExecutable } from "./helpers/cli.js";
 import { createTestRepository } from "./helpers/git-repository.js";
-
-const cli = path.resolve(import.meta.dirname, "../src/cli.ts");
-const tsxLoader = import.meta.resolve("tsx");
 
 describe("skipping create hooks", () => {
   let temporaryRoot: string;
@@ -285,7 +283,7 @@ tools:
 });
 
 async function runCli(cwd: string, ...args: string[]) {
-  return await execa(process.execPath, ["--import", tsxLoader, cli, ...args], {
+  return await execa(cliExecutable, cliArguments(...args), {
     cwd,
     reject: false,
   });
