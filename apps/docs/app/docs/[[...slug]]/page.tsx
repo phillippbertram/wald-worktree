@@ -29,9 +29,6 @@ function DocLink({ href, ...props }: ComponentProps<"a">) {
   if (href?.startsWith("../skills/")) {
     return <a href={`${repository}/blob/main/${href.slice(3)}`} {...props} />;
   }
-  if (href === "assets/wald-worktrees.png") {
-    return <a href={asset("/media/wald-worktrees.webp")} {...props} />;
-  }
   const Link = defaultComponents.a;
   return <Link href={href} {...props} />;
 }

@@ -1,7 +1,4 @@
----
-title: "Brand identity"
-description: "The Wald name, visual language, and writing guidelines."
----
+# Wald brand identity
 
 This document is the canonical source for Wald's name, message, visual language, and product voice.
 Technical behavior remains owned by the implementation and the corresponding reference docs.

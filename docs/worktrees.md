@@ -315,6 +315,5 @@ job, or parallel agent. For a quick isolated change, normal branch switching may
 
 - [Official Git worktree documentation](https://git-scm.com/docs/git-worktree)
 - [DataCamp: Git Worktree Tutorial](https://www.datacamp.com/tutorial/git-worktree-tutorial)
-- [Wald brand identity](brand.md)
 - [Wald CLI reference](cli-reference.md)
 - [Wald configuration](configuration.md)

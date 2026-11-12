@@ -30,6 +30,10 @@ for (const entry of required) {
 const searchIndex = await readFile(path.join(output, "search-index.json"), "utf8");
 assert(JSON.parse(searchIndex), "Invalid search index");
 assert(searchIndex.includes("Parallel coding agents"), "Agent guide missing from search index");
+assert(!(await exportedFile(`${basePath}/docs/brand/`)), "Brand guidelines must stay internal");
+assert(!searchIndex.includes("/docs/brand"), "Brand guidelines must stay out of the search index");
+const sitemap = await readFile(path.join(output, "sitemap.xml"), "utf8");
+assert(!sitemap.includes("/docs/brand"), "Brand guidelines must stay out of the sitemap");
 
 const documents = new Map();
 for (const file of await readdir(output, { recursive: true })) {
