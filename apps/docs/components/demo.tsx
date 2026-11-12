@@ -187,7 +187,7 @@ export function Demo({ id, hero = false }: { id: DemoId; hero?: boolean }) {
             <i />
           </span>
           <span>{titles[id]}</span>
-          <span className="terminal-tag">Wald CLI</span>
+          <span className="terminal-tag">wald CLI</span>
         </div>
         {/* biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard users can scroll the terminal horizontally. */}
         <section className="terminal-window" aria-label="Terminal recording" tabIndex={0}>

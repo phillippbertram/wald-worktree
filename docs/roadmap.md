@@ -1,9 +1,9 @@
 ---
 title: "Roadmap"
-description: "Current scope and future ideas for Wald."
+description: "Current scope and future ideas for wald."
 ---
 
-Wald's v1 covers the day-to-day worktree lifecycle. It can create, prepare, inspect, rename, hand
+wald's v1 covers the day-to-day worktree lifecycle. It can create, prepare, inspect, rename, hand
 off, and safely remove worktrees from the interactive CLI or direct commands. Trusted YAML
 automation, shell integration, JSON output, diagnostics, and the portable Agent Skill work on macOS
 and Linux.
@@ -17,7 +17,7 @@ features can wait until everyday use shows which ones are actually needed.
 
 - Add Flutter, iOS, Rust, or other setup detection once concrete repositories establish safe
   defaults.
-- Projects that Wald does not detect can still use commands written by hand in `.wald/project.yml`
+- Projects that wald does not detect can still use commands written by hand in `.wald/project.yml`
   or `.wald.yml`.
 
 ## Later, if real projects need it

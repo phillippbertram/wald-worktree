@@ -1,6 +1,6 @@
 ---
 title: "Get started"
-description: "Install Wald, keep your existing checkout, and create your first worktree."
+description: "Install wald, keep your existing checkout, and create your first worktree."
 ---
 
 Create a worktree beside a project you already use. The existing checkout stays in place.
@@ -14,10 +14,10 @@ Create a worktree beside a project you already use. The existing checkout stays 
 | Linux (glibc) | ARM64 | `wald-linux-arm64.tar.gz` |
 | Linux (glibc) | x64 | `wald-linux-x64.tar.gz` |
 
-Release binaries are tested on macOS 15 and Ubuntu 24.04. Wald needs Git 2.31.0 or newer.
+Release binaries are tested on macOS 15 and Ubuntu 24.04. wald needs Git 2.31.0 or newer.
 The binary includes the Bun runtime.
 
-## Install Wald
+## Install wald
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/phillippbertram/wald-worktree/main/install.sh | bash
@@ -63,7 +63,7 @@ wald init
 ```
 
 Choose to retain the existing checkout. Check the proposed paths and confirm initialization.
-Wald keeps your primary checkout in place and proposes a separate directory for new worktrees.
+wald keeps your primary checkout in place and proposes a separate directory for new worktrees.
 The optional project-configuration step can wait until you need [project setup](project-setup.md).
 
 Starting from a remote instead? See [workspace layouts](worktrees.md#workspace-layouts).
@@ -87,7 +87,7 @@ if you prefer to open the folder yourself.
 
 ## Work from any terminal
 
-The global `-C` option selects the starting directory for Wald. From elsewhere, point it at the
+The global `-C` option selects the starting directory for wald. From elsewhere, point it at the
 primary checkout or another worktree in the workspace:
 
 ```sh

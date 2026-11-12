@@ -8,8 +8,8 @@ signature and a few examples in the terminal.
 
 If worktrees are new to you, start with [Worktrees explained](worktrees.md).
 
-Wald release binaries support macOS and Linux on x64 and ARM64 and require Git 2.31.0 or newer.
-See [Install Wald](getting-started.md#install-wald) for the installer and GitHub Release downloads.
+wald release binaries support macOS and Linux on x64 and ARM64 and require Git 2.31.0 or newer.
+See [Install wald](getting-started.md#install-wald) for the installer and GitHub Release downloads.
 Git 2.31 introduced the `rev-parse --path-format` behavior used for canonical common-directory
 resolution ([release notes](https://github.com/git/git/blob/master/Documentation/RelNotes/2.31.0.adoc)).
 
@@ -35,7 +35,7 @@ Interactive prompts use the same navigation throughout:
 | Input | Behavior |
 | --- | --- |
 | `Esc` | Return one prompt step; cancel at a command's first prompt; exit from the main menu. |
-| `Ctrl-C` | Exit the complete Wald process with status 130. |
+| `Ctrl-C` | Exit the complete wald process with status 130. |
 
 Prompts display the available navigation keys. Entered values and selections are retained when
 moving back. Required names are validated in the prompt so they can be corrected without restarting.
@@ -51,7 +51,7 @@ Failures use a non-zero exit status. Interrupted foreground tasks exit with stat
 
 ### Working directory
 
-Use the global `-C <path>` or `--directory <path>` option to run Wald from an existing directory.
+Use the global `-C <path>` or `--directory <path>` option to run wald from an existing directory.
 Workspace discovery, the current worktree, and relative input paths use that directory. Without a
 command, `wald -C <path>` opens the guided menu there. `handoff` and `create --carry` use the selected
 worktree as their source; their preservation and trust checks remain unchanged.
@@ -67,7 +67,7 @@ Relative paths resolve from the current directory. Repeated `-C` options resolve
 relative to the preceding directory. Absolute paths replace that context; symlinks resolve to their
 actual directory. Empty, missing, inaccessible, or non-directory paths fail before command execution.
 `-Cpath` and `--directory=path` are also supported. Quote paths containing spaces. Global options may
-appear before or after the subcommand; arguments after `--` are not interpreted as Wald options.
+appear before or after the subcommand; arguments after `--` are not interpreted as wald options.
 
 `-C` alone does not change the invoking shell's directory. With shell integration, `wald -C <path>
 cd <worktree>` and `wald -C <path> create <branch> --cd` explicitly navigate after success. A failed
@@ -139,7 +139,7 @@ Direct and non-interactive invocations do not show the guided preview.
 JSON clone mode requires both `repository` and `directory`. JSON adoption requires `--adopt` and
 `--yes`. The result action is `initialized`, `repaired`, or `unchanged`.
 
-When the repository already has a valid Wald configuration, `init` verifies its local infrastructure.
+When the repository already has a valid wald configuration, `init` verifies its local infrastructure.
 It recreates a missing worktree container, adopted-workspace `.wald` link, or `shared` directory and
 reports `Repaired workspace`. It does not recreate individual worktrees or change workspace settings;
 use `wald prune` first if manually deleted worktrees still have stale Git registrations.
@@ -178,7 +178,7 @@ Branch search keeps a **Create branch …** action visible for a new name. Branc
 out are labeled with their worktree and cannot be selected again. Empty or invalid names can be
 corrected in place.
 
-After branch selection, Wald shows the complete plan with **Create worktree**, **Change options…**,
+After branch selection, wald shows the complete plan with **Create worktree**, **Change options…**,
 and **Cancel**. Options include the directory name, whether to run create hooks, and opening an
 editor or agent afterward. New branches also offer a base branch or commit, except during a handoff,
 which always starts at the current `HEAD`. Create hooks run by default unless `--skip-hooks` was
@@ -186,7 +186,7 @@ passed or the review was changed to skip them.
 
 `Esc` from review returns to branch selection; `Esc` from options returns to the updated preview.
 Changing options validates and updates the plan without fetching again. Cancelling performs no
-branch, worktree, trust, or hook mutation; if preparation already fetched, Wald states that only
+branch, worktree, trust, or hook mutation; if preparation already fetched, wald states that only
 remote refs were updated. Explicit branch invocations do not add this review.
 
 Skipping hooks needs no trust approval for creation and does not save or change configuration trust.
@@ -198,7 +198,7 @@ JSON mode requires a branch and cannot be combined with `--cd`, `--open`, `--too
 shell-integration option `--print-path`.
 
 `--carry` must run inside a concrete worktree and cannot be combined with `--from`. Its target must
-be a new local branch with no matching local or configured-remote ref. Wald starts at the source's
+be a new local branch with no matching local or configured-remote ref. wald starts at the source's
 exact `HEAD` and reproduces its staged, unstaged, and non-ignored untracked files, including binary
 content, executable modes, and symlinks. Ignored files, empty directories, and submodules are not
 copied. A clean source is valid and behaves like normal creation with an explicit notice.
@@ -206,8 +206,8 @@ copied. A clean source is valid and behaves like normal creation with an explici
 Carry rejects unmerged entries, active merge/rebase/cherry-pick state, sparse checkouts, dirty
 submodules, and unsupported special files before creating the target. The source is fingerprinted
 before and after transfer and is never cleaned or modified by the transfer. Before `post_create`, a
-failed application rolls back the new worktree and branch only while Wald has verified that the
-target is still clean and no write was attempted. Once a transfer may have written data, Wald keeps
+failed application rolls back the new worktree and branch only while wald has verified that the
+target is still clean and no write was attempted. Once a transfer may have written data, wald keeps
 the target and branch and prints a recovery path for manual inspection. A failed `post_create`
 keeps the fully transferred worktree and reports
 `wald setup <worktree>` as usual.
@@ -216,7 +216,7 @@ Resolution order is local branch, matching configured remote branch, then a new 
 `--from` or the default branch. By default, creation runs trusted `pre_create`, Git checkout creation,
 then `post_create`. A matching remote branch tracks its same-named remote ref. A new branch has no
 upstream: its start point determines history only and never implies tracking, including when the
-start point is `origin/<default-branch>`. With a configured remote, Wald prints
+start point is `origin/<default-branch>`. With a configured remote, wald prints
 `git push -u <remote> HEAD` as the explicit publish command. A failed `post_create` keeps the
 checkout and reports `wald setup <worktree>`.
 
@@ -259,7 +259,7 @@ wald handoff feature/review --tool codex
 wald doctor [--json] [--verbose]
 ```
 
-Runs a read-only diagnosis even outside a Wald workspace or when workspace configuration is invalid.
+Runs a read-only diagnosis even outside a wald workspace or when workspace configuration is invalid.
 Checks are `pass`, `warning`, `fail`, or `skipped` and cover the JavaScript runtime, Git 2.31.0, workspace
 discovery, YAML syntax and schema, canonical path boundaries, Git common-directory and marker
 identity, remote/default-branch refs, worktree registrations and intentional locks, project trust,
@@ -311,7 +311,7 @@ wald list|ls [--json]
 Lists each worktree's name, branch, role, state, and path. `--json` emits the complete
 machine-readable worktree records. `ls` is an alias for `list`. States are `clean`, `modified`,
 `locked`, `missing`, or `unavailable`; roles are `primary` or `linked`. `unavailable` means the
-directory exists but Wald could not safely read its Git status; removal and rename remain blocked.
+directory exists but wald could not safely read its Git status; removal and rename remain blocked.
 
 ```json
 [{"name":"main","role":"primary","path":"/dev/project/main","head":"abc123","branch":"main","branchRef":"refs/heads/main","locked":false,"lockReason":null,"prunable":false,"state":"clean"}]
@@ -366,7 +366,7 @@ own `Task` block with resolved worktree, branch, target path, command, and worki
 step prints `RUNNING` before execution followed by its result; configured environment values are
 not printed.
 
-If a guided task selection has no configured tasks, Wald offers project automation setup or a way
+If a guided task selection has no configured tasks, wald offers project automation setup or a way
 back. Supplying an explicit task still reports a missing task or configuration as an error.
 
 ```sh
@@ -387,7 +387,7 @@ least one step for the selected event.
 This command runs only the configured steps; it never creates or removes a worktree. Every manual
 run uses an existing selected worktree as `WALD_WORKTREE_PATH`. Consequently, manual `pre_create`
 and `post_remove` runs are useful for testing behavior but do not reproduce the absent-target state
-of their automatic lifecycle phase; Wald prints a warning for these events.
+of their automatic lifecycle phase; wald prints a warning for these events.
 
 In a terminal, automation output shows an animated spinner for the active configured step, groups
 each step, nests concrete copy/symlink results, and summarizes their outcomes. Command steps keep
@@ -436,7 +436,7 @@ before a preview shows the old and new paths and branch names. **Rename worktree
 preview; **Cancel** preserves the checkout and branch. Explicit arguments and flags retain their
 direct behavior; completion reflects the selected mode.
 
-Only direct children of the configured worktree directory are eligible. Wald refuses the primary or
+Only direct children of the configured worktree directory are eligible. wald refuses the primary or
 current checkout, external, missing, unavailable, or locked worktrees, and worktrees whose index contains a
 submodule. The destination uses the normal worktree-name and path validation and must not already
 exist, including as a dangling symlink. Dirty worktrees are allowed. There is no `--force` option
@@ -444,7 +444,7 @@ and rename runs no project hooks or trusted executable configuration. The new lo
 have a valid literal Git ref name and must not collide with a local branch or existing target branch
 configuration. A branch checked out in multiple worktrees cannot be renamed.
 
-Wald checks the path, branch identity, `HEAD`, and upstream before mutation. It renames the local
+wald checks the path, branch identity, `HEAD`, and upstream before mutation. It renames the local
 branch first, moves the directory, then verifies the resulting path, ref, `HEAD`, and upstream.
 If a later step fails, it attempts to restore both steps after checking their identity. Concurrent
 changes or an occupied original path/ref can prevent safe rollback; the error reports concrete
@@ -501,7 +501,7 @@ selection. With `--force`, eligible unmerged branches are also offered and clear
 | `--json` | Emit removed worktrees plus deleted and retained local branches. |
 
 The three bypassable safeguards are staged, unstaged, or untracked changes; a branch not merged
-into the configured default branch; and a Git worktree lock. With `--force`, Wald prints the branch,
+into the configured default branch; and a Git worktree lock. With `--force`, wald prints the branch,
 path, and every bypassed safeguard before confirmation, including with `--yes`.
 
 The retained primary checkout and a worktree whose state is unavailable are hard blockers and
@@ -539,7 +539,7 @@ wald uninit
 wald uninit --apply [--force] [--yes] [--json]
 ```
 
-`wald uninit` previews the Wald workspace metadata and adopted-workspace `.wald` link that would be
+`wald uninit` previews the wald workspace metadata and adopted-workspace `.wald` link that would be
 removed. The Git database, branches, retained primary checkout, worktree container, project-owned
 `.wald.yml`, and every other directory are kept.
 
@@ -548,7 +548,7 @@ removed. The Git database, branches, retained primary checkout, worktree contain
 including missing or locked registrations, always block uninitialization. Remove existing worktrees
 with `wald remove` and clean missing registrations with `wald prune --apply` first.
 
-Files or additional directories below the Wald metadata directory are local data. This includes
+Files or additional directories below the wald metadata directory are local data. This includes
 `.wald/project.yml` and content below `shared`. Uninitialization preserves them by default and
 requires `--force` to discard them. Project hooks are not run.
 `--json` emits the action, remove/keep paths, blocking worktrees, and local data entries.
@@ -592,12 +592,12 @@ Prints the navigation function and dynamic completion definitions used by `wald 
 
 Zsh completion requires `compinit` to be initialized before loading the generated definitions.
 Bash navigation and completion work in Apple's Bash 3.2 and newer versions. When bash-completion
-is loaded, Wald uses its word parsing helper; otherwise it uses Bash's completion words directly.
+is loaded, wald uses its word parsing helper; otherwise it uses Bash's completion words directly.
 
 Completion offers directory paths for `-C` and `--directory`, then resolves branches, worktrees,
 tasks, and tools in the selected workspace. Repeated directory options use the same relative-path
 semantics as execution. Completion requests pass arguments literally, including spaces and shell
-metacharacters. Reload the generated integration in existing shells after updating Wald.
+metacharacters. Reload the generated integration in existing shells after updating wald.
 
 ```sh
 eval "$(wald completion zsh)"

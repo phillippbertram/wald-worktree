@@ -1,9 +1,9 @@
 ---
 title: "Binary packaging"
-description: "Build, verify, and prepare standalone Wald binaries for GitHub Releases."
+description: "Build, verify, and prepare standalone wald binaries for GitHub Releases."
 ---
 
-Wald release archives contain a standalone executable built with Bun. To install a released
+wald release archives contain a standalone executable built with Bun. To install a released
 binary, follow the [Quickstart](getting-started.md#install-wald). Build dependencies are managed by
 pnpm, and Bun compiles the executable.
 
@@ -14,7 +14,7 @@ The build script rejects a different Bun version before building. `BUN_BINARY` c
 isolated Bun executable without replacing an existing installation.
 
 The build disables Bun's automatic runtime loading of `.env`, `bunfig.toml`, `tsconfig.json` and
-`package.json`. Repository-local Bun settings and preload scripts must not change Wald's behavior
+`package.json`. Repository-local Bun settings and preload scripts must not change wald's behavior
 or bypass its explicit configuration/trust model. Environment variables explicitly supplied by
 the caller still reach hooks and tools normally.
 
@@ -87,7 +87,7 @@ simulated GitHub downloads.
    on the branch to produce the `wald-release-assets` Actions artifact with four native archives and
    `SHA256SUMS`.
 2. After merging, create an annotated `vX.Y.Z` tag on the release commit and push that tag. For
-   version `0.14.0`, use `git tag -a v0.14.0 -m 'Wald 0.14.0'` and `git push origin v0.14.0`.
+   version `0.14.0`, use `git tag -a v0.14.0 -m 'wald 0.14.0'` and `git push origin v0.14.0`.
    The tag workflow verifies the version and prepares a GitHub Release draft after all builds and
    tests pass.
 3. Review the generated notes, the four archives, and `SHA256SUMS` in

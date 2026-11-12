@@ -25,7 +25,7 @@ export default function Home() {
               <span className="hero-accent">ready for real work.</span>
             </h1>
             <p className="hero-lead">
-              Keep your unfinished work open. Wald creates and prepares a separate checkout for the
+              Keep your unfinished work open. wald creates and prepares a separate checkout for the
               next feature, hotfix, or coding agent.
             </p>
             <div className="wald-actions">
@@ -70,13 +70,14 @@ export default function Home() {
       <section className="setup-section">
         <div className="page-width home-section setup-grid">
           <div className="section-intro">
-            <h2>Start with the project already set up.</h2>
+            <h2>Reuse your project setup with hooks.</h2>
             <p>
-              Tell Wald how to install dependencies, copy local files, and open your tools. Review
-              and trust the setup once, then reuse it for each new worktree.
+              Install dependencies and copy local settings after creating a worktree. Run project
+              checks before removal. wald runs these hooks after you review and trust the
+              configuration.
             </p>
             <Link className="text-link" href="/docs/project-setup">
-              Configure project setup <ArrowRight size={16} aria-hidden="true" />
+              Configure lifecycle hooks <ArrowRight size={16} aria-hidden="true" />
             </Link>
           </div>
           <div className="setup-comparison">
@@ -92,7 +93,7 @@ export default function Home() {
             </div>
             <div className="setup-wald">
               <h3>
-                <Terminal size={17} aria-hidden="true" /> Run Wald with trusted project setup
+                <Terminal size={17} aria-hidden="true" /> Run wald with trusted project setup
               </h3>
               <div className="command-line">
                 <code>
@@ -140,7 +141,7 @@ export default function Home() {
           <h2>Keep the code. Retire the checkout.</h2>
           <p>
             Copy a draft into a new worktree when it needs a different branch. When you’re done,
-            review what Wald will remove before confirming.
+            review what wald will remove before confirming.
           </p>
           <Link className="text-link" href="/docs/finish">
             Hand off and finish work <ArrowRight size={16} aria-hidden="true" />
@@ -163,7 +164,7 @@ export default function Home() {
       </section>
 
       <footer className="page-width site-footer">
-        <Link href="/" aria-label="Wald home">
+        <Link href="/" aria-label="wald home">
           <WaldMark />
         </Link>
         <nav aria-label="Footer">

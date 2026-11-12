@@ -1,25 +1,25 @@
-# Wald brand identity
+# wald brand identity
 
-This document is the canonical source for Wald's name, message, visual language, and product voice.
+This document is the canonical source for wald's name, message, visual language, and product voice.
 Technical behavior remains owned by the implementation and the corresponding reference docs.
 
 ## Core identity
 
-- **Name:** Wald
+- **Name:** wald
 - **CLI:** `wald`
 - **Repository and package:** `wald-worktree`
-- **Primary line:** **Wald — Where Git worktrees grow.**
+- **Primary line:** **wald — Where Git worktrees grow.**
 - **Product promise:** **Git worktrees, ready for real work.**
 - **Supporting line:** **Parallel work, naturally.**
 
-Wald is the German word for forest. The name is short enough for a terminal and gives the product a
-simple picture: several worktrees growing from the same repository.
+Write the product name as **wald**, including in headings and at the start of a sentence. The name
+comes from the German word *Wald* (/valt/), meaning “forest”. Several worktrees share one repository.
 
 ## The analogy
 
 The repository is the shared ground. Its Git history connects the workspace below the surface. Each
 worktree is a separate tree with its own files, dependencies, editor, and running processes. Put
-them together and you have a Wald: several working folders connected to one repository.
+them together and you have a forest: several working folders connected to one repository.
 
 Use the analogy to make worktrees approachable, not to replace Git terminology. Commands remain
 technical and predictable: `create`, `handoff`, `status`, `doctor`, `remove`, and `prune`. `plant` is
@@ -31,7 +31,7 @@ workspace, not a branching, merging, or release strategy.
 
 ## Voice and tone
 
-Wald should sound:
+wald should sound:
 
 - calm and confident about safety;
 - practical before playful;
@@ -43,8 +43,8 @@ Forest language belongs in the welcome screen, product introduction, section hea
 moments of delight. Errors, confirmations, JSON, and safety guidance use direct technical language.
 Avoid mystical or extended metaphors and jokes that obscure behavior.
 
-Start with the situation the reader recognizes, then say what Wald does. “Wald checks for local
-changes before removing a worktree” is better than “Wald provides a safe and predictable lifecycle.”
+Start with the situation the reader recognizes, then say what wald does. “wald checks for local
+changes before removing a worktree” is better than “wald provides a safe and predictable lifecycle.”
 Prefer concrete verbs and nouns over strings of reassuring adjectives.
 
 Do not stack several slogans, pad a paragraph with generic benefits, or force every explanation into
@@ -67,7 +67,7 @@ sequences. Color is decorative and must never be the only carrier of status or m
 
 ## Emoji rules
 
-- Use `🌲` and `🌳` for the Wald identity and welcome screen.
+- Use `🌲` and `🌳` for the wald identity and welcome screen.
 - Use `🌱` sparingly for setup, first steps, or successful new growth.
 - Keep conventional status symbols such as success, warning, error, and information markers where
   they improve scanning.
@@ -87,7 +87,7 @@ and free of text, decorative symbols, people, and third-party logos.
 
 | Area | Name |
 | --- | --- |
-| Product | Wald |
+| Product | wald |
 | Command | `wald` |
 | Repository and npm package | `wald-worktree` |
 | Workspace metadata | `.wald/` |
@@ -96,6 +96,6 @@ and free of text, decorative symbols, people, and third-party logos.
 | Automation variables | `WALD_*` |
 | Agent skill | `wald-worktrees` |
 
-Wald is a clean namespace. Do not add aliases or automatic discovery for metadata created under
+wald is a clean namespace. Do not add aliases or automatic discovery for metadata created under
 earlier product names. Existing repositories should be initialized or adopted through the normal,
 preview-first `wald init` flow.

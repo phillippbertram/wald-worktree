@@ -3,7 +3,7 @@ title: "Configuration"
 description: "Reference for workspace layouts, project hooks, tasks, tool profiles, and trust."
 ---
 
-Every Wald workspace has one local configuration and one directory for shared local files. Project
+Every wald workspace has one local configuration and one directory for shared local files. Project
 setup may come from two configuration files. Every YAML document is strict and versioned; unknown
 fields are errors.
 
@@ -123,10 +123,10 @@ them unless `--force` is also supplied.
 
 ## Project configuration
 
-Wald combines up to two files into the configuration it actually uses:
+wald combines up to two files into the configuration it actually uses:
 
 1. `<worktree>/.wald.yml` is the repository-owned base and may vary by branch or revision.
-2. `<workspace>/.wald/project.yml` is local to one Wald workspace and overrides that base for every
+2. `<workspace>/.wald/project.yml` is local to one wald workspace and overrides that base for every
    worktree.
 
 In an adopted workspace the local file physically lives at
@@ -163,7 +163,7 @@ is the only generator mode that intentionally copies the complete repository con
 
 Within customization, `Esc` returns to the preceding step and restores the previous answer as its
 default. From the first customization question it returns to the settings summary. `Ctrl-C` exits
-Wald. Reopening customization retains the last completed choices.
+wald. Reopening customization retains the last completed choices.
 
 For scripts, use `wald config init --yes`; use `--force` separately when existing configuration at
 the selected scope may be replaced. `--yes` keeps the detected recommended verify scripts.
@@ -183,7 +183,7 @@ wald config init [worktree] --scope workspace --from-project --yes
 
 The source `.wald.yml` remains in place and continues as the repository base until deliberately
 removed. Copying it locally and then removing the source preserves the semantic behavior hash when
-the effective configuration is unchanged. Wald never deletes, commits, or pushes `.wald.yml`.
+the effective configuration is unchanged. wald never deletes, commits, or pushes `.wald.yml`.
 
 The repository-owned `.wald.yml` supports this complete top-level schema:
 
@@ -229,7 +229,7 @@ tools:
 | `tasks.<name>` | Add or replace that named task; `null` removes an inherited task. |
 | `tools.<name>` | Add or replace that named tool; `null` removes an inherited tool. |
 
-Wald executes and trusts the merged result, not either source file on its own.
+wald executes and trusts the merged result, not either source file on its own.
 
 | Field | Default | Purpose |
 | --- | --- | --- |
@@ -445,7 +445,7 @@ expose local data, their exact paths and glob patterns participate in the same p
 trust hash as commands.
 
 Every non-empty automation run reports its selected worktree, branch, target path, and step results.
-In a terminal, Wald groups each configured step and nests concrete file operations beneath it:
+In a terminal, wald groups each configured step and nests concrete file operations beneath it:
 
 ```text
 ┌  Hook post_create
@@ -563,13 +563,13 @@ wald hook run post_create
 
 `wald hook run <event> [worktree]` accepts all four lifecycle events and reloads both configuration
 sources for every invocation. If the edit changes executable behavior, the semantic hash changes
-and Wald requires a new trust decision. Formatting-only changes keep existing trust valid.
+and wald requires a new trust decision. Formatting-only changes keep existing trust valid.
 
 Manual execution never performs `git worktree add` or `git worktree remove`. It uses the selected
 existing worktree as `WALD_WORKTREE_PATH`; the normal working-directory defaults still apply:
 `pre_create` uses the preferred source, `post_remove` uses the workspace, and the other events use
 the target. Because `pre_create` normally runs before the target exists and `post_remove` normally
-runs after it is gone, Wald warns that manual runs of these two events simulate a different lifecycle
+runs after it is gone, wald warns that manual runs of these two events simulate a different lifecycle
 state. `wald setup [worktree]` remains a compatibility shortcut for manually running `post_create`.
 
 ### Named tasks and tool profiles
@@ -614,12 +614,12 @@ failure.
 Built-in profiles are `code`, `cursor`, `zed`, `codex`, `codex-app`, and `claude`; unavailable
 commands are omitted from interactive selection.
 
-Repository-owned `.wald.yml` must be a regular file. Wald rejects a symbolic link or directory at
+Repository-owned `.wald.yml` must be a regular file. wald rejects a symbolic link or directory at
 that path so executable configuration cannot silently resolve outside the worktree.
 
 ## Trust
 
-Any non-empty effective hook, task, or custom tool makes project configuration executable. Wald
+Any non-empty effective hook, task, or custom tool makes project configuration executable. wald
 hashes the merged, validated, normalized behavior with SHA-256. Comments, whitespace, mapping order,
 and moving identical behavior between `.wald.yml` and `.wald/project.yml` do not change trust;
 behavioral changes in either source do.

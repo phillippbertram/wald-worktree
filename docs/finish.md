@@ -30,7 +30,7 @@ wald remove review-ui
 Inspect the proposed worktree and branch. Choose **Remove worktree, keep branches** to retire
 the checkout while keeping its branch. In the terminal, the action menu starts on **Cancel**.
 
-If Wald reports local changes, an unmerged branch, or a lock, check whether the checkout still
+If wald reports local changes, an unmerged branch, or a lock, check whether the checkout still
 has work to preserve. If a directory is already missing, use `wald prune` to preview stale
 registrations. See [remove](cli-reference.md#wald-remove) and [prune](cli-reference.md#wald-prune)
 for confirmation and automation details.

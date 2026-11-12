@@ -6,7 +6,7 @@ export default function NotFound() {
     <main className="not-found">
       <WaldMark />
       <h1>Page not found</h1>
-      <p>Find a guide or command in the Wald documentation.</p>
+      <p>Find a guide or command in the wald documentation.</p>
       <Link className="wald-button primary" href="/docs">
         Open the docs
       </Link>

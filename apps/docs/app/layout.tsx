@@ -3,18 +3,20 @@ import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { asset, basePath, description, siteUrl } from "../lib/site.mjs";
+import { asset, basePath, brand, description, siteUrl } from "../lib/site.mjs";
 import "./global.css";
+
+const title = `${brand} — Git worktrees, ready for real work`;
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: { default: "Wald — Git worktrees, ready for real work", template: "%s | Wald" },
+  title: { default: title, template: `%s | ${brand}` },
   description,
   icons: { icon: asset("/wald.svg") },
   openGraph: {
     type: "website",
-    siteName: "Wald",
-    title: "Wald — Git worktrees, ready for real work",
+    siteName: brand,
+    title,
     description,
     url: `${basePath}/`,
     images: [{ url: asset("/media/wald-social.jpg"), width: 1200, height: 630 }],

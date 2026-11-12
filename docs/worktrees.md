@@ -78,10 +78,10 @@ When the review is complete:
 wald remove contributor-payment-fix
 ```
 
-Wald fetches according to project configuration and prefers an existing local branch, then a matching
+wald fetches according to project configuration and prefers an existing local branch, then a matching
 remote branch, before creating a new branch. A matching remote branch is tracked. A newly created
 local branch has no upstream even when its history starts at the configured remote default branch;
-Wald prints the explicit `git push -u <remote> HEAD` command needed to publish it.
+wald prints the explicit `git push -u <remote> HEAD` command needed to publish it.
 
 ### 3. Keep coding while a long test runs
 
@@ -138,7 +138,7 @@ transfer failure before `post_create` rolls back the fresh worktree and branch w
 `post_create` failure keeps the verified target for `wald setup`. After success, the changes exist in
 both worktrees. `handoff` does not move an editor, process, or agent session.
 
-When the branch was chosen interactively, Wald shows the complete plan before trust, hooks, branch
+When the branch was chosen interactively, wald shows the complete plan before trust, hooks, branch
 creation, or checkout creation. **Change options…** lets you adjust the directory, setup, and opening
 behavior before choosing **Create worktree**. `--skip-hooks`, or skipping hooks in the review,
 bypasses all create-hook steps, including copies and symlinks.
@@ -150,7 +150,7 @@ Explicit branch commands do not add this review.
 Creation and removal follow the same path in every supported workspace layout. **Wald Flow** is the
 name of the recommended flat layout, not a branching model or this create-to-remove sequence.
 Creation resolves the branch and project configuration, checks trust for enabled automation,
-and runs the configured setup around the Git checkout. When carrying code, Wald verifies the
+and runs the configured setup around the Git checkout. When carrying code, wald verifies the
 copy before running post-create setup. If setup fails, retry in the retained target with
 `wald setup`.
 
@@ -162,7 +162,7 @@ for a worked example.
 
 ### Wald Flow
 
-**Wald Flow** is Wald's recommended flat standalone layout. The shared repository and every worktree
+**Wald Flow** is wald's recommended flat standalone layout. The shared repository and every worktree
 are siblings directly inside one workspace root:
 
 ```text
@@ -223,34 +223,34 @@ cd ~/dev/project
 wald init
 ```
 
-Wald suggests a safe target, shows the absolute paths and resulting directory tree, then asks for
+wald suggests a safe target, shows the absolute paths and resulting directory tree, then asks for
 confirmation. The original checkout is never moved or deleted and is protected from `wald remove`.
 
-Creating a separate standalone workspace from a local repository is different: Wald copies committed
+Creating a separate standalone workspace from a local repository is different: wald copies committed
 branch history into independent Git object storage without hardlinks. Uncommitted or ignored files,
 stashes, and detached commits without a branch stay in the source repository.
 
 See [Configuration](configuration.md#supported-layouts) for generated paths and layout constraints.
 
-## Wald and native Git
+## wald and native Git
 
-Wald uses Git for the underlying repository operations and adds the workspace rules around them:
+wald uses Git for the underlying repository operations and adds the workspace rules around them:
 
-| Intent | Wald workflow | Native foundation |
+| Intent | wald workflow | Native foundation |
 | --- | --- | --- |
 | Create a checkout | `wald create <branch>` | `git worktree add` |
 | Carry current code to a fresh checkout | `wald create <branch> --carry`, `wald handoff <branch>` | Binary Git patches plus verified untracked-file copy |
-| Understand the current context | `wald status` | Local Git status, tracking refs, and Wald configuration |
-| Find all checkouts | `wald list` | `git worktree list` plus Wald state |
+| Understand the current context | `wald status` | Local Git status, tracking refs, and wald configuration |
+| Find all checkouts | `wald list` | `git worktree list` plus wald state |
 | Enter a checkout | `wald cd <worktree>` | Resolve and print its canonical path |
 | Rename a checkout and branch | `wald rename <worktree> <new-name>` | Verified local `git branch --move` and `git worktree move` |
 | Run hooks, setup, or tasks | `wald hook run`, `wald setup`, `wald run` | Trusted effective project behavior |
 | Finish with a checkout | `wald remove <worktree>` | Safety inspection and `git worktree remove` |
 | Clean stale metadata | `wald prune` | Preview-first `git worktree prune` |
 | Repair workspace infrastructure | `wald init` | Restore the configured container, metadata link, or shared directory |
-| Stop managing the repository with Wald | `wald uninit` | Preview-first removal of Wald-owned metadata |
+| Stop managing the repository with wald | `wald uninit` | Preview-first removal of wald-owned metadata |
 
-Use Wald when creating, finding, preparing, or removing worktrees so those workspace rules are
+Use wald when creating, finding, preparing, or removing worktrees so those workspace rules are
 applied. Inside a worktree, regular Git commands continue to work normally.
 
 ## Common questions and pitfalls
@@ -289,7 +289,7 @@ repairs Git metadata without touching surviving worktrees or branches.
 ### Does removing a worktree delete its branch?
 
 Not by default. `wald remove` removes the linked checkout after safety checks and keeps its branch.
-In a terminal, Wald previews the target and offers **Cancel**, removal while keeping branches, or
+In a terminal, wald previews the target and offers **Cancel**, removal while keeping branches, or
 removal with eligible local branch deletion. Cancel is selected by default. Multiple worktrees allow
 choosing branches before a final confirmation; no branch is preselected. An unmerged branch is
 offered only with `--force` and is clearly labeled.
@@ -298,12 +298,12 @@ when the branch is unmerged. The configured default branch, detached checkouts, 
 are never deleted. `wald prune` removes only stale administrative metadata and never deletes an
 existing directory or branch.
 
-### How do I remove Wald from an existing repository?
+### How do I remove wald from an existing repository?
 
 Remove linked worktrees normally, prune registrations for folders that are already missing, then run
 `wald uninit`. The command previews its changes. `wald uninit --apply` removes the workspace
 configuration and metadata link but keeps the Git repository, branches, primary checkout, worktree
-container, and `.wald.yml`. Local files below the Wald metadata directory require `--force`.
+container, and `.wald.yml`. Local files below the wald metadata directory require `--force`.
 This includes workspace-local `.wald/project.yml`; preview its removal before granting `--force`.
 
 ### Do I need a worktree for every branch?
@@ -315,5 +315,5 @@ job, or parallel agent. For a quick isolated change, normal branch switching may
 
 - [Official Git worktree documentation](https://git-scm.com/docs/git-worktree)
 - [DataCamp: Git Worktree Tutorial](https://www.datacamp.com/tutorial/git-worktree-tutorial)
-- [Wald CLI reference](cli-reference.md)
-- [Wald configuration](configuration.md)
+- [wald CLI reference](cli-reference.md)
+- [wald configuration](configuration.md)
