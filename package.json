@@ -1,54 +1,35 @@
 {
-  "name": "wald-worktree",
-  "version": "0.10.0",
-  "description": "Wald is a safe, guided workspace manager for Git worktrees.",
+  "name": "wald-workspace",
   "private": true,
   "type": "module",
-  "bin": {
-    "wald": "./dist/cli.js"
-  },
-  "files": [
-    "dist",
-    "skills"
-  ],
   "engines": {
     "node": ">=22.13.0"
   },
   "packageManager": "pnpm@11.15.1",
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "build:binary": "node scripts/build-binary.mjs",
-    "ci": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
-    "dev": "tsx src/cli.ts",
-    "install:global": "pnpm build && pnpm add -g .",
+    "build": "pnpm --filter wald-worktree build",
+    "build:binary": "pnpm --filter wald-worktree build:binary",
+    "dev": "pnpm --filter wald-worktree dev",
+    "install:global": "pnpm --filter wald-worktree install:global",
+    "start": "pnpm --filter wald-worktree start",
+    "test": "pnpm --filter wald-worktree test",
+    "test:binary": "pnpm --filter wald-worktree test:binary",
+    "test:binary:smoke": "pnpm --filter wald-worktree test:binary:smoke",
+    "test:git": "pnpm --filter wald-worktree test:git",
+    "test:watch": "pnpm --filter wald-worktree test:watch",
+    "typecheck": "pnpm --filter wald-worktree typecheck",
+    "uninstall:global": "pnpm --filter wald-worktree uninstall:global",
+    "ci": "pnpm ci:cli && pnpm docs:check",
+    "ci:cli": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
-    "start": "node dist/cli.js",
-    "test": "vitest run",
-    "test:binary": "WALD_TEST_BINARY=\"$PWD/dist/binary/wald\" vitest run tests/cli.integration.test.ts tests/completion.integration.test.ts tests/automation-json.integration.test.ts tests/status.integration.test.ts tests/workspace-project-config.integration.test.ts tests/skip-hooks.integration.test.ts tests/cli-program.test.ts",
-    "test:binary:smoke": "python3 scripts/smoke-binary.py dist/binary/wald",
-    "test:git": "vitest run tests/*.integration.test.ts tests/worktree-transfer-service.test.ts",
-    "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
-    "uninstall:global": "pnpm remove -g wald-worktree"
+    "docs:dev": "pnpm --filter @wald/docs dev",
+    "docs:build": "pnpm --filter @wald/docs build",
+    "docs:check": "pnpm build && pnpm --filter @wald/docs check",
+    "docs:demos:record": "pnpm build && pnpm --filter @wald/docs demos:record",
+    "docs:test": "pnpm --filter @wald/docs test:browser"
   },
-  "dependencies": {
-    "@bomb.sh/tab": "0.0.22",
-    "@clack/prompts": "^1.7.0",
-    "cli-table3": "^0.6.5",
-    "commander": "^15.0.0",
-    "execa": "^10.0.1",
-    "glob": "14.0.4",
-    "picocolors": "^1.1.1",
-    "yaml": "^2.8.1",
-    "zod": "^4.4.3"
-  },
-  "license": "MIT",
   "devDependencies": {
-    "@biomejs/biome": "^2.5.10",
-    "@types/node": "^26.3.0",
-    "tsx": "^4.23.12",
-    "typescript": "^7.0.2",
-    "vitest": "^4.1.11"
+    "@biomejs/biome": "^2.5.10"
   }
 }

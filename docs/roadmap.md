@@ -1,4 +1,7 @@
-# Roadmap
+---
+title: "Roadmap"
+description: "Current scope and future ideas for Wald."
+---
 
 Wald's v1 covers the day-to-day worktree lifecycle. It can create, prepare, inspect, rename, hand
 off, and safely remove worktrees from the interactive CLI or direct commands. Trusted YAML

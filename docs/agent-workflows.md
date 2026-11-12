@@ -1,24 +1,14 @@
-# Agent workflows
+---
+title: "Parallel coding agents"
+description: "Give each agent its own Git worktree and run checks in the right checkout."
+---
 
-Run two coding agents in the same checkout and they can edit or stage each other's files. Put each
-agent in its own Git worktree and they still share the repository, but not the working directory or
-index. Wald creates and keeps track of those folders.
+Give the API task and the UI task different working directories. Both agents can edit and stage
+files at the same time, and both can see commits in the shared repository.
 
-```mermaid
-flowchart TB
-    Git["Shared Git repository<br/>commits · branches · remotes"]
-    Git --> Api["feature-api/<br/>API worktree"]
-    Git --> Ui["feature-ui/<br/>UI worktree"]
-    Api --> Codex["Codex process"]
-    Ui --> App["Codex App process"]
-```
-
-Commits remain visible through the shared repository. Files, `HEAD`, the index, dependencies, and
-agent processes stay with their worktree. Ports, databases, containers, and external services are
-not automatically isolated; coordinate them separately.
-
-The examples use the recommended flat [Wald Flow layout](worktrees.md#wald-flow), but the same agent
-isolation works in grouped and retained-checkout workspaces.
+The examples use [Wald Flow](worktrees.md#wald-flow). The same commands also work in grouped and
+retained-checkout workspaces. Assign each task a branch and coordinate any ports, databases,
+containers, and other external resources they need.
 
 ## Run two tasks in parallel
 

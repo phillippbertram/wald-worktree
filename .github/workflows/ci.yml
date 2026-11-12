@@ -33,17 +33,17 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: git --version
-      - run: pnpm run ci
-      - run: node dist/cli.js --help
+      - run: pnpm ci:cli
+      - run: node apps/cli/dist/cli.js --help
       - name: Install Linux shell test tools
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install --yes zsh fish
       - name: Prepare built CLI and smoke workspace
         if: runner.os == 'Linux'
         run: |
-          chmod +x dist/cli.js
+          chmod +x apps/cli/dist/cli.js
           mkdir -p "$RUNNER_TEMP/wald-bin"
-          ln -s "$GITHUB_WORKSPACE/dist/cli.js" "$RUNNER_TEMP/wald-bin/wald"
+          ln -s "$GITHUB_WORKSPACE/apps/cli/dist/cli.js" "$RUNNER_TEMP/wald-bin/wald"
           echo "$RUNNER_TEMP/wald-bin" >> "$GITHUB_PATH"
           git init --bare "$RUNNER_TEMP/remote.git"
           git init "$RUNNER_TEMP/source"

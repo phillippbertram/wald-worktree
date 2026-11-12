@@ -8,7 +8,20 @@
     }
   },
   "files": {
-    "includes": ["**", "!!dist", "!!coverage", "!!node_modules"]
+    "includes": [
+      "**",
+      "!!**/dist",
+      "!!**/coverage",
+      "!!node_modules",
+      "!!apps/docs/.next",
+      "!!apps/docs/.source",
+      "!!apps/docs/out",
+      "!!apps/docs/test-results",
+      "!!apps/docs/playwright-report",
+      "!apps/docs/next-env.d.ts",
+      "!apps/docs/lib/demos.generated.json",
+      "!!apps/cli/skills"
+    ]
   },
   "formatter": {
     "enabled": true,
@@ -26,6 +39,11 @@
     "enabled": true,
     "rules": {
       "preset": "recommended"
+    }
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
     }
   }
 }

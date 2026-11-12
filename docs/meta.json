@@ -1,0 +1,19 @@
+{
+  "pages": [
+    "---Start here---",
+    "index",
+    "getting-started",
+    "worktrees",
+    "---Workflows---",
+    "agent-workflows",
+    "project-setup",
+    "finish",
+    "---Reference---",
+    "cli-reference",
+    "configuration",
+    "troubleshooting",
+    "---Project---",
+    "roadmap",
+    "binary-packaging"
+  ]
+}

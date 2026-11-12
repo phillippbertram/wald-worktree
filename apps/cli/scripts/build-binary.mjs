@@ -3,7 +3,10 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
-const expectedVersion = readFileSync(new URL("../.bun-version", import.meta.url), "utf8").trim();
+const expectedVersion = readFileSync(
+  new URL("../../../.bun-version", import.meta.url),
+  "utf8",
+).trim();
 const executable = process.env.BUN_BINARY || "bun";
 const version = spawnSync(executable, ["--version"], { encoding: "utf8" });
 if (version.status !== 0 || version.stdout.trim() !== expectedVersion) {

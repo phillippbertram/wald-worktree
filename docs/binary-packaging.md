@@ -1,4 +1,7 @@
-# Standalone binary prototype
+---
+title: "Binary packaging prototype"
+description: "Build and verify the experimental standalone executable."
+---
 
 Wald can be bundled with Bun into one executable. The destination machine needs Git 2.31.0 or
 newer and the programs used by configured hooks or tools, but no separate Node.js, Bun,
@@ -23,11 +26,12 @@ the caller still reach hooks and tools normally.
 ```sh
 pnpm install --frozen-lockfile
 pnpm build:binary
-./dist/binary/wald --version
+./apps/cli/dist/binary/wald --version
 ```
 
-The native executable is written to `dist/binary/wald`. Generated binaries remain ignored.
-The build script forwards additional arguments directly to Bun, for example:
+The native executable is written to `apps/cli/dist/binary/wald`. Generated binaries remain ignored.
+The build script runs in the CLI package. Additional arguments go directly to Bun, so relative
+output paths resolve from `apps/cli/`:
 
 ```sh
 pnpm build:binary --target=bun-linux-x64-baseline --outfile=dist/binary/wald-linux-x64

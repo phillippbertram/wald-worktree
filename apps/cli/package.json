@@ -1,0 +1,50 @@
+{
+  "name": "wald-worktree",
+  "version": "0.10.0",
+  "description": "Wald is a safe, guided workspace manager for Git worktrees.",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "wald": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "skills"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node scripts/copy-skills.mjs",
+    "build:binary": "node scripts/build-binary.mjs",
+    "dev": "tsx src/cli.ts",
+    "install:global": "pnpm build && pnpm add -g .",
+    "start": "node dist/cli.js",
+    "test": "vitest run",
+    "test:binary": "WALD_TEST_BINARY=\"$PWD/dist/binary/wald\" vitest run tests/cli.integration.test.ts tests/completion.integration.test.ts tests/automation-json.integration.test.ts tests/status.integration.test.ts tests/workspace-project-config.integration.test.ts tests/skip-hooks.integration.test.ts tests/cli-program.test.ts",
+    "test:binary:smoke": "python3 scripts/smoke-binary.py dist/binary/wald",
+    "test:git": "vitest run tests/*.integration.test.ts tests/worktree-transfer-service.test.ts",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "uninstall:global": "pnpm remove -g wald-worktree",
+    "prepack": "pnpm build"
+  },
+  "dependencies": {
+    "@bomb.sh/tab": "0.0.22",
+    "@clack/prompts": "^1.7.0",
+    "cli-table3": "^0.6.5",
+    "commander": "^15.0.0",
+    "execa": "^10.0.1",
+    "glob": "14.0.4",
+    "picocolors": "^1.1.1",
+    "yaml": "^2.8.1",
+    "zod": "^4.4.3"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^26.3.0",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  }
+}

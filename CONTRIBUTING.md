@@ -1,50 +1,43 @@
 # Contributing
 
-Thanks for helping improve Wald.
-
 ## Development
 
-Requirements:
-
-- Node.js 22 or newer
-- pnpm 11
-- Git
-
-Install dependencies and validate the project:
+Use Node.js 22.13.0 or newer, Git 2.31.0 or newer, and pnpm 11.15.1. The docs checks and demo recorder
+require Python 3.
 
 ```sh
-pnpm install
+pnpm install --frozen-lockfile
+pnpm dev --help
 pnpm run ci
 ```
 
-Run the CLI directly from source:
+The pnpm workspace contains the [CLI package](apps/cli/) and the
+[documentation app](apps/docs/). Commands in the root package delegate to them.
+The portable [agent skill](skills/wald-worktrees/) remains at the repository root and is
+included when packaging the CLI.
 
-```sh
-pnpm dev -- --help
-```
-
-Keep command handlers thin, keep Git and filesystem behavior outside the UI layer, and add
-integration coverage for changes that affect repository state. Never commit real environment files
-or secrets as fixtures. Keep product copy, visuals, and emoji consistent with the
-[Wald brand identity](docs/brand.md).
+Keep command handlers thin and put Git and filesystem behavior outside the UI layer. Add
+integration coverage for changes that affect repository state. Use disposable repositories and
+synthetic files in tests. Follow the [brand guidelines](docs/brand.md) for product copy and visuals.
 
 ## Continuous integration
 
-Pull requests and pushes to `main` run five jobs:
-
 | Job | Runtime | Validation |
 | --- | --- | --- |
-| Ubuntu 24.04 | Node 22.13.0 | `pnpm run ci`, built CLI help, and Bash/Zsh/Fish shell integration |
-| macOS | Node 24 | `pnpm run ci` and built CLI help |
-| Minimum Git on Ubuntu 24.04 | Node 22.13.0, Git 2.31.0 | `pnpm test:git` |
-| Linux binary | Bun from `.bun-version` | Native build, binary integration tests, and isolated shell/PTY smoke tests |
-| macOS binary | Bun from `.bun-version` | Native build, binary integration tests, and isolated shell/PTY smoke tests |
+| Ubuntu 24.04 | Node 22.13.0 | CLI lint, typecheck, tests, build, and Bash/Zsh/Fish integration |
+| macOS | Node 24 | CLI lint, typecheck, tests, and build |
+| Minimum Git on Ubuntu 24.04 | Node 22.13.0, Git 2.31.0 | Git integration tests |
+| Linux and macOS binary | Bun from .bun-version | Native build, integration tests, and isolated PTY checks |
+| Docs on Ubuntu 24.04 | Node 24 and Python 3 | Demo transcripts, static export, links, and browser tests |
 
-The two Node jobs cover both supported operating systems with Node 22.13.0 and Node 24.
-The Ubuntu job reuses its installed dependencies and built CLI for the shell checks.
+Run `pnpm ci:cli` for CLI checks alone. `pnpm test:git` runs the CLI integration tests and
+worktree-transfer tests. Use the `.integration.test.ts` suffix for new Git integration
+coverage so the minimum-Git job includes it. See [Binary packaging](docs/binary-packaging.md)
+for standalone test requirements.
 
-`pnpm test:git` runs every `tests/*.integration.test.ts` file plus
-`tests/worktree-transfer-service.test.ts`, which also exercises real Git repositories. Add new
-Git integration coverage using the `.integration.test.ts` suffix so the minimum-Git job includes it.
-The full validation in both Node jobs includes all unit tests, lint, typecheck, and build.
-See [Binary packaging](docs/binary-packaging.md) for standalone test requirements and artifacts.
+## Work on the docs
+
+Edit the canonical Markdown and MDX in [docs/](docs/) and run `pnpm docs:dev`. The local
+site uses the same `/wald-worktree/` prefix as GitHub Pages.
+
+See [the docs app guide](apps/docs/README.md) for demo recording, browser checks, and deployment.
