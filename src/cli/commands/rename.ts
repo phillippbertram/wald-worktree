@@ -1,8 +1,15 @@
 import type { Command } from "commander";
 import { z } from "zod";
 import { WaldError } from "../../domain/errors.js";
+import type { Worktree } from "../../domain/types.js";
 import { style } from "../../ui/style.js";
-import { isInteractiveTerminal, promptText, selectWorktree } from "../../ui/terminal.js";
+import {
+  isInteractiveTerminal,
+  isPromptBackError,
+  promptText,
+  selectValue,
+  selectWorktree,
+} from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
 import { success, writeJson, writeLine } from "../helpers.js";
 import { nonEmptyCliString, parseCliInput } from "../input.js";
@@ -56,43 +63,23 @@ export function registerRenameCommand(program: Command, context: CliContext): vo
     });
 }
 
-export async function renameWorktree(input: RenameInput, context: CliContext): Promise<void> {
+export async function renameWorktree(
+  input: RenameInput,
+  context: CliContext,
+): Promise<Worktree | null> {
   input = parseCliInput(renameInputSchema, input);
   const workspace = await context.workspaces.find();
-  let identifier = input.worktree;
-  let newName = input.newName;
-
-  if (!identifier || !newName) {
-    if (!isInteractiveTerminal()) {
-      throw new WaldError("Non-interactive rename requires a worktree and new name.");
-    }
-    if (!identifier) {
-      const candidates = await context.worktrees.listMoveCandidates(workspace, undefined, input);
-      if (candidates.length === 0) {
-        throw new WaldError("No worktree can be renamed from the current location.");
-      }
-      const selected = await selectWorktree(candidates, { navigation: "cancel" });
-      if (!selected) throw new WaldError("No worktree selected.");
-      identifier = selected.name;
-    }
-    if (!newName) {
-      newName = await promptText(
-        input.keepBranch || input.branch
-          ? "Rename › New name · Worktree directory name:"
-          : "Rename › New name · Directory and local branch name:",
-        undefined,
-        {
-          navigation: "cancel",
-        },
-      );
-      if (!newName) throw new WaldError("Worktree directory name cannot be empty.");
-    }
-  }
-
-  const plan = await context.worktrees.prepareMove(workspace, identifier, newName, undefined, {
-    branch: input.branch,
-    keepBranch: input.keepBranch,
-  });
+  const plan =
+    input.worktree && input.newName
+      ? await context.worktrees.prepareMove(
+          workspace,
+          input.worktree,
+          input.newName,
+          undefined,
+          input,
+        )
+      : await prepareGuidedRename(workspace, input, context);
+  if (!plan) return null;
   const moved = await context.worktrees.move(workspace, plan);
   if (input.json) {
     writeJson(context.output.stdout, {
@@ -108,7 +95,7 @@ export async function renameWorktree(input: RenameInput, context: CliContext): P
         head: moved.head,
       },
     });
-    return;
+    return moved;
   }
   await success(
     `Renamed ${style.worktree(plan.worktree.name)} to ${style.worktree(moved.name)}`,
@@ -132,4 +119,137 @@ export async function renameWorktree(input: RenameInput, context: CliContext): P
     );
   }
   writeLine(context.output.stdout, `${style.label("Path:")} ${style.path(moved.path)}`);
+  return moved;
+}
+
+async function prepareGuidedRename(
+  workspace: Awaited<ReturnType<CliContext["workspaces"]["find"]>>,
+  input: RenameInput,
+  context: CliContext,
+) {
+  if (!isInteractiveTerminal())
+    throw new WaldError("Non-interactive rename requires a worktree and new name.");
+  let initialPath: string | undefined;
+  while (true) {
+    const candidates = input.worktree
+      ? []
+      : await context.worktrees.listMoveCandidates(workspace, undefined, { keepBranch: true });
+    if (!input.worktree && candidates.length === 0)
+      throw new WaldError("No worktree can be renamed from the current location.");
+    const worktree = input.worktree
+      ? await context.worktrees.resolve(workspace, input.worktree)
+      : await selectWorktree(candidates, { navigation: "cancel", initialValue: initialPath });
+    if (!worktree) throw new WaldError("No worktree can be renamed from the current location.");
+    initialPath = worktree.path;
+    try {
+      return await chooseRenameDetails(workspace, worktree, input, context);
+    } catch (error) {
+      if (!isPromptBackError(error) || input.worktree) throw error;
+    }
+  }
+}
+
+async function chooseRenameDetails(
+  workspace: Awaited<ReturnType<CliContext["workspaces"]["find"]>>,
+  worktree: Worktree,
+  input: RenameInput,
+  context: CliContext,
+) {
+  let mode = input.keepBranch ? "directory" : input.branch ? "custom" : "both";
+  let name = input.newName ?? worktree.name;
+  let branch = input.branch ?? worktree.branch ?? "";
+  const chooseMode = !input.keepBranch && !input.branch && !input.newName;
+  const canRenameBranch = (await context.worktrees.listMoveCandidates(workspace)).some(
+    (item) => item.path === worktree.path,
+  );
+  if (chooseMode && !canRenameBranch) mode = "directory";
+  const steps = [
+    ...(chooseMode ? ["mode"] : []),
+    ...(!input.newName ? ["name"] : []),
+    ...(chooseMode ? ["branch"] : []),
+    "review",
+  ];
+  let index = 0;
+  while (index < steps.length) {
+    const navigation = index === 0 && input.worktree ? "cancel" : "back";
+    try {
+      switch (steps[index]) {
+        case "mode":
+          mode = await selectValue(
+            "Rename › Scope · What should change?",
+            [
+              ...(canRenameBranch ? [{ label: "Directory and local branch", value: "both" }] : []),
+              { label: "Directory only, keep the branch", value: "directory" },
+              ...(canRenameBranch
+                ? [{ label: "Directory and a different local branch name", value: "custom" }]
+                : []),
+            ],
+            { navigation, initialValue: mode },
+          );
+          break;
+        case "name":
+          name = await promptText(
+            mode === "both"
+              ? "Rename › Name · New directory and local branch name:"
+              : "Rename › Name · New directory name:",
+            name,
+            {
+              navigation,
+              validate: (value) => (value ? undefined : "Enter a worktree directory name."),
+              validateAsync: async (value) => {
+                await context.worktrees.prepareMove(workspace, worktree.path, value, undefined, {
+                  keepBranch: mode !== "both",
+                });
+              },
+            },
+          );
+          break;
+        case "branch":
+          if (mode === "custom")
+            branch = await promptText("Rename › Branch · New local branch name:", branch, {
+              navigation: "back",
+              validate: (value) => (value ? undefined : "Enter a branch name."),
+              validateAsync: async (value) => {
+                await context.worktrees.prepareMove(workspace, worktree.path, name, undefined, {
+                  branch: value,
+                });
+              },
+            });
+          break;
+        case "review": {
+          const plan = await context.worktrees.prepareMove(
+            workspace,
+            worktree.path,
+            name,
+            undefined,
+            { keepBranch: mode === "directory", branch: mode === "custom" ? branch : undefined },
+          );
+          writeLine(
+            context.output.stdout,
+            `${style.label("Directory:")} ${style.path(worktree.path)} → ${style.path(plan.target)}`,
+          );
+          writeLine(
+            context.output.stdout,
+            `${style.label("Branch:")} ${style.branch(worktree.branch ?? "detached")} → ${style.branch(plan.branchChange.after ?? "detached")}${plan.branchChange.renamed ? "" : " (kept)"}`,
+          );
+          writeLine(context.output.stdout, "Upstream tracking and remotes stay unchanged.");
+          const action = await selectValue(
+            "Rename › Review · Apply this rename?",
+            [
+              { label: "Rename worktree", value: "rename" },
+              { label: "Cancel", value: "cancel" },
+            ],
+            { navigation: "back", initialValue: "rename" },
+          );
+          return action === "rename" ? plan : null;
+        }
+      }
+      index += 1;
+    } catch (error) {
+      if (!isPromptBackError(error) || index === 0) throw error;
+      index -= 1;
+      if (steps[index] === "branch" && mode !== "custom") index -= 1;
+    }
+  }
+  return null;
 }

@@ -45,6 +45,31 @@ describe("terminal tables", () => {
     expect(plain).not.toMatch(/[│┌┐└┘├┤┬┴┼]/u);
   });
 
+  it("wraps long preview values without truncating the target path", () => {
+    const target = `/tmp/${"long-directory/".repeat(8)}feature`;
+    const plain = stripVTControlCharacters(
+      renderTable(["SETTING", "VALUE"], [["Target", target]], (cell) => cell, 60),
+    );
+    expect(plain.split("\n").every((line) => line.length <= 60)).toBe(true);
+    const lines = plain.split("\n").slice(1);
+    const valueColumn = plain.split("\n")[0]?.indexOf("VALUE") ?? 0;
+    expect(lines.map((line) => line.slice(valueColumn)).join("")).toBe(target);
+    expect(plain).not.toContain("…");
+  });
+
+  it("uses cards when long paths do not fit a wide terminal", async () => {
+    const restoreColumns = overrideStdoutColumns(120);
+    const output = captureStdout();
+    const target = `/tmp/${"long-directory/".repeat(12)}feature`;
+    try {
+      await printWorktreeTable([{ ...worktree(), path: target }]);
+    } finally {
+      restoreColumns();
+    }
+    expect(stripVTControlCharacters(output())).not.toContain("NAME");
+    expect(stripVTControlCharacters(output())).toContain(target);
+  });
+
   it("keeps the card view below 100 columns, including long paths", async () => {
     const restoreColumns = overrideStdoutColumns(99);
     const output = captureStdout();

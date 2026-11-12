@@ -211,6 +211,53 @@ describe("terminal prompt navigation", () => {
     expect(prompts.spinner.clear).toHaveBeenCalledOnce();
   });
 
+  it("validates text in place and retains the input after an operational validation error", async () => {
+    const { WaldError } = await import("../src/domain/errors.js");
+    prompts.text.mockResolvedValueOnce("bad branch").mockResolvedValueOnce("feature/good");
+    const validateAsync = vi
+      .fn()
+      .mockRejectedValueOnce(new WaldError("Invalid branch name"))
+      .mockResolvedValueOnce(undefined);
+    await expect(
+      promptText("Branch:", undefined, {
+        validate: (value) => (value ? undefined : "Enter a branch name."),
+        validateAsync,
+      }),
+    ).resolves.toBe("feature/good");
+    expect(prompts.text.mock.calls[0]?.[0].validate(" ")).toBe("Enter a branch name.");
+    expect(prompts.text.mock.calls[1]?.[0].initialValue).toBe("bad branch");
+    expect(prompts.log.error).toHaveBeenCalledWith("Invalid branch name", expect.any(Object));
+  });
+
+  it("offers creation for a search without hiding occupied branches", async () => {
+    prompts.autocomplete.mockResolvedValue("new:feature/example");
+    await searchSelect("Branch:", [{ label: "main (in main)", value: "main", disabled: true }], {
+      createChoice: (search) =>
+        search && search !== "main"
+          ? { label: `Create ${search}`, value: `new:${search}` }
+          : undefined,
+    });
+    const options = prompts.autocomplete.mock.calls[0]?.[0];
+    expect(options.options.call({ userInput: "feature/example" })).toEqual([
+      expect.objectContaining({ label: "Create feature/example", value: "new:feature/example" }),
+    ]);
+    expect(options.options.call({ userInput: "main" })).toEqual([
+      expect.objectContaining({ value: "main", disabled: true }),
+    ]);
+  });
+
+  it("shows the navigation keys in an interactive prompt", async () => {
+    restoreTerminalProperties = overrideTerminalProperties({ stdinTty: true, stdoutTty: true });
+    const write = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+    prompts.select.mockResolvedValue("back");
+    try {
+      await selectValue("Action:", [{ label: "Back", value: "back" }], { navigation: "back" });
+      expect(write).toHaveBeenCalledWith(expect.stringContaining("Esc: back · Ctrl+C: exit"));
+    } finally {
+      write.mockRestore();
+    }
+  });
+
   it("does not create a spinner for non-interactive tasks", async () => {
     restoreTerminalProperties = overrideTerminalProperties({ stdinTty: false, stdoutTty: false });
 

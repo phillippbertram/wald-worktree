@@ -12,6 +12,12 @@ import type { ProjectConfigDocument, Workspace, Worktree } from "../src/domain/t
 import { PromptBackError, PromptExitError } from "../src/ui/terminal.js";
 
 const prompts = vi.hoisted(() => ({
+  selections: [] as Array<string | Error>,
+  selectionCalls: [] as Array<{
+    question: string;
+    choices: Array<{ label: string; value: string }>;
+    initialValue?: string;
+  }>,
   confirmations: [] as Array<boolean | Error>,
   confirmationDefaults: [] as boolean[],
   confirmationQuestions: [] as string[],
@@ -34,6 +40,16 @@ vi.mock("../src/ui/terminal.js", async (importOriginal) => {
     isInteractiveTerminal: () => true,
     printStatus: async () => undefined,
     runTask: async <T>(_label: string, task: () => Promise<T>) => await task(),
+    selectValue: async (
+      question: string,
+      choices: Array<{ label: string; value: string }>,
+      options: { initialValue?: string } = {},
+    ) => {
+      prompts.selectionCalls.push({ question, choices, initialValue: options.initialValue });
+      const result = prompts.selections.shift() ?? "cancel";
+      if (result instanceof Error) throw result;
+      return result;
+    },
     confirm: async (question: string, defaultValue: boolean) => {
       prompts.confirmationQuestions.push(question);
       prompts.confirmationDefaults.push(defaultValue);
@@ -89,6 +105,8 @@ describe("interactive command navigation", () => {
   const review = worktree("review", "/workspace/review");
 
   beforeEach(() => {
+    prompts.selections = [];
+    prompts.selectionCalls = [];
     prompts.confirmations = [];
     prompts.confirmationDefaults = [];
     prompts.confirmationQuestions = [];
@@ -108,6 +126,7 @@ describe("interactive command navigation", () => {
     prompts.searchSelections.push("__create_new_branch__", "existing");
     prompts.promptTexts.push(new PromptBackError());
     const worktrees = {
+      list: vi.fn().mockResolvedValue([]),
       listBranchCandidates: vi
         .fn()
         .mockResolvedValue([{ name: "existing", label: "existing", source: "local" }]),
@@ -118,7 +137,8 @@ describe("interactive command navigation", () => {
     ).resolves.toBe("existing");
   });
 
-  it("renames the selected worktree and branch without an extra confirmation", async () => {
+  it("previews the selected worktree and branch before renaming", async () => {
+    prompts.selections.push("both", "rename");
     prompts.worktreeSelections.push(feature);
     prompts.promptTexts.push("review");
     const plan = {
@@ -134,16 +154,17 @@ describe("interactive command navigation", () => {
 
     await renameWorktree({}, context);
 
-    expect(prepareMove).toHaveBeenCalledWith(workspace, "feature", "review", undefined, {
+    expect(prepareMove).toHaveBeenCalledWith(workspace, feature.path, "review", undefined, {
       branch: undefined,
-      keepBranch: undefined,
+      keepBranch: false,
     });
     expect(move).toHaveBeenCalledWith(workspace, plan);
     expect(prompts.confirmationQuestions).toEqual([]);
   });
 
-  it("cancels rename input before preparing or mutating the worktree", async () => {
-    prompts.worktreeSelections.push(feature);
+  it("returns through rename scope and target selection before cancelling", async () => {
+    prompts.selections.push("both", new PromptBackError());
+    prompts.worktreeSelections.push(feature, new PromptBackError());
     prompts.promptTexts.push(new PromptBackError());
     const prepareMove = vi.fn();
     const move = vi.fn();
@@ -155,164 +176,74 @@ describe("interactive command navigation", () => {
     expect(move).not.toHaveBeenCalled();
   });
 
-  it("confirms an interactively selected create plan with Yes by default", async () => {
+  it("offers creation from the reviewed plan by default", async () => {
     prompts.searchSelections.push("feature");
-    prompts.confirmations.push(true);
+    prompts.selections.push("create");
     const executeCreate = vi.fn().mockResolvedValue(feature);
     const context = createContextForCreate(workspace, feature, executeCreate);
-
     await createWorktree({ carry: false, cd: false, open: false, printPath: false }, context);
-
-    expect(prompts.confirmationQuestions).toContain("Create this worktree?");
-    expect(prompts.confirmationDefaults).toContain(true);
+    expect(prompts.selectionCalls[0]?.initialValue).toBe("create");
     expect(executeCreate).toHaveBeenCalledOnce();
   });
 
-  it("cancels an interactive create before trust or mutation", async () => {
+  it.each(["cancel", new PromptExitError()])(
+    "cancels or interrupts before trust and creation: %s",
+    async (answer) => {
+      prompts.searchSelections.push("feature");
+      prompts.selections.push(answer);
+      const executeCreate = vi.fn();
+      const context = createContextForCreate(workspace, feature, executeCreate);
+      const result = createWorktree(
+        { carry: false, cd: false, open: false, printPath: false },
+        context,
+      );
+      if (answer instanceof Error) await expect(result).rejects.toBeInstanceOf(PromptExitError);
+      else await expect(result).resolves.toBeNull();
+      expect(executeCreate).not.toHaveBeenCalled();
+      expect(context.configs.isTrusted).not.toHaveBeenCalled();
+    },
+  );
+
+  it("reports an earlier fetch after changing options and cancelling", async () => {
     prompts.searchSelections.push("feature");
-    prompts.confirmations.push(false);
-    const executeCreate = vi.fn();
-    const context = createContextForCreate(workspace, feature, executeCreate);
-
-    await expect(
-      createWorktree({ carry: false, cd: false, open: false, printPath: false }, context),
-    ).resolves.toBeNull();
-
-    expect(executeCreate).not.toHaveBeenCalled();
-    expect(context.configs.isTrusted).not.toHaveBeenCalled();
-  });
-
-  it("states that only remote refs changed when a fetched plan is declined", async () => {
-    prompts.searchSelections.push("feature");
-    prompts.confirmations.push(false);
+    prompts.selections.push("options", "hooks", "skip", "back", "cancel");
     let stdout = "";
-    const context = createContextForCreate(workspace, feature, vi.fn(), null, "origin");
+    const context = createContextForCreate(workspace, feature, vi.fn(), null, "origin", true);
     context.output.stdout = {
       write: (value: string) => {
         stdout += value;
         return true;
       },
     } as NodeJS.WritableStream;
-
     await createWorktree({ carry: false, cd: false, open: false, printPath: false }, context);
-
     expect(stdout).toContain("Only remote refs from origin were updated during preparation");
+    expect(context.workflow.planCreate).toHaveBeenLastCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ fetch: false }),
+    );
     expect(context.workflow.executeCreate).not.toHaveBeenCalled();
   });
 
-  it("returns from create confirmation with the previous branch selection retained", async () => {
+  it("retains the branch when returning from the review", async () => {
     prompts.searchSelections.push("feature", "feature");
-    prompts.confirmations.push(new PromptBackError(), true);
+    prompts.selections.push(new PromptBackError(), "create");
     const executeCreate = vi.fn().mockResolvedValue(feature);
     const context = createContextForCreate(workspace, feature, executeCreate);
-
     await createWorktree({ carry: false, cd: false, open: false, printPath: false }, context);
-
     expect(prompts.searchPromptOptions[1]).toMatchObject({ initialValue: "feature" });
     expect(executeCreate).toHaveBeenCalledOnce();
-  });
-
-  it("does not confirm a fully explicit create command", async () => {
-    const executeCreate = vi.fn().mockResolvedValue(feature);
-    const context = createContextForCreate(workspace, feature, executeCreate);
-
-    await createWorktree(
-      { branch: "feature", carry: false, cd: false, open: false, printPath: false },
-      context,
-    );
-
-    expect(prompts.confirmationQuestions).toEqual([]);
-    expect(executeCreate).toHaveBeenCalledOnce();
-  });
-
-  it.each([true, false])(
-    "offers create hooks with Yes by default and accepts %s",
-    async (runHooks) => {
-      prompts.searchSelections.push("feature");
-      prompts.confirmations.push(runHooks, true);
-      const executeCreate = vi.fn().mockResolvedValue(feature);
-      const context = createContextForCreate(workspace, feature, executeCreate, null, null, true);
-
-      await createWorktree({ carry: false, cd: false, open: false, printPath: false }, context);
-
-      expect(prompts.confirmationQuestions).toEqual([
-        "Run create hooks? (1 pre-create, 1 post-create steps)",
-        "Create this worktree?",
-      ]);
-      expect(prompts.confirmationDefaults).toEqual([true, true]);
-      expect(executeCreate).toHaveBeenCalledWith(
-        expect.objectContaining({ skipHooks: !runHooks }),
-        expect.any(Object),
-      );
-      expect(context.configs.isTrusted).toHaveBeenCalledTimes(runHooks ? 1 : 0);
-    },
-  );
-
-  it("returns to the hook choice without preparing or fetching the plan again", async () => {
-    prompts.searchSelections.push("feature");
-    prompts.confirmations.push(false, new PromptBackError(), true, true);
-    const executeCreate = vi.fn().mockResolvedValue(feature);
-    const context = createContextForCreate(workspace, feature, executeCreate, null, "origin", true);
-
-    await createWorktree({ carry: false, cd: false, open: false, printPath: false }, context);
-
-    expect(prompts.confirmationDefaults).toEqual([true, true, false, true]);
-    expect(context.workflow.planCreate).toHaveBeenCalledOnce();
-    expect(context.worktrees.listBranchCandidates).toHaveBeenCalledOnce();
-    expect(executeCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ skipHooks: false }),
-      expect.any(Object),
-    );
-  });
-
-  it("retains the branch and hook choice when backing out of hook selection", async () => {
-    prompts.searchSelections.push("feature", "feature");
-    prompts.confirmations.push(false, new PromptBackError(), new PromptBackError(), false, true);
-    const executeCreate = vi.fn().mockResolvedValue(feature);
-    const context = createContextForCreate(workspace, feature, executeCreate, null, null, true);
-
-    await createWorktree({ carry: false, cd: false, open: false, printPath: false }, context);
-
-    expect(prompts.searchPromptOptions[1]).toMatchObject({ initialValue: "feature" });
-    expect(prompts.confirmationDefaults).toEqual([true, true, false, false, true]);
-    expect(context.workflow.planCreate).toHaveBeenCalledTimes(2);
-    expect(executeCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ skipHooks: true }),
-      expect.any(Object),
-    );
-  });
-
-  it("skips hook selection when the flag is supplied", async () => {
-    prompts.searchSelections.push("feature");
-    prompts.confirmations.push(true);
-    const executeCreate = vi.fn().mockResolvedValue(feature);
-    const context = createContextForCreate(workspace, feature, executeCreate, null, null, true);
-
-    await createWorktree(
-      { carry: false, cd: false, open: false, printPath: false, skipHooks: true },
-      context,
-    );
-
-    expect(prompts.confirmationQuestions).toEqual(["Create this worktree?"]);
-    expect(context.configs.isTrusted).not.toHaveBeenCalled();
-    expect(executeCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ skipHooks: true }),
-      expect.any(Object),
-    );
   });
 
   it.each([false, true])(
-    "does not ask about hooks for an explicit branch (skip: %s)",
+    "keeps explicit create commands free of prompts (skip hooks: %s)",
     async (skipHooks) => {
       const executeCreate = vi.fn().mockResolvedValue(feature);
       const context = createContextForCreate(workspace, feature, executeCreate, null, null, true);
-
       await createWorktree(
         { branch: "feature", carry: false, cd: false, open: false, printPath: false, skipHooks },
         context,
       );
-
-      expect(prompts.confirmationQuestions).toEqual([]);
+      expect(prompts.selectionCalls).toEqual([]);
       expect(executeCreate).toHaveBeenCalledWith(
         expect.objectContaining({ skipHooks }),
         expect.any(Object),
@@ -320,69 +251,76 @@ describe("interactive command navigation", () => {
     },
   );
 
-  it("cancels a plan with skipped hooks before trust or execution", async () => {
+  it.each(["run", "skip"])("changes create hooks from the options menu: %s", async (action) => {
     prompts.searchSelections.push("feature");
-    prompts.confirmations.push(false, false);
-    const executeCreate = vi.fn();
+    prompts.selections.push("options", "hooks", action, "back", "create");
+    const executeCreate = vi.fn().mockResolvedValue(feature);
     const context = createContextForCreate(workspace, feature, executeCreate, null, null, true);
-
-    await expect(
-      createWorktree({ carry: false, cd: false, open: false, printPath: false }, context),
-    ).resolves.toBeNull();
-
-    expect(context.configs.isTrusted).not.toHaveBeenCalled();
-    expect(executeCreate).not.toHaveBeenCalled();
+    await createWorktree({ carry: false, cd: false, open: false, printPath: false }, context);
+    expect(executeCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ skipHooks: action === "skip" }),
+      expect.any(Object),
+    );
+    expect(context.configs.isTrusted).toHaveBeenCalledTimes(action === "skip" ? 0 : 1);
   });
 
-  it("interrupts hook selection before trust or execution", async () => {
+  it("returns from options without preparing or fetching the plan again", async () => {
     prompts.searchSelections.push("feature");
-    prompts.confirmations.push(new PromptExitError());
-    const executeCreate = vi.fn();
-    const context = createContextForCreate(workspace, feature, executeCreate, null, null, true);
-
-    await expect(
-      createWorktree({ carry: false, cd: false, open: false, printPath: false }, context),
-    ).rejects.toBeInstanceOf(PromptExitError);
-
-    expect(context.configs.isTrusted).not.toHaveBeenCalled();
-    expect(executeCreate).not.toHaveBeenCalled();
+    prompts.selections.push("options", new PromptBackError(), "create");
+    const executeCreate = vi.fn().mockResolvedValue(feature);
+    const context = createContextForCreate(workspace, feature, executeCreate);
+    await createWorktree({ carry: false, cd: false, open: false, printPath: false }, context);
+    expect(context.workflow.planCreate).toHaveBeenCalledOnce();
   });
 
-  it("offers the shared hook choice for a guided handoff", async () => {
+  it("replans with the edited directory name without another fetch", async () => {
+    prompts.searchSelections.push("feature");
+    prompts.selections.push("options", "name", "back", "create");
+    prompts.promptTexts.push("payment-review");
+    const executeCreate = vi.fn().mockResolvedValue(feature);
+    const context = createContextForCreate(workspace, feature, executeCreate);
+    await createWorktree({ carry: false, cd: false, open: false, printPath: false }, context);
+    expect(context.workflow.planCreate).toHaveBeenLastCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ name: "payment-review", fetch: false }),
+    );
+  });
+
+  it("keeps --skip-hooks on a guided create unless changed explicitly", async () => {
+    prompts.searchSelections.push("feature");
+    prompts.selections.push("create");
+    const executeCreate = vi.fn().mockResolvedValue(feature);
+    const context = createContextForCreate(workspace, feature, executeCreate, null, null, true);
+    await createWorktree(
+      { carry: false, cd: false, open: false, printPath: false, skipHooks: true },
+      context,
+    );
+    expect(context.configs.isTrusted).not.toHaveBeenCalled();
+    expect(executeCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ skipHooks: true }),
+      expect.any(Object),
+    );
+  });
+
+  it("uses the same reviewed options for handoff without exposing a different base", async () => {
     prompts.promptTexts.push("review");
-    prompts.confirmations.push(false, true);
+    prompts.selections.push("options", "hooks", "skip", "back", "create");
     const executeCreate = vi.fn().mockResolvedValue(review);
     const context = createContextForCreate(workspace, review, executeCreate, primary, null, true);
-
     await handoffWorktree({ cd: false, open: false, printPath: false }, context);
-
-    expect(prompts.confirmationQuestions[0]).toContain("Run create hooks?");
+    expect(prompts.selectionCalls[1]?.choices.map(({ value }) => value)).not.toContain("base");
     expect(executeCreate).toHaveBeenCalledWith(
       expect.objectContaining({ skipHooks: true, carrySource: primary }),
       expect.any(Object),
     );
   });
 
-  it("confirms an interactively entered handoff branch before carrying changes", async () => {
-    prompts.promptTexts.push("review");
-    prompts.confirmations.push(true);
-    const executeCreate = vi.fn().mockResolvedValue(review);
-    const context = createContextForCreate(workspace, review, executeCreate, primary);
-
-    await handoffWorktree({ cd: false, open: false, printPath: false }, context);
-
-    expect(prompts.confirmationQuestions).toContain("Create this worktree?");
-    expect(executeCreate).toHaveBeenCalledOnce();
-  });
-
-  it("returns from handoff confirmation with the previous branch text retained", async () => {
+  it("retains the handoff branch after going back from the review", async () => {
     prompts.promptTexts.push("review", "review");
-    prompts.confirmations.push(new PromptBackError(), true);
+    prompts.selections.push(new PromptBackError(), "create");
     const executeCreate = vi.fn().mockResolvedValue(review);
     const context = createContextForCreate(workspace, review, executeCreate, primary);
-
     await handoffWorktree({ cd: false, open: false, printPath: false }, context);
-
     expect(prompts.promptTextDefaults).toEqual([undefined, "review"]);
     expect(executeCreate).toHaveBeenCalledOnce();
   });
@@ -465,7 +403,7 @@ describe("interactive command navigation", () => {
 
   it("returns from removal confirmation and preserves the checkbox selection", async () => {
     prompts.manySelections.push([feature], [review]);
-    prompts.confirmations.push(new PromptBackError(), true);
+    prompts.selections.push(new PromptBackError(), "keep");
     const executeRemove = vi.fn();
     const context = commandContext(workspace, primary, [primary, feature, review], {
       workflow: {
@@ -550,51 +488,62 @@ describe("interactive command navigation", () => {
     expect(stderr).toContain("not merged into main");
   });
 
-  it("uses the eligible branch decision as the final removal confirmation", async () => {
-    prompts.confirmations.push(true);
-    const executeRemove = vi.fn();
-    const context = commandContext(workspace, primary, [primary, feature], {
-      workflow: {
-        planRemove: vi.fn().mockResolvedValue({
-          inspection: {
-            worktree: feature,
-            hardBlockers: [],
-            blockers: [],
-            branchDeletion: {
-              eligible: true,
-              branch: feature.branch,
-              branchRef: "refs/heads/feature",
-              expectedHead: "abc123",
-              mergedIntoDefault: true,
+  it.each(["cancel", "keep", "delete"])(
+    "makes the single-worktree removal action explicit: %s",
+    async (action) => {
+      prompts.selections.push(action);
+      const executeRemove = vi.fn();
+      const context = commandContext(workspace, primary, [primary, feature], {
+        workflow: {
+          planRemove: vi.fn().mockResolvedValue({
+            inspection: {
+              worktree: feature,
+              hardBlockers: [],
+              blockers: [],
+              branchDeletion: {
+                eligible: true,
+                branch: feature.branch,
+                branchRef: "refs/heads/feature",
+                expectedHead: "abc123",
+                mergedIntoDefault: true,
+              },
             },
-          },
-          project: null,
-        }),
-        executeRemove,
-      },
-    });
+            project: null,
+          }),
+          executeRemove,
+        },
+      });
 
-    await removeWorktrees(
-      {
-        worktrees: [feature.name],
-        force: false,
-        deleteBranch: false,
-        yes: false,
-      },
-      context,
-    );
+      await removeWorktrees(
+        {
+          worktrees: [feature.name],
+          force: false,
+          deleteBranch: false,
+          yes: false,
+        },
+        context,
+      );
 
-    expect(prompts.confirmationQuestions[0]).toContain("Delete local branch feature too?");
-    expect(prompts.confirmationDefaults[0]).toBe(false);
-    expect(prompts.confirmationQuestions).toHaveLength(1);
-    expect(executeRemove).toHaveBeenCalledWith(
-      expect.any(Object),
-      expect.objectContaining({ deleteBranch: true }),
-    );
-  });
+      expect(prompts.selectionCalls[0]?.initialValue).toBe("cancel");
+      expect(prompts.selectionCalls[0]?.choices.map(({ value }) => value)).toEqual([
+        "cancel",
+        "keep",
+        "delete",
+      ]);
+      expect(prompts.confirmationQuestions).toHaveLength(0);
+      if (action === "cancel") {
+        expect(executeRemove).not.toHaveBeenCalled();
+        return;
+      }
+      expect(executeRemove).toHaveBeenCalledWith(
+        expect.any(Object),
+        expect.objectContaining({ deleteBranch: action === "delete" }),
+      );
+    },
+  );
 
   it("offers an unmerged branch for deletion when removal is forced", async () => {
-    prompts.confirmations.push(true);
+    prompts.selections.push("delete");
     const executeRemove = vi.fn();
     const context = commandContext(workspace, primary, [primary, feature], {
       workflow: {
@@ -627,8 +576,10 @@ describe("interactive command navigation", () => {
       context,
     );
 
-    expect(prompts.confirmationQuestions[0]).toContain("Delete unmerged local branch feature too?");
-    expect(prompts.confirmationDefaults[0]).toBe(false);
+    expect(prompts.selectionCalls[0]?.choices).toContainEqual(
+      expect.objectContaining({ label: "Remove worktree and unmerged local branch" }),
+    );
+    expect(prompts.selectionCalls[0]?.initialValue).toBe("cancel");
     expect(executeRemove).toHaveBeenCalledWith(
       expect.any(Object),
       expect.objectContaining({ deleteBranch: true, force: true }),
@@ -636,6 +587,7 @@ describe("interactive command navigation", () => {
   });
 
   it("offers multiple eligible branches as an unselected checkbox list", async () => {
+    prompts.selections.push("delete", "remove");
     prompts.manyValueSelections.push(["refs/heads/review"]);
     const executeRemove = vi.fn();
     const context = commandContext(workspace, primary, [primary, feature, review], {
@@ -672,7 +624,7 @@ describe("interactive command navigation", () => {
       context,
     );
 
-    expect(prompts.manyValueOptions).toEqual([{ initialValues: [], navigation: "cancel" }]);
+    expect(prompts.manyValueOptions).toEqual([{ initialValues: [], navigation: "back" }]);
     expect(prompts.confirmationQuestions).toEqual([]);
     expect(executeRemove).toHaveBeenNthCalledWith(
       1,

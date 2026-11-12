@@ -146,16 +146,21 @@ git diff -- .wald.yml
 The wizard detects npm, pnpm, Yarn, or Bun, package scripts, and files such as `.env.example`. It can
 add an install hook, an environment copy step, a `verify` task, a separate `dev` task for an exact
 `dev` package script, and a default tool. The long-running `dev` script is never added to the
-one-shot `verify` task. Interactive setup asks whether to create the `verify` task before offering
-individual scripts; declining or selecting no scripts omits the task.
+one-shot `verify` task. Interactive setup first summarizes the detected settings, including the
+destination file. **Use these settings** writes them, **Customize…** opens the individual questions,
+and **Show configuration** displays the generated YAML. **Cancel** writes nothing. Creating the
+configuration does not grant trust or run its commands.
+
+Customization asks whether to create the `verify` task before offering individual scripts;
+declining or selecting no scripts omits the task.
 
 For workspace scope, the generator writes a sparse overlay: hooks and tasks that were not selected
 are omitted, so existing repository behavior remains inherited. The explicit `--from-project` path
 is the only generator mode that intentionally copies the complete repository configuration.
 
-`Esc` returns to the preceding wizard step and restores the previous answer as its default;
-`Ctrl-C` exits Wald. From the final preview, going back returns to the tool choice without discarding
-the other detected setup decisions.
+Within customization, `Esc` returns to the preceding step and restores the previous answer as its
+default. From the first customization question it returns to the settings summary. `Ctrl-C` exits
+Wald. Reopening customization retains the last completed choices.
 
 For scripts, use `wald config init --yes`; use `--force` separately when existing configuration at
 the selected scope may be replaced. `--yes` keeps the detected recommended verify scripts.
@@ -501,8 +506,8 @@ resolve branch/config -> trust -> pre_create -> git worktree add -> post_create
 ```
 
 `create`, its alias `plant`, and `handoff` accept `--skip-hooks` to skip both create events,
-including command, copy, and symlink steps. The guided create and handoff flows offer the same
-choice when hooks are configured. Skipping needs no creation-time trust approval and does not
+including command, copy, and symlink steps. The guided create and handoff review offers the same
+choice under **Change options…**. Skipping needs no creation-time trust approval and does not
 change saved trust; configuration validation and carry checks remain active. Opening a tool still
 requires its usual trust check. This choice is per invocation: `wald setup <worktree>` can run
 `post_create` later after trust approval. See the [create reference](cli-reference.md#wald-create)

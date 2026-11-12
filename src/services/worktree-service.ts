@@ -926,7 +926,7 @@ export class WorktreeService {
     });
   }
 
-  private async validateBranch(workspace: Workspace, branch: string): Promise<void> {
+  async validateBranch(workspace: Workspace, branch: string): Promise<void> {
     const valid = await this.git.succeeds(["check-ref-format", "--branch", branch], {
       gitDir: workspace.gitDir,
     });

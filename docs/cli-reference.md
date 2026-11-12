@@ -12,13 +12,19 @@ resolution ([release notes](https://github.com/git/git/blob/master/Documentation
 ## General behavior
 
 ```text
-wald [--version] [--help] <command>
+wald [-C <path>] [--version] [--help] <command>
 ```
 
-Run `wald` without a command for the guided menu. Direct commands are deterministic and are preferred
-for scripts and agents. After an action completes, its output remains visible until `Esc` refreshes
-the workspace state and returns to the action list or the session is explicitly closed. Expected
-command errors use the same result view instead of immediately reopening the menu.
+Run `wald` without a command for the guided menu. Choose **Worktrees…** to select a checkout first,
+then open it, show navigation commands, run tasks or setup, rename it, or remove it. The primary
+and current checkout never offer rename or removal. Project settings group automation,
+configuration trust, and shell integration; maintenance groups status, diagnostics, batch removal, pruning, and advanced
+automation. Copying current changes is offered only from inside a worktree.
+
+The welcome banner appears once per session. Returning to the main menu shows compact workspace
+context. After an action, its output stays visible with explicit **Back** and **Exit** choices.
+Creation also offers opening the new checkout and showing navigation commands. Expected command
+errors use the same result view. Direct commands remain preferred for scripts and agents.
 
 Interactive prompts use the same navigation throughout:
 
@@ -27,9 +33,10 @@ Interactive prompts use the same navigation throughout:
 | `Esc` | Return one prompt step; cancel at a command's first prompt; exit from the main menu. |
 | `Ctrl-C` | Exit the complete Wald process with status 130. |
 
-Entered values and selections are retained when moving back. `No`, empty text, and empty checkbox
-selections remain regular answers rather than cancellation signals. Navigation does not cross an
-already completed workspace or worktree mutation.
+Prompts display the available navigation keys. Entered values and selections are retained when
+moving back. Required names are validated in the prompt so they can be corrected without restarting.
+`No`, optional empty text, and empty checkbox selections remain regular answers rather than
+cancellation signals. Navigation does not cross an already completed workspace or worktree mutation.
 
 A worktree identifier may be its directory name, branch, or path. When an optional identifier is
 omitted, `wald` uses the current worktree, the only worktree, or an interactive selection. Without a
@@ -37,6 +44,32 @@ terminal, ambiguous selection is an error.
 
 Commands discover the workspace from its root, a linked worktree, or a retained primary checkout.
 Failures use a non-zero exit status. Interrupted foreground tasks exit with status 130.
+
+### Working directory
+
+Use the global `-C <path>` or `--directory <path>` option to run Wald from an existing directory.
+Workspace discovery, the current worktree, and relative input paths use that directory. Without a
+command, `wald -C <path>` opens the guided menu there. `handoff` and `create --carry` use the selected
+worktree as their source; their preservation and trust checks remain unchanged.
+
+```sh
+wald -C ~/dev/project status
+wald -C ~/dev/project create feature/payment
+wald -C ~/dev/project/main handoff feature/review
+wald -C ~/dev/project -C main status --json
+```
+
+Relative paths resolve from the current directory. Repeated `-C` options resolve in order, each
+relative to the preceding directory. Absolute paths replace that context; symlinks resolve to their
+actual directory. Empty, missing, inaccessible, or non-directory paths fail before command execution.
+`-Cpath` and `--directory=path` are also supported. Quote paths containing spaces. Global options may
+appear before or after the subcommand; arguments after `--` are not interpreted as Wald options.
+
+`-C` alone does not change the invoking shell's directory. With shell integration, `wald -C <path>
+cd <worktree>` and `wald -C <path> create <branch> --cd` explicitly navigate after success. A failed
+command leaves the shell in its previous directory. `-C` grants neither confirmation nor trust.
+
+### Output
 
 `--json` changes representation only: it is not a dry run and never grants confirmation or trust.
 JSON mode never prompts. Successful commands write exactly one JSON document to stdout. Hook and
@@ -137,15 +170,20 @@ wald create [branch] [options]
 `--cd` cannot be combined with `--open` or `--tool`. Without a branch, a terminal offers local and
 remote candidates plus new-branch creation; non-interactive use requires a branch.
 
-After an interactive branch selection, Wald prepares the create plan. If create hooks are configured
-and `--skip-hooks` was not passed, it asks `Run create hooks?` with the pre-create and post-create
-step counts and `Yes` selected by default. Choosing `No` skips all these steps.
-The plan shows the choice before `Create this worktree?`, also defaulting to `Yes`.
-`Esc` from confirmation returns to the hook choice, or to branch selection if no hook choice was
-offered; `Esc` from the hook choice returns to branch selection. Previous values are retained.
-Revisiting the hook choice does not prepare or fetch the same plan again. Declining creation performs
-no branch, worktree, trust, or hook mutation; if preparation already fetched, Wald states that only
-remote refs were updated. Explicit branch invocations do not add either question.
+Branch search keeps a **Create branch …** action visible for a new name. Branches already checked
+out are labeled with their worktree and cannot be selected again. Empty or invalid names can be
+corrected in place.
+
+After branch selection, Wald shows the complete plan with **Create worktree**, **Change options…**,
+and **Cancel**. Options include the directory name, whether to run create hooks, and opening an
+editor or agent afterward. New branches also offer a base branch or commit, except during a handoff,
+which always starts at the current `HEAD`. Create hooks run by default unless `--skip-hooks` was
+passed or the review was changed to skip them.
+
+`Esc` from review returns to branch selection; `Esc` from options returns to the updated preview.
+Changing options validates and updates the plan without fetching again. Cancelling performs no
+branch, worktree, trust, or hook mutation; if preparation already fetched, Wald states that only
+remote refs were updated. Explicit branch invocations do not add this review.
 
 Skipping hooks needs no trust approval for creation and does not save or change configuration trust.
 Configuration validation, Git safety checks, and carry verification still apply. Opening afterward
@@ -199,7 +237,7 @@ wald handoff [branch] [options]
 is not available. Without a branch, a terminal asks for a new branch name. Without a navigation
 option, the result includes the matching `wald cd` command.
 
-The interactive handoff uses the same hook choice, create-plan confirmation, and back navigation as
+The interactive handoff uses the same create-plan review, options, and back navigation as
 `create`.
 `--json` requires a branch and has the same destination-option conflicts as create.
 
@@ -324,6 +362,9 @@ own `Task` block with resolved worktree, branch, target path, command, and worki
 step prints `RUNNING` before execution followed by its result; configured environment values are
 not printed.
 
+If a guided task selection has no configured tasks, Wald offers project automation setup or a way
+back. Supplying an explicit task still reports a missing task or configuration as an error.
+
 ```sh
 wald run verify feature-payment
 wald run dev feature-payment
@@ -369,6 +410,9 @@ after setup failed during creation. The effective project configuration must be 
 at least one `post_create` step. It uses the same structured automation output and conflict policies
 as the general hook command.
 
+In a terminal, missing setup steps offer project automation setup or a way back. Non-interactive
+use retains the missing-configuration or missing-hook error.
+
 ## `wald rename`
 
 ```text
@@ -381,10 +425,12 @@ for both. `--branch <new-branch>` supplies a different local branch name, includ
 The two options are mutually exclusive. The configured default branch and detached worktrees require
 `--keep-branch` even when a separate `--branch` is supplied.
 
-Both arguments are required without a terminal. Interactive use selects an eligible worktree and
-asks for the new directory and branch name, with no additional confirmation. `wald rename
---keep-branch` also offers eligible default-branch and detached worktrees. The main menu uses the
-default of renaming both; completion reflects the selected mode.
+Both arguments are required without a terminal. Guided use selects an eligible worktree and offers
+renaming the directory and branch together, only the directory, or a directory and separately named
+branch. Default-branch and detached worktrees offer only directory renaming. Names are validated
+before a preview shows the old and new paths and branch names. **Rename worktree** applies the
+preview; **Cancel** preserves the checkout and branch. Explicit arguments and flags retain their
+direct behavior; completion reflects the selected mode.
 
 Only direct children of the configured worktree directory are eligible. Wald refuses the primary or
 current checkout, external, missing, unavailable, or locked worktrees, and worktrees whose index contains a
@@ -433,12 +479,15 @@ wald remove [worktrees...] [--delete-branch] [--force] [--yes] [--json]
 ```
 
 Without identifiers, a terminal offers removable linked worktrees. Non-interactive use requires
-explicit identifiers and `--yes`. An interactive terminal offers each eligible local branch for
-deletion; the safe default keeps every branch. With `--force`, this choice also includes unmerged
-local branches and labels them accordingly. That branch choice confirms the removal, so Wald does
-not ask the same question again. Multiple eligible branches use an unselected checkbox list. When
-no branch choice is available, Wald retains a separate removal confirmation. `--yes` without
-`--delete-branch` keeps every branch.
+explicit identifiers and `--yes`. An interactive terminal previews each worktree, branch, and full
+path, then offers **Cancel** (selected by default), removal while keeping branches, or removal with
+eligible local branch deletion. Each action names its effect; choosing to keep branches still
+explicitly removes the worktrees. With `--delete-branch`, the removal action includes branch deletion.
+
+For multiple worktrees, optional branch deletion uses an initially empty checkbox list followed by
+a confirmation that lists the branches to delete. `Esc` returns to branch selection and retains the
+selection. With `--force`, eligible unmerged branches are also offered and clearly labeled.
+`--yes` without `--delete-branch` keeps every branch.
 
 | Option | Meaning |
 | --- | --- |
@@ -538,8 +587,13 @@ Prints the navigation function and dynamic completion definitions used by `wald 
 `wald create --cd`, and interactive tab completion.
 
 Zsh completion requires `compinit` to be initialized before loading the generated definitions.
-Bash Tab completion requires Bash 4 or newer (for `compopt`) and bash-completion to be loaded.
-The navigation wrapper also works in Apple's Bash 3.2, but its Tab completion is not fully supported.
+Bash navigation and completion work in Apple's Bash 3.2 and newer versions. When bash-completion
+is loaded, Wald uses its word parsing helper; otherwise it uses Bash's completion words directly.
+
+Completion offers directory paths for `-C` and `--directory`, then resolves branches, worktrees,
+tasks, and tools in the selected workspace. Repeated directory options use the same relative-path
+semantics as execution. Completion requests pass arguments literally, including spaces and shell
+metacharacters. Reload the generated integration in existing shells after updating Wald.
 
 ```sh
 eval "$(wald completion zsh)"

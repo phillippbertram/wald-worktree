@@ -7,6 +7,7 @@ import { isInteractiveTerminal, isPromptBackError, searchSelect } from "../../ui
 import type { CliContext } from "../context.js";
 import { ensureTrusted, resolveWorktree, success, writeLine } from "../helpers.js";
 import { nonEmptyCliString, parseCliInput } from "../input.js";
+import { offerProjectConfiguration } from "./config.js";
 
 const hookRunInputSchema = z
   .object({
@@ -61,9 +62,21 @@ export async function runProjectHook(
     });
     initialPath = worktree.path;
     const project = await context.workflow.projectForWorktree(workspace, worktree);
-    if (!project) throw new WaldError(`No project configuration found for ${worktree.path}`);
+    if (!project) {
+      if ((!input.event || presentation.emptyMessage) && isInteractiveTerminal()) {
+        if (await offerProjectConfiguration(worktree, "No project automation configured.", context))
+          continue;
+        return;
+      }
+      throw new WaldError(`No project configuration found for ${worktree.path}`);
+    }
     const configuredEvents = hookEvents.filter((event) => project.config.hooks[event].length > 0);
     if (configuredEvents.length === 0 && !input.event) {
+      if (isInteractiveTerminal()) {
+        if (await offerProjectConfiguration(worktree, "No lifecycle hooks configured.", context))
+          continue;
+        return;
+      }
       throw new WaldError("No hooks are configured in the effective project configuration.");
     }
 
@@ -97,6 +110,11 @@ export async function runProjectHook(
       }
 
       if (project.config.hooks[event].length === 0) {
+        if (presentation.emptyMessage && isInteractiveTerminal()) {
+          if (await offerProjectConfiguration(worktree, "No worktree setup configured.", context))
+            break;
+          return;
+        }
         throw new WaldError(
           presentation.emptyMessage?.(event, worktree.name) ??
             `No ${event} hook is configured for ${worktree.name}.`,

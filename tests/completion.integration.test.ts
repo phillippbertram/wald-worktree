@@ -282,4 +282,63 @@ tools:
     expect(json.stdout).not.toContain("\u001B[");
     expect(JSON.parse(json.stdout)).toEqual(expect.arrayContaining([expect.any(Object)]));
   });
+
+  it("completes the selected workspace with global options before or after the command", async () => {
+    for (const args of [
+      ["-C", workspace, "create", ""],
+      [`-C${workspace}`, "plant", ""],
+      [`--directory=${workspace}`, "create", ""],
+      ["-C", temporaryRoot, "--directory", "workspace", "create", ""],
+      ["create", "--directory", workspace, ""],
+    ]) {
+      const result = await runCli(temporaryRoot, "complete", "--", ...args);
+      expect(result.exitCode, result.stderr).toBe(0);
+      expect(suggestionValues(result.stdout)).toContain("feature/local");
+    }
+    const tasks = await runCli(temporaryRoot, "complete", "--", "-C", workspace, "run", "");
+    expect(suggestionValues(tasks.stdout)).toContain("local-check");
+    const rename = await runCli(
+      temporaryRoot,
+      "complete",
+      "--",
+      "-C",
+      path.join(workspace, "feature-local"),
+      "rename",
+      "",
+    );
+    expect(suggestionValues(rename.stdout)).not.toContain("feature-local");
+    const options = await runCli(temporaryRoot, "complete", "--", "create", "--");
+    expect(suggestionValues(options.stdout)).toContain("--directory");
+    const short = await runCli(temporaryRoot, "complete", "--", "-C");
+    expect(suggestionValues(short.stdout)).toContain("-C");
+  });
+
+  it("completes directory values relative to earlier selections and handles invalid paths quietly", async () => {
+    await fs.mkdir(path.join(temporaryRoot, "directory with spaces"));
+    const directory = await runCli(temporaryRoot, "complete", "--", "-C", "directory");
+    expect(suggestionValues(directory.stdout)).toEqual(["directory with spaces/"]);
+    const nested = await runCli(temporaryRoot, "complete", "--", "-C", workspace, "-C", "ma");
+    expect(suggestionValues(nested.stdout)).toEqual(["main/"]);
+    const attached = await runCli(temporaryRoot, "complete", "--", "--directory=directory");
+    expect(suggestionValues(attached.stdout)).toEqual(["--directory=directory with spaces/"]);
+    const compact = await runCli(temporaryRoot, "complete", "--", "-Cdirectory");
+    expect(suggestionValues(compact.stdout)).toEqual(["-Cdirectory with spaces/"]);
+    const missing = await runCli(workspace, "complete", "--", "-C", "missing", "create", "");
+    expect(missing.exitCode, missing.stderr).toBe(0);
+    expect(missing.stdout).toBe(":4");
+    expect(missing.stderr).toBe("");
+    const child = await runCli(
+      workspace,
+      "complete",
+      "--",
+      "exec",
+      "main",
+      "--",
+      "tool",
+      "-C",
+      "missing",
+      "",
+    );
+    expect(child.stdout).toBe(":4");
+  });
 });

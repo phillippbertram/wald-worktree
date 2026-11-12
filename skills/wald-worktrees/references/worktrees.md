@@ -32,11 +32,11 @@ Do not publish it unless the user explicitly requests that external change; Wald
 `git push -u <remote> HEAD` command for an authorized first push. Existing remote branches continue
 to track their same-named remote ref.
 
-An interactive branch or handoff choice offers whether to run configured create hooks, then a
-create-plan confirmation before trust, hooks, or Git mutation. `Esc` returns to the preceding choice
-and retains previous values; declining creation cancels the mutation. Explicit branch commands do
-not add these questions. In automation, `create` and `handoff --json` require a branch and
-cannot be combined with navigation or tool-opening options.
+An interactive branch or handoff choice opens a create-plan review before trust, hooks, or Git
+mutation. **Change options…** exposes the directory, eligible base, hook policy, and opening behavior.
+`Esc` returns to the preceding choice and retains previous values; cancelling creation prevents the
+mutation. Explicit branch commands do not add this review. In automation, `create` and `handoff`
+with `--json` require a branch and cannot be combined with navigation or tool-opening options.
 
 Fetching follows the effective project-configuration default. Override it only when the task
 requires it with `--fetch` or `--no-fetch`. Use `--tool <profile>` to open an editor or agent after
@@ -86,6 +86,12 @@ to the result. Branch names and upstream are `null` when not applicable.
 
 ## Execute and remove
 
+The global `-C <path>` / `--directory <path>` option selects the working directory before discovery
+or mutation. For example, `wald -C /dev/project/main handoff feature/review --json` copies changes
+from `main`, regardless of the agent's own directory. The directory must already exist. Repeated
+relative options resolve from the preceding selection. Arguments after `--` stay with the child
+command, so `wald -C /dev/project exec main -- tool -C other` passes `-C other` to `tool`.
+
 Pass command arguments after `--`:
 
 ```sh
@@ -103,10 +109,12 @@ wald remove <worktree> --yes
 Add `--json` for one machine-readable result. It does not preview or confirm the removal, so both
 the explicit worktree identifiers and `--yes` remain required.
 
-This default removes only the checkout and preserves its branch. In a terminal, Wald offers eligible
-local branches for deletion with no preselection. With `--force`, unmerged local branches are also
-offered and clearly labeled. In automation, use `--delete-branch --yes` only when the user explicitly
-authorizes deleting the corresponding local branch, and add `--force` only with permission to
+This default removes only the checkout and preserves its branch. In a terminal, Wald previews the
+target and offers explicit cancel, keep-branch removal, and branch-deleting removal actions, with
+cancel selected by default. Batch branch selection starts empty and requires a final confirmation.
+With `--force`, unmerged local branches are also offered and clearly labeled. In automation, use
+`--delete-branch --yes` only when the user explicitly authorizes deleting the corresponding local
+branch, and add `--force` only with permission to
 discard unmerged work. The configured default branch, detached checkouts, and remote branches are
 never deleted; `--force` alone grants no branch-deletion permission.
 

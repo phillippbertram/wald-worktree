@@ -77,6 +77,7 @@ describe("interactive project configuration wizard", () => {
   });
 
   it("skips the verify script selection when the task is declined", async () => {
+    prompts.selections.push("customize", "__none__", "write");
     prompts.confirmations.push(true, false, false, false, true);
 
     const document = await initializeProjectConfiguration(
@@ -95,6 +96,7 @@ describe("interactive project configuration wizard", () => {
   });
 
   it("allows an empty verify script selection after accepting the task", async () => {
+    prompts.selections.push("customize", "__none__", "write");
     prompts.confirmations.push(true, false, false, true, true);
     prompts.manySelections.push([]);
 
@@ -139,7 +141,7 @@ describe("interactive project configuration wizard", () => {
 
   it("returns one step and reuses the previous answer as the default", async () => {
     prompts.confirmations.push(false, new PromptBackError(), false, true, false, false, true);
-    prompts.selections.push("__none__");
+    prompts.selections.push("customize", "__none__", "write");
 
     await initializeProjectConfiguration(
       workspace,
@@ -155,6 +157,52 @@ describe("interactive project configuration wizard", () => {
       expect.objectContaining({ defaultValue: true }),
       expect.objectContaining({ defaultValue: false }),
     ]);
+  });
+
+  it("accepts detected settings in one review without granting trust", async () => {
+    prompts.selections.push("write");
+    const document = await initializeProjectConfiguration(
+      workspace,
+      root,
+      { force: false, yes: false, scope: "workspace", fromProject: false },
+      createContext(),
+    );
+    expect(prompts.confirmationCalls).toEqual([]);
+    expect(prompts.manyCalls).toEqual([]);
+    expect(document?.config.hooks.post_create).toHaveLength(1);
+    expect(document?.config.tasks.verify?.steps).toHaveLength(2);
+    expect(workspace.config.trustedProjectConfig).toBeNull();
+  });
+
+  it("allows inspecting the full configuration and cancelling without writing", async () => {
+    prompts.selections.push("show", "cancel");
+    const context = createContext();
+    const output = new PassThrough();
+    context.output.stdout = output;
+    const result = await initializeProjectConfiguration(
+      workspace,
+      root,
+      { force: false, yes: false, scope: "workspace", fromProject: false },
+      context,
+    );
+    expect(result).toBeNull();
+    expect(output.read()?.toString()).toContain("post_create:");
+    await expect(fs.access(path.join(root, ".wald", "project.yml"))).rejects.toThrow();
+  });
+
+  it("keeps an existing configuration when the replacement review is cancelled", async () => {
+    const target = path.join(root, ".wald", "project.yml");
+    const original = "version: 1\ndefaults:\n  fetch: false\n";
+    await fs.writeFile(target, original);
+    prompts.confirmations.push(true);
+    prompts.selections.push("cancel");
+    await initializeProjectConfiguration(
+      workspace,
+      root,
+      { force: false, yes: false, scope: "workspace", fromProject: false },
+      createContext(),
+    );
+    expect(await fs.readFile(target, "utf8")).toBe(original);
   });
 });
 

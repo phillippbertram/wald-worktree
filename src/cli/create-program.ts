@@ -24,6 +24,7 @@ import {
   createCliContext,
   createCliExecutionState,
 } from "./context.js";
+import { applyDirectories, collectDirectories } from "./directory-option.js";
 import { runMainMenu } from "./main-menu.js";
 
 export function createProgram(
@@ -35,9 +36,15 @@ export function createProgram(
     .name("wald")
     .description("🌲 Where Git worktrees grow — safe, guided workspaces for parallel work.")
     .version("0.10.0")
+    .option(
+      "-C, --directory <path>",
+      "Run from this directory; repeat to resolve paths in order",
+      collectDirectories,
+    )
     .showSuggestionAfterError()
     .showHelpAfterError()
     .configureHelp({
+      showGlobalOptions: true,
       styleTitle: (text) => pc.cyan(pc.bold(text)),
       styleCommandText: (text) => pc.green(pc.bold(text)),
       styleSubcommandText: (text) => pc.green(text),
@@ -47,15 +54,16 @@ export function createProgram(
 
   program.addHelpText(
     "after",
-    `\n${pc.cyan(pc.bold("🌱 Start here:"))}\n  ${pc.green("cd ~/dev/project && wald init")}\n  ${pc.green("wald create feature/payment --cd")}\n  ${pc.green("wald create feature/review --tool codex")}\n`,
+    `\n${pc.cyan(pc.bold("🌱 Start here:"))}\n  ${pc.green("cd ~/dev/project && wald init")}\n  ${pc.green("wald -C ~/dev/project status")}\n  ${pc.green("wald create feature/payment --cd")}\n  ${pc.green("wald create feature/review --tool codex")}\n`,
   );
 
   program.configureOutput({
     writeOut: (text) => output.stdout.write(text),
     writeErr: (text) => output.stderr.write(text),
   });
-  program.hook("preAction", (_thisCommand, actionCommand) => {
+  program.hook("preAction", async (_thisCommand, actionCommand) => {
     execution.json = actionCommand.optsWithGlobals().json === true;
+    await applyDirectories(program.opts().directory);
   });
   program.action(async () => runMainMenu(program, context));
 

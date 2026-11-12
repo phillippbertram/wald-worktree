@@ -1,3 +1,4 @@
+import path from "node:path";
 import { type Command, Option } from "commander";
 import { z } from "zod";
 import { toErrorMessage, WaldError } from "../../domain/errors.js";
@@ -6,7 +7,7 @@ import { builtInToolNames } from "../../services/tool-service.js";
 import type { CreatedWorktree, CreatePlan } from "../../services/worktree-workflow-service.js";
 import { type CreateDestination, printCreatePlan } from "../../ui/create-plan.js";
 import { style } from "../../ui/style.js";
-import { confirm, isPromptBackError, runTask } from "../../ui/terminal.js";
+import { isPromptBackError, promptText, runTask, selectValue } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
 import {
   chooseBranch,
@@ -124,21 +125,27 @@ export async function createWorktree(
   input: CreateInput,
   context: CliContext,
 ): Promise<Worktree | null> {
+  input = { ...input };
   const workspace = await context.workspaces.find();
   const promptedForBranch = input.branch === undefined;
   const branchState: { selectedValue?: string; branchValue?: string } = {};
-  const hookState = { runHooks: true };
   let plan: CreatePlan;
   while (true) {
     const branch =
       input.branch ??
       (input.carry
-        ? await chooseNewBranch("Carry › New branch · Branch name:", branchState)
+        ? await chooseNewBranch("Handoff › New branch · Branch name:", branchState, (value) =>
+            context.worktrees.validateBranch(workspace, value),
+          )
         : await chooseBranch(workspace, context.worktrees, branchState));
     plan = await prepareCreatePlan(workspace, branch, input, context);
     if (!promptedForBranch) break;
     try {
-      if (await confirmCreatePlan(plan, input, context, hookState)) break;
+      const reviewed = await reviewCreatePlan(plan, input, context);
+      if (reviewed) {
+        plan = reviewed;
+        break;
+      }
       writeLine(context.output.stdout, createCancellationMessage(plan));
       return null;
     } catch (error) {
@@ -257,29 +264,124 @@ async function prepareCreatePlan(
   return input.json ? await prepare() : await runTask("Preparing worktree", prepare);
 }
 
-async function confirmCreatePlan(
+async function reviewCreatePlan(
   plan: CreatePlan,
   input: CreateInput,
   context: CliContext,
-  hookState: { runHooks: boolean },
-): Promise<boolean> {
-  const preCreateCount = plan.project?.config.hooks.pre_create.length ?? 0;
-  const postCreateCount = plan.project?.config.hooks.post_create.length ?? 0;
-  const promptForHooks = !input.skipHooks && preCreateCount + postCreateCount > 0;
+): Promise<CreatePlan | null> {
   while (true) {
-    if (promptForHooks) {
-      hookState.runHooks = await confirm(
-        `Run create hooks? (${preCreateCount} pre-create, ${postCreateCount} post-create steps)`,
-        hookState.runHooks,
+    printCreatePlan(plan, createDestination(input), context.output);
+    const action = await selectValue(
+      "Create › Review · Ready to create?",
+      [
+        { label: "Create worktree", value: "create" },
+        {
+          label: "Change options…",
+          value: "options",
+          description: "Directory, base branch, setup, and opening.",
+        },
+        { label: "Cancel", value: "cancel" },
+      ],
+      { navigation: "back", initialValue: "create" },
+    );
+    if (action === "create") return plan;
+    if (action === "cancel") return null;
+    try {
+      plan = await changeCreateOptions(plan, input, context);
+    } catch (error) {
+      if (!isPromptBackError(error)) throw error;
+    }
+  }
+}
+
+async function changeCreateOptions(
+  plan: CreatePlan,
+  input: CreateInput,
+  context: CliContext,
+): Promise<CreatePlan> {
+  while (true) {
+    const canChangeBase = plan.prepared.strategy.type === "new" && !input.carry;
+    let action: string;
+    try {
+      action = await selectValue(
+        "Create › Options · What would you like to change?",
+        [
+          ...(canChangeBase ? [{ label: "Base branch or commit", value: "base" }] : []),
+          { label: "Worktree directory name", value: "name" },
+          {
+            label: "Run or skip create hooks",
+            value: "hooks",
+            description: "Includes configured copy and symlink steps.",
+          },
+          { label: "After creation", value: "destination" },
+          { label: "Back to preview", value: "back" },
+        ],
         { navigation: "back" },
       );
-      plan.skipHooks = !hookState.runHooks;
-    }
-    printCreatePlan(plan, createDestination(input), context.output);
-    try {
-      return await confirm("Create this worktree?", true, { navigation: "back" });
     } catch (error) {
-      if (isPromptBackError(error) && promptForHooks) continue;
+      if (isPromptBackError(error)) return plan;
+      throw error;
+    }
+    if (action === "back") return plan;
+    const next = { ...input };
+    try {
+      if (action === "base" || action === "name") {
+        const key = action === "base" ? "from" : "name";
+        const value = await promptText(
+          action === "base"
+            ? "Create › Base · Branch or commit (empty: configured default):"
+            : "Create › Directory · Directory name (empty: generated from branch):",
+          action === "base"
+            ? (input.from ??
+                (plan.prepared.strategy.type === "new" ? plan.prepared.strategy.base : undefined))
+            : (input.name ?? path.basename(plan.prepared.target)),
+          {
+            navigation: "back",
+            validateAsync: async (value) => {
+              await prepareCreatePlan(
+                plan.workspace,
+                plan.prepared.branch,
+                { ...input, [key]: value || undefined, fetch: false },
+                context,
+              );
+            },
+          },
+        );
+        next[key] = value || undefined;
+      } else if (action === "hooks") {
+        next.skipHooks =
+          (await selectValue(
+            "Create › Setup · Run configured create hooks?",
+            [
+              { label: "Run hooks", value: "run" },
+              { label: "Skip hooks, including copy and symlink", value: "skip" },
+            ],
+            { navigation: "back", initialValue: input.skipHooks ? "skip" : "run" },
+          )) === "skip";
+      } else if (action === "destination") {
+        const destination = await selectValue(
+          "Create › Destination · After creation:",
+          [
+            { label: "Stay here and show navigation commands", value: "stay" },
+            { label: "Open in an editor or agent", value: "open" },
+          ],
+          { navigation: "back", initialValue: input.open || input.tool ? "open" : "stay" },
+        );
+        next.cd = false;
+        next.open = destination === "open";
+        if (!next.open) next.tool = undefined;
+      }
+      const updated = await prepareCreatePlan(
+        plan.workspace,
+        plan.prepared.branch,
+        { ...next, fetch: false },
+        context,
+      );
+      updated.fetchedRemote = plan.fetchedRemote;
+      Object.assign(input, next);
+      plan = updated;
+    } catch (error) {
+      if (isPromptBackError(error)) continue;
       throw error;
     }
   }
