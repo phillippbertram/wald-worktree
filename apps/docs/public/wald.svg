@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <title>Wald</title>
+  <rect width="48" height="48" rx="12" fill="#1F4D3A"/>
+  <path d="m24 8 9 12h-5l8 11H12l8-11h-5l9-12Zm0 23v8" fill="none" stroke="#D4EDA9" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round"/>
+</svg>

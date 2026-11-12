@@ -1,90 +1,35 @@
-# Worktrees explained
+---
+title: "Why worktrees?"
+description: "Keep unfinished work open while you switch tasks or start a coding agent."
+---
 
-Git worktrees let one repository have several working folders at the same time. You can leave a
-half-finished feature open in one folder and fix a production bug in another. This guide explains
-what Git shares between those folders, what stays separate, and where Wald helps.
+You're halfway through a search feature when a production fix comes in. With one checkout, you
+need to put away the unfinished changes before switching branches. With a second worktree, you
+can leave the feature open and start the fix in a separate folder.
 
 ## The forest as a mental model
 
-Wald borrows the forest picture to explain how the pieces fit together. Git, the CLI, and the
-configuration still use their proper technical names:
-
-| Forest image | Technical meaning |
-| --- | --- |
-| Forest | The complete Wald workspace. |
-| Shared ground and root network | Git's common directory (`repo.git` in a standalone workspace), which keeps shared objects, refs, remotes, and worktree metadata. |
-| Tree | An independent worktree folder with its own files, `HEAD`, index, and processes. |
-| New growth | A feature, hotfix, review, experiment, or agent task created in its own worktree. |
-
-The default branch is the preferred base for new work and the comparison target for safe removal;
-Wald does not enforce one history. An explicit `--from` may start new work from another commit.
+Picture separate trees with connected roots. The roots are one Git repository: commits,
+branches, tags, and remotes. Each tree is a worktree, a working directory with its own
+checked-out files and staging area.
 
 ## The four building blocks
 
-Most worktree confusion disappears once these four terms are kept separate:
-
-| Term | Think of it as | Example |
-| --- | --- | --- |
-| Repository | The shared Git database and history | Commits, branches, tags, and remotes |
-| Branch | A movable name for a line of commits | `main`, `feature/payment` |
-| Checkout | Files from one commit written into a folder | The files currently visible in an editor |
-| Worktree | One checkout plus its own Git working state | `feature-payment/` with its own `HEAD` and index |
-
-A normal clone combines one repository and one main worktree. Linked worktrees add more checkout
-folders without cloning the complete repository again.
-
-```mermaid
-flowchart TB
-    Repo["Shared ground · Git repository and history"]
-    Repo --> History["Commits · branches · tags · remotes"]
-    Repo --> Main["Main tree · worktree<br/>HEAD: main"]
-    Repo --> Feature["Feature tree · linked worktree<br/>HEAD: feature/payment"]
-    Repo --> Review["Review tree · linked worktree<br/>HEAD: contributor/fix"]
-
-    Main --> MainFiles["own files · index · dependencies"]
-    Feature --> FeatureFiles["own files · index · dependencies"]
-    Review --> ReviewFiles["own files · index · dependencies"]
-```
-
-In a Wald standalone workspace, the same relationship is visible on disk:
-
-```text
-project/
-├── .wald/                    Wald workspace metadata and shared local files
-├── repo.git/                shared Git objects, refs, remotes, and worktree metadata
-├── main/                    files + HEAD + index for main
-├── feature-payment/         files + HEAD + index for feature/payment
-└── contributor-fix/         files + HEAD + index for contributor/fix
-```
-
-You work in each folder as usual: open it in an editor, run `git status`, edit files, commit, and
-start processes. A commit created in one worktree immediately becomes part of the shared repository
-and is visible from the others.
+A branch names a line of commits. A checkout is the set of files Git writes into a directory. A
+worktree combines those files with its own HEAD and index. An ordinary clone starts with one
+worktree, and Git can attach more to the same repository.
 
 ## Shared and independent state
 
-Files and staging are separate; commits and refs are not. In practice, that means:
-
-```mermaid
-flowchart TB
-    Shared["Shared repository state"]
-    Shared --> Objects["commits and Git objects"]
-    Shared --> Refs["branches, tags, remotes, stashes"]
-
-    Local["Per-worktree state"]
-    Local --> GitState["HEAD and index"]
-    Local --> Files["checked-out and untracked files"]
-    Local --> Runtime["dependencies, build output, editors, processes"]
-```
-
-| Action | Effect |
+| Shared repository | Each worktree |
 | --- | --- |
-| Edit a file | Changes only that worktree's folder. |
-| Stage a file | Changes only that worktree's index. |
-| Create a commit | Adds the commit to the shared repository. |
-| Fetch a remote | Updates shared remote-tracking refs for all worktrees. |
-| Install dependencies | Writes into that worktree unless the package manager uses an external cache. |
-| Start a server | Starts a separate process, but ports and external services may still conflict. |
+| Commits, branches, tags, remotes, and stashes | Files, HEAD, index, and generated output |
+| A fetch updates remote-tracking refs for every checkout | Editing or staging a file affects its own checkout |
+| Commits become visible from other worktrees | Editors and agents can keep working in their assigned folders |
+
+Separate folders give agents separate local files and staging areas. Ports, databases,
+containers, and other services still need coordination. Git generally allows each branch to be
+checked out in only one worktree at a time.
 
 ## Four everyday workflows
 
@@ -163,43 +108,8 @@ wald remove experiment-migration
 
 ### 4. Give parallel agents separate files
 
-Two coding agents need the same repository, but they must not share staged, unstaged, untracked, or
-generated files. Give each task its own branch and folder:
-
-```sh
-wald create feature/api
-wald create feature/ui
-wald list
-```
-
-```text
-project/
-├── feature-api/             API agent, commits on feature/api
-└── feature-ui/              UI agent, commits on feature/ui
-```
-
-Open the agents from separate terminals so foreground tools can run at the same time:
-
-```sh
-# Terminal A
-wald open feature-api --tool codex
-
-# Terminal B
-wald open feature-ui --tool codex-app
-```
-
-Each agent owns a real checkout. When the project exposes a `verify` task, verify and remove each
-task independently:
-
-```sh
-wald run verify feature-api
-wald remove feature-api
-wald run verify feature-ui
-wald remove feature-ui
-```
-
-Wald separates filesystem state; it does not coordinate agent decisions, running sessions, ports,
-databases, or other shared services.
+Create one worktree for the API and one for the UI. Each agent can edit, stage, and run tests in
+its own folder. Follow [Parallel coding agents](agent-workflows.md) to create and open both.
 
 ## Carry unfinished code into another worktree
 
@@ -239,36 +149,14 @@ Explicit branch commands do not add this review.
 
 Creation and removal follow the same path in every supported workspace layout. **Wald Flow** is the
 name of the recommended flat layout, not a branching model or this create-to-remove sequence.
-The diagram shows creation with hooks enabled; skipping them preserves Git creation and carry checks.
+Creation resolves the branch and project configuration, checks trust for enabled automation,
+and runs the configured setup around the Git checkout. When carrying code, Wald verifies the
+copy before running post-create setup. If setup fails, retry in the retained target with
+`wald setup`.
 
-```mermaid
-flowchart TB
-    Request["wald create or handoff"] --> Resolve["Resolve branch and trusted configuration"]
-    Resolve --> Pre["Run pre_create"]
-    Pre --> Add["Create the Git worktree"]
-    Add --> Carry["Optional carry<br/>apply and verify local code"]
-    Carry --> Post["Run post_create setup"]
-    Carry -- transfer fails --> Rollback["Roll back fresh checkout and branch"]
-    Post --> Ready["Edit · commit · run · review"]
-    Post -- setup fails --> Retry["Keep checkout<br/>retry with wald setup"]
-    Retry --> Ready
-    Ready --> Inspect["wald remove safety checks"]
-    Ready -. optional .-> Verify["wald run verify"]
-    Verify --> Inspect
-    Inspect --> Remove["Remove linked checkout<br/>keep branch"]
-
-    Missing["Folder was already deleted outside Git"] --> Preview["wald prune<br/>preview stale metadata"]
-    Preview --> Apply["wald prune --apply<br/>remove metadata only"]
-
-    Apply --> Repair["wald init<br/>repair missing workspace container or link"]
-    Apply --> Uninit["wald uninit<br/>preview removal of Wald metadata"]
-```
-
-`remove` is the normal finish path. `prune` is not a faster removal command; it repairs stale Git
-administrative state after a registered directory is already missing. Locked registrations are
-preserved. `init` repairs the workspace infrastructure after stale registrations are gone;
-`uninit` is the explicit path for disconnecting the repository from Wald. A normal removal retires
-one worktree while its branch and shared Git history survive.
+Finish with `wald remove` after checking the worktree state. Use `wald prune` to preview stale
+Git registrations for directories that are already missing. See [Finish a worktree](finish.md)
+for a worked example.
 
 ## Workspace layouts
 

@@ -18,13 +18,15 @@ user-facing CLI text.
 
 ## Sources of Truth
 
-- `package.json` owns the supported runtime, package manager, dependencies, and project scripts.
-- `src/cli/` owns commands, option parsing, input validation, and interactive orchestration.
-- `src/domain/` owns shared domain contracts and expected domain errors.
-- `src/services/` owns workflows and business behavior.
-- `src/infrastructure/` owns Git, process, filesystem, and path boundaries.
-- `src/ui/` owns terminal prompts and presentation, not repository mutation rules.
-- `tests/` owns executable behavior and regression coverage.
+- The root `package.json` owns the runtime, package manager, and shared scripts. Each workspace
+  package owns its own dependencies and build scripts.
+- `packages/cli/src/cli/` owns commands, option parsing, input validation, and interactive orchestration.
+- `packages/cli/src/domain/` owns shared domain contracts and expected domain errors.
+- `packages/cli/src/services/` owns workflows and business behavior.
+- `packages/cli/src/infrastructure/` owns Git, process, filesystem, and path boundaries.
+- `packages/cli/src/ui/` owns terminal prompts and presentation, not repository mutation rules.
+- `packages/cli/tests/` owns executable behavior and regression coverage.
+- `apps/docs/` owns the Fumadocs site, demo tooling, and static export.
 - `README.md` owns the product overview and first-use journey.
 - `docs/brand.md` owns the product name, message, visual language, and tone.
 - `docs/` owns detailed CLI, configuration, worktree, and agent-workflow documentation.
@@ -45,7 +47,7 @@ Use pnpm for all package operations. Do not introduce npm, Yarn, or Bun lockfile
 
 ```sh
 pnpm install
-pnpm dev -- --help
+pnpm dev --help
 pnpm lint
 pnpm typecheck
 pnpm test
@@ -53,12 +55,13 @@ pnpm build
 pnpm run ci
 ```
 
-- `pnpm dev -- <arguments>` runs the CLI from TypeScript source.
-- `pnpm test -- <test-file>` runs focused Vitest coverage.
-- `pnpm run ci` is the canonical full validation: lint, typecheck, tests, and build.
+- `pnpm dev <arguments>` runs the CLI from TypeScript source.
+- `pnpm test <test-file>` runs focused Vitest coverage.
+- `pnpm run ci` is the canonical full validation: CLI lint, typecheck, tests, and build, plus docs validation and static export.
 - `pnpm lint:fix` rewrites files. Do not run it across a dirty worktree unless every resulting
   change is in scope. Prefer formatting only files owned by the current task.
-- `dist/` is generated and ignored. Never edit or commit it manually.
+- CLI builds go to `packages/cli/dist/` and the static site exports to `apps/docs/out/`. Both
+  directories are generated and ignored.
 
 Do not add or upgrade dependencies unless the requested change needs them. Explain the need and
 keep both manifest and lockfile consistent when a dependency change is in scope.
@@ -98,7 +101,8 @@ files, or local configuration based on an inferred cleanup request.
 
 ## TypeScript and CLI Conventions
 
-- This repository uses strict TypeScript, ESM, NodeNext module resolution, and ES2024.
+- Use strict TypeScript, ESM, and ES2024. The CLI uses NodeNext resolution and the docs app uses
+  bundler resolution.
 - Use `.js` extensions for relative imports from TypeScript source.
 - Prefer precise types, discriminated unions, and `unknown` plus validation over `any` or unsafe
   assertions.

@@ -1,0 +1,354 @@
+{
+  "revision": "f0b520bd44b9476733f2745cb781a8da81f39855",
+  "demos": {
+    "create": {
+      "compact": {
+        "file": "create-compact.cast",
+        "chapters": [
+          {
+            "time": 0.25,
+            "seek": 0.85,
+            "title": "Open Wald",
+            "description": "The menu opens in Canopy’s main worktree.",
+            "command": "wald",
+            "lines": [
+              "🌲  🌳  🌲",
+              "Where Git worktrees grow.",
+              "Workspace canopy · Current main (main) · 1 worktree",
+              "◆  What would you like to do?",
+              "│  ● Create worktree (Create an isolated checkout for",
+              "│  ○ Worktrees…",
+              "│  ○ Project tasks…",
+              "│  ○ Project settings…",
+              "│  ○ Maintenance & diagnostics…"
+            ]
+          },
+          {
+            "time": 4.55,
+            "seek": 5.75,
+            "title": "Review the plan",
+            "description": "Wald resolves the branch, destination and project setup before creating files.",
+            "command": "",
+            "lines": [
+              "◆  Create › New branch · Branch name:",
+              "Create plan",
+              "│  feature/search",
+              "◆  Create › Review · Ready to create?"
+            ]
+          },
+          {
+            "time": 9.45,
+            "seek": 10.65,
+            "title": "Prepare the worktree",
+            "description": "Wald runs the trusted setup and offers to open the new checkout.",
+            "command": "",
+            "lines": [
+              "│  Local settings prepared",
+              "◆  Created feature-search at /demo/canopy/feature-search",
+              "◆  What next?"
+            ]
+          },
+          {
+            "time": 14.35,
+            "seek": 14.95,
+            "title": "Inspect the result",
+            "description": "Use -C to inspect the new checkout from the workspace root.",
+            "command": "wald -C feature-search status",
+            "lines": [
+              "Current  feature-search · feature/search · linked · clean",
+              "Worktrees  2 total · 2 clean · 0 modified · 0 locked · 0 missing · 0 unavailable"
+            ]
+          }
+        ]
+      },
+      "wide": {
+        "file": "create-wide.cast",
+        "chapters": [
+          {
+            "time": 0.25,
+            "seek": 0.85,
+            "title": "Open Wald",
+            "description": "The menu opens in Canopy’s main worktree.",
+            "command": "wald",
+            "lines": [
+              "🌲  🌳  🌲",
+              "Where Git worktrees grow.",
+              "Workspace canopy · Current main (main) · 1 worktree",
+              "◆  What would you like to do?",
+              "│  ● Create worktree (Create an isolated checkout for a branch.)",
+              "│  ○ Worktrees…",
+              "│  ○ Project tasks…",
+              "│  ○ Project settings…",
+              "│  ○ Maintenance & diagnostics…"
+            ]
+          },
+          {
+            "time": 4.55,
+            "seek": 5.75,
+            "title": "Review the plan",
+            "description": "Wald resolves the branch, destination and project setup before creating files.",
+            "command": "",
+            "lines": [
+              "◆  Create › New branch · Branch name:",
+              "Create plan",
+              "│  feature/search",
+              "◆  Create › Review · Ready to create?"
+            ]
+          },
+          {
+            "time": 9.45,
+            "seek": 10.65,
+            "title": "Prepare the worktree",
+            "description": "Wald runs the trusted setup and offers to open the new checkout.",
+            "command": "",
+            "lines": [
+              "│  Local settings prepared",
+              "◆  Created feature-search at /demo/canopy/feature-search",
+              "◆  What next?"
+            ]
+          },
+          {
+            "time": 14.35,
+            "seek": 14.95,
+            "title": "Inspect the result",
+            "description": "Use -C to inspect the new checkout from the workspace root.",
+            "command": "wald -C feature-search status",
+            "lines": [
+              "Current  feature-search · feature/search · linked · clean",
+              "Worktrees  2 total · 2 clean · 0 modified · 0 locked · 0 missing · 0 unavailable"
+            ]
+          }
+        ]
+      }
+    },
+    "parallel": {
+      "compact": {
+        "file": "parallel-compact.cast",
+        "chapters": [
+          {
+            "time": 0.25,
+            "seek": 0.85,
+            "title": "Make room for API work",
+            "description": "The API task gets a separate checkout and index.",
+            "command": "wald create feature/api",
+            "lines": [
+              "◆  Created feature-api at /demo/canopy/feature-api",
+              "Upstream: none"
+            ]
+          },
+          {
+            "time": 4.55,
+            "seek": 5.15,
+            "title": "Make room for UI work",
+            "description": "The UI task has its own folder while the API checkout stays available.",
+            "command": "wald create feature/ui",
+            "lines": [
+              "◆  Created feature-ui at /demo/canopy/feature-ui",
+              "Upstream: none"
+            ]
+          },
+          {
+            "time": 8.85,
+            "seek": 9.45,
+            "title": "See both checkouts",
+            "description": "Use the listed paths to open each agent in its assigned worktree.",
+            "command": "wald list",
+            "lines": [
+              "Branch  feature/api",
+              "Branch  feature/ui"
+            ]
+          }
+        ]
+      },
+      "wide": {
+        "file": "parallel-wide.cast",
+        "chapters": [
+          {
+            "time": 0.25,
+            "seek": 0.85,
+            "title": "Make room for API work",
+            "description": "The API task gets a separate checkout and index.",
+            "command": "wald create feature/api",
+            "lines": [
+              "◆  Created feature-api at /demo/canopy/feature-api",
+              "Upstream: none"
+            ]
+          },
+          {
+            "time": 4.55,
+            "seek": 5.15,
+            "title": "Make room for UI work",
+            "description": "The UI task has its own folder while the API checkout stays available.",
+            "command": "wald create feature/ui",
+            "lines": [
+              "◆  Created feature-ui at /demo/canopy/feature-ui",
+              "Upstream: none"
+            ]
+          },
+          {
+            "time": 8.85,
+            "seek": 9.45,
+            "title": "See both checkouts",
+            "description": "Use the listed paths to open each agent in its assigned worktree.",
+            "command": "wald list",
+            "lines": [
+              "feature-api  feature/api  linked  clean  /demo/canopy/feature-api",
+              "feature-ui  feature/ui  linked  clean  /demo/canopy/feature-ui"
+            ]
+          }
+        ]
+      }
+    },
+    "handoff": {
+      "compact": {
+        "file": "handoff-compact.cast",
+        "chapters": [
+          {
+            "time": 0.25,
+            "seek": 0.85,
+            "title": "Check the source",
+            "description": "The original checkout has staged, unstaged and untracked work.",
+            "command": "wald -C feature-search status",
+            "lines": [
+              "Current  feature-search · feature/search · linked · modified"
+            ]
+          },
+          {
+            "time": 4.55,
+            "seek": 5.15,
+            "title": "Copy the code",
+            "description": "Wald starts a fresh branch at the source commit and copies its local changes.",
+            "command": "wald -C feature-search handoff feature/review",
+            "lines": [
+              "Carried: 1 staged, 1 unstaged, 1 untracked",
+              "Source kept unchanged: /demo/canopy/feature-search"
+            ]
+          },
+          {
+            "time": 8.85,
+            "seek": 9.45,
+            "title": "Check the target",
+            "description": "Both folders contain the changes. Open a fresh session in the review worktree.",
+            "command": "wald -C feature-review status",
+            "lines": [
+              "Current  feature-review · feature/review · linked · modified"
+            ]
+          }
+        ]
+      },
+      "wide": {
+        "file": "handoff-wide.cast",
+        "chapters": [
+          {
+            "time": 0.25,
+            "seek": 0.85,
+            "title": "Check the source",
+            "description": "The original checkout has staged, unstaged and untracked work.",
+            "command": "wald -C feature-search status",
+            "lines": [
+              "Current  feature-search · feature/search · linked · modified"
+            ]
+          },
+          {
+            "time": 4.55,
+            "seek": 5.15,
+            "title": "Copy the code",
+            "description": "Wald starts a fresh branch at the source commit and copies its local changes.",
+            "command": "wald -C feature-search handoff feature/review",
+            "lines": [
+              "Carried: 1 staged, 1 unstaged, 1 untracked",
+              "Source kept unchanged: /demo/canopy/feature-search"
+            ]
+          },
+          {
+            "time": 8.85,
+            "seek": 9.45,
+            "title": "Check the target",
+            "description": "Both folders contain the changes. Open a fresh session in the review worktree.",
+            "command": "wald -C feature-review status",
+            "lines": [
+              "Current  feature-review · feature/review · linked · modified"
+            ]
+          }
+        ]
+      }
+    },
+    "cleanup": {
+      "compact": {
+        "file": "cleanup-compact.cast",
+        "chapters": [
+          {
+            "time": 0.25,
+            "seek": 0.85,
+            "title": "Protect unfinished work",
+            "description": "Wald rejects removal because the checkout contains local changes.",
+            "command": "wald remove feature-search",
+            "lines": [
+              "- the worktree contains staged, unstaged, or untracked changes"
+            ]
+          },
+          {
+            "time": 4.55,
+            "seek": 5.75,
+            "title": "Review the removal",
+            "description": "The clean review checkout is eligible. The menu starts on Cancel.",
+            "command": "wald remove review-ui",
+            "lines": [
+              "Removal plan",
+              "│  ○ Remove worktree, keep branches",
+              "Branch kept: review/ui"
+            ]
+          },
+          {
+            "time": 9.45,
+            "seek": 10.05,
+            "title": "Check what remains",
+            "description": "The review directory is gone and the modified search checkout remains.",
+            "command": "wald list",
+            "lines": [
+              "Branch  feature/search",
+              "Status  modified"
+            ]
+          }
+        ]
+      },
+      "wide": {
+        "file": "cleanup-wide.cast",
+        "chapters": [
+          {
+            "time": 0.25,
+            "seek": 0.85,
+            "title": "Protect unfinished work",
+            "description": "Wald rejects removal because the checkout contains local changes.",
+            "command": "wald remove feature-search",
+            "lines": [
+              "- the worktree contains staged, unstaged, or untracked changes"
+            ]
+          },
+          {
+            "time": 4.55,
+            "seek": 5.75,
+            "title": "Review the removal",
+            "description": "The clean review checkout is eligible. The menu starts on Cancel.",
+            "command": "wald remove review-ui",
+            "lines": [
+              "Removal plan",
+              "│  ○ Remove worktree, keep branches",
+              "Branch kept: review/ui"
+            ]
+          },
+          {
+            "time": 9.45,
+            "seek": 10.05,
+            "title": "Check what remains",
+            "description": "The review directory is gone and the modified search checkout remains.",
+            "command": "wald list",
+            "lines": [
+              "feature-search  feature/search  linked  modified  /demo/canopy/feature-search"
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

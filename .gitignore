@@ -4,3 +4,13 @@ dist/
 coverage/
 .DS_Store
 *.log
+
+/apps/docs/.next/
+/apps/docs/.source/
+/apps/docs/out/
+/apps/docs/next-env.d.ts
+/apps/docs/test-results/
+/apps/docs/playwright-report/
+__pycache__/
+/apps/docs/tsconfig.tsbuildinfo
+/packages/cli/skills/

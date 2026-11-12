@@ -1,4 +1,7 @@
-# Configuration
+---
+title: "Configuration"
+description: "Reference for workspace layouts, project hooks, tasks, tool profiles, and trust."
+---
 
 Every Wald workspace has one local configuration and one directory for shared local files. Project
 setup may come from two configuration files. Every YAML document is strict and versioned; unknown

@@ -49,8 +49,8 @@ jobs:
       - run: pnpm test:binary
       - run: pnpm test:binary:smoke
       - name: Archive executable with permissions
-        run: tar -czf dist/wald-binary.tar.gz -C dist/binary wald
+        run: tar -czf packages/cli/dist/wald-binary.tar.gz -C packages/cli/dist/binary wald
       - uses: actions/upload-artifact@v7
         with:
           name: wald-${{ runner.os }}-${{ runner.arch }}
-          path: dist/wald-binary.tar.gz
+          path: packages/cli/dist/wald-binary.tar.gz
