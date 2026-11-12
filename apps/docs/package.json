@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev --webpack",
     "build": "next build --webpack",
-    "check": "python3 scripts/record-demos.py --check && pnpm build && node scripts/check-export.mjs",
+    "check": "python3 scripts/test-record-demos.py && python3 scripts/record-demos.py --check && pnpm build && node scripts/check-export.mjs",
     "test:browser": "playwright test",
     "demos:record": "python3 scripts/record-demos.py"
   },

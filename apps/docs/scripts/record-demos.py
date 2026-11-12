@@ -18,6 +18,7 @@ import sys
 import tempfile
 import termios
 import time
+from typing import NamedTuple
 
 ROOT = Path(__file__).resolve().parents[3]
 ASSETS = ROOT / "apps/docs/public/demos"
@@ -25,6 +26,14 @@ MANIFEST = ROOT / "apps/docs/lib/demos.generated.json"
 ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 WIDTHS = {"compact": 64, "wide": 104}
 ROWS = 19
+# The recorder enables color and Clack renders this footer at the end of an active prompt.
+PROMPT_FOOTER = "\n\x1b[36m└\x1b[39m".encode("utf-8")
+
+
+class PromptInput(NamedTuple):
+    title: str
+    keys: bytes
+    end: bytes = PROMPT_FOOTER + b"\r\n"
 
 
 def plain(text):
@@ -112,7 +121,7 @@ def capture(fixture, argv, cwd, width, inputs, expected):
     )
     os.close(slave)
 
-    def read_until(needle):
+    def read_until(prompt=None):
         output = bytearray()
         deadline = time.monotonic() + 20
         while time.monotonic() < deadline:
@@ -125,19 +134,27 @@ def capture(fixture, argv, cwd, width, inputs, expected):
                     raise
                 chunk = b""
             if not chunk:
-                if needle:
-                    raise AssertionError(f"Wald exited before {needle!r}: {fixture.normalize(plain(output.decode(errors='replace')))}")
+                if prompt:
+                    transcript = fixture.normalize(plain(output.decode(errors="replace")))
+                    raise AssertionError(
+                        f"Wald exited before {prompt.title!r} finished rendering: {transcript}"
+                    )
                 return fixture.normalize(output.decode())
             output.extend(chunk)
-            if needle and needle in plain(output.decode(errors="replace")):
-                return fixture.normalize(output.decode())
-        raise TimeoutError(f"Timed out waiting for {needle or 'Wald to exit'}: {fixture.normalize(plain(output.decode(errors='replace')))}")
+            # A PTY read can stop anywhere, even inside a UTF-8 character or escape sequence.
+            if prompt and output.endswith(prompt.end):
+                frame = output.decode()
+                if prompt.title in plain(frame):
+                    return fixture.normalize(frame)
+        target = f"{prompt.title!r} to finish rendering" if prompt else "Wald to exit"
+        transcript = fixture.normalize(plain(output.decode(errors="replace")))
+        raise TimeoutError(f"Timed out waiting for {target}: {transcript}")
 
     try:
-        for needle, keys in inputs:
-            yield read_until(needle)
-            os.write(master, keys)
-        yield read_until(None)
+        for prompt in inputs:
+            yield read_until(prompt)
+            os.write(master, prompt.keys)
+        yield read_until()
         assert process.wait(timeout=5) == expected, (argv, process.returncode)
     finally:
         if process.poll() is None:
@@ -202,15 +219,16 @@ def guided(fixture, width):
     )
     fixture.run([*fixture.wald, "config", "trust", "--yes"], fixture.workspace)
     session = Recording(fixture, width)
-    keys = [
-        ("What would you like to do?", b"\r"),
-        ("Select a branch or create a new one:", b"\r"),
-        ("Branch name:", b"feature/search\r"),
-        ("Create › Review · Ready to create?", b"\r"),
-        ("What next?", b"\r"),
-        ("What would you like to do?", b"\x1b"),
+    inputs = [
+        PromptInput("What would you like to do?", b"\r"),
+        # Clack's autocomplete prompt does not emit a newline after the footer.
+        PromptInput("Select a branch or create a new one:", b"\r", end=PROMPT_FOOTER),
+        PromptInput("Branch name:", b"feature/search\r"),
+        PromptInput("Create › Review · Ready to create?", b"\r"),
+        PromptInput("What next?", b"\r"),
+        PromptInput("What would you like to do?", b"\x1b"),
     ]
-    frames = iter(capture(fixture, fixture.wald, fixture.main, width, keys, 0))
+    frames = iter(capture(fixture, fixture.wald, fixture.main, width, inputs, 0))
     session.chapter(
         "Open Wald", "The menu opens in Canopy’s main worktree.", "wald",
         ["\x1b[1;32m❯\x1b[0m wald\r\n", next(frames)],
@@ -297,7 +315,7 @@ def cleanup(fixture, width):
     session.command(
         "Review the removal", "The clean review checkout is eligible. The menu starts on Cancel.",
         "wald remove review-ui", ["Removal plan", "Remove worktree, keep branches", "Branch kept:"],
-        inputs=[("Remove › Action · What would you like to do?", b"\x1b[B\r")],
+        inputs=[PromptInput("Remove › Action · What would you like to do?", b"\x1b[B\r")],
     )
     session.command(
         "Check what remains", "The review directory is gone and the modified search checkout remains.",
