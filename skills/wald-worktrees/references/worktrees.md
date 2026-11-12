@@ -9,8 +9,9 @@ the same commands and safety rules.
 Use `wald status --json` for the current context and local tracking comparison. Use `wald list --json`
 for complete worktree records and `wald cd <name-or-branch>` for the canonical path. `wald cd` only
 changes the parent shell when shell integration is installed.
-The experimental standalone binary includes its JavaScript runtime. Its doctor check is
-`runtime.bun` instead of `runtime.node`; configured hooks and tools still need their own executables.
+The [release binary](https://github.com/phillippbertram/wald-worktree/releases) includes the Bun
+runtime, reported as `runtime.bun` by `wald doctor`. Configured hooks and tools need their own
+executables.
 Use `wald doctor --json` for a read-only runtime, configuration, path, Git-registration, trust, file
 source, and executable diagnosis. Review its suggestions before applying any repair.
 

@@ -31,8 +31,7 @@ features can wait until everyday use shows which ones are actually needed.
   safe to run in parallel; a later doctor check can identify abandoned operations before recovery.
 - Run one command across explicitly selected worktrees and report a result for each one.
 - Show optional GitHub or GitLab pull-request metadata.
-- Prepare the package for distribution with publishable boundaries, a changelog, provenance,
-  release automation, and global-install verification. That work follows broader real-world use.
+- Add release provenance and a maintained changelog as the binary distribution matures.
 - Treat Windows as a separate platform effort, backed by dedicated tests for paths, processes, and
   symlinks.
 - Consider running agent-session transfer, reusable patch apply/unapply, and sandbox orchestration

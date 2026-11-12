@@ -8,8 +8,8 @@ signature and a few examples in the terminal.
 
 If worktrees are new to you, start with [Worktrees explained](worktrees.md).
 
-Supported platforms are macOS and Linux with Node.js 22.13.0 or newer and Git 2.31.0 or newer.
-For the experimental standalone build, see [Binary packaging](binary-packaging.md).
+Wald release binaries support macOS and Linux on x64 and ARM64 and require Git 2.31.0 or newer.
+See [Install Wald](getting-started.md#install-wald) for the installer and GitHub Release downloads.
 Git 2.31 introduced the `rev-parse --path-format` behavior used for canonical common-directory
 resolution ([release notes](https://github.com/git/git/blob/master/Documentation/RelNotes/2.31.0.adoc)).
 

@@ -11,7 +11,7 @@ const executable = process.env.BUN_BINARY || "bun";
 const version = spawnSync(executable, ["--version"], { encoding: "utf8" });
 if (version.status !== 0 || version.stdout.trim() !== expectedVersion) {
   console.error(
-    `Bun ${expectedVersion} is required for the binary prototype. Install that version or set BUN_BINARY to its executable path.`,
+    `Bun ${expectedVersion} is required to build Wald binaries. Install that version or set BUN_BINARY to its executable path.`,
   );
   process.exit(1);
 }

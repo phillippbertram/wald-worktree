@@ -1,6 +1,6 @@
 {
   "name": "wald-worktree",
-  "version": "0.10.0",
+  "version": "0.14.0",
   "description": "Wald is a safe, guided workspace manager for Git worktrees.",
   "private": true,
   "type": "module",

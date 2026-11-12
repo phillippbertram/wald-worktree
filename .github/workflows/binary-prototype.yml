@@ -1,10 +1,12 @@
-name: Binary prototype
+name: Release binaries
 
 on:
   pull_request:
   push:
     branches:
       - main
+    tags:
+      - 'v*.*.*'
   workflow_dispatch:
 
 permissions:
@@ -20,10 +22,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-24.04]
+        os: ${{ fromJSON((github.event_name == 'workflow_dispatch' || github.ref_type == 'tag') && '["macos-15","macos-15-intel","ubuntu-24.04","ubuntu-24.04-arm"]' || '["macos-15","ubuntu-24.04"]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
@@ -45,12 +49,96 @@ jobs:
           brew install bash bash-completion@2 fish
           echo "BASH_BINARY=$(brew --prefix bash)/bin/bash" >> "$GITHUB_ENV"
           echo "BASH_COMPLETION_FILE=$(brew --prefix bash-completion@2)/share/bash-completion/bash_completion" >> "$GITHUB_ENV"
-      - run: pnpm build:binary
+      - name: Select binary target
+        id: target
+        run: |
+          case "$RUNNER_OS/$RUNNER_ARCH" in
+            macOS/ARM64) platform=darwin-arm64 ;;
+            macOS/X64) platform=darwin-x64 ;;
+            Linux/ARM64) platform=linux-arm64 ;;
+            Linux/X64) platform=linux-x64 ;;
+            *) echo "Unsupported runner: $RUNNER_OS/$RUNNER_ARCH" >&2; exit 1 ;;
+          esac
+          target="bun-$platform"
+          if [[ "$platform" == linux-x64 ]]; then
+            target="$target-baseline"
+          fi
+          echo "platform=$platform" >> "$GITHUB_OUTPUT"
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+      - name: Build standalone binary
+        env:
+          BUN_TARGET: ${{ steps.target.outputs.target }}
+        run: pnpm build:binary --target="$BUN_TARGET"
+      - name: Verify the binary version
+        run: |
+          tag=()
+          if [[ "$GITHUB_EVENT_NAME" == push && "$GITHUB_REF_TYPE" == tag ]]; then
+            tag=("$GITHUB_REF_NAME")
+          fi
+          bash apps/cli/scripts/release-binaries.sh check-version apps/cli/dist/binary/wald "${tag[@]}"
       - run: pnpm test:binary
       - run: pnpm test:binary:smoke
       - name: Archive executable with permissions
-        run: tar -czf apps/cli/dist/wald-binary.tar.gz -C apps/cli/dist/binary wald
+        env:
+          PLATFORM: ${{ steps.target.outputs.platform }}
+        run: |
+          COPYFILE_DISABLE=1 tar -czf "apps/cli/dist/wald-$PLATFORM.tar.gz" \
+            -C apps/cli/dist/binary wald -C "$GITHUB_WORKSPACE" LICENSE
+      - name: Test installing the archive
+        env:
+          PLATFORM: ${{ steps.target.outputs.platform }}
+        run: python3 apps/cli/scripts/test-release.py "apps/cli/dist/wald-$PLATFORM.tar.gz"
       - uses: actions/upload-artifact@v7
         with:
-          name: wald-${{ runner.os }}-${{ runner.arch }}
-          path: apps/cli/dist/wald-binary.tar.gz
+          name: binary-${{ steps.target.outputs.platform }}
+          path: apps/cli/dist/wald-${{ steps.target.outputs.platform }}.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+
+  package:
+    name: Prepare release assets
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_type == 'tag')
+    needs: binary
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: binary-*
+          path: release-assets
+          merge-multiple: true
+      - name: Verify the archive set and generate checksums
+        run: bash apps/cli/scripts/release-binaries.sh prepare release-assets
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wald-release-assets
+          path: release-assets/
+          if-no-files-found: error
+          compression-level: 0
+
+  release:
+    name: Create GitHub release draft
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    concurrency:
+      group: wald-release-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: wald-release-assets
+          path: release-assets
+      - name: Attach assets to a draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash apps/cli/scripts/release-binaries.sh draft release-assets "$GITHUB_REPOSITORY" "$GITHUB_REF_NAME"

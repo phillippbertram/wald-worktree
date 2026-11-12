@@ -7,26 +7,52 @@ Create a worktree beside a project you already use. The existing checkout stays 
 
 ## Supported platforms
 
-| Platform | Wald CLI support | Standard CLI test environment |
+| Platform | Processor | Release archive |
 | --- | --- | --- |
-| macOS | Supported | macOS with Node.js 24 |
-| Linux | Supported | Ubuntu 24.04 with Node.js 22.13.0 |
-| Native Windows | Unsupported | — |
+| macOS | Apple Silicon (ARM64) | `wald-darwin-arm64.tar.gz` |
+| macOS | Intel (x64) | `wald-darwin-x64.tar.gz` |
+| Linux (glibc) | ARM64 | `wald-linux-arm64.tar.gz` |
+| Linux (glibc) | x64 | `wald-linux-x64.tar.gz` |
 
-See [binary packaging](binary-packaging.md) for the experimental standalone executable and its
-platform verification.
+Release binaries are tested on macOS 15 and Ubuntu 24.04. Wald needs Git 2.31.0 or newer.
+The binary includes the Bun runtime.
 
 ## Install Wald
 
-The standard installation builds from source and requires Node.js 22.13.0 or newer,
-Git 2.31.0 or newer, and pnpm 11.15.1.
+```bash
+curl -fsSL https://raw.githubusercontent.com/phillippbertram/wald-worktree/main/install.sh | bash
+```
+
+The installer selects the archive for your machine from the latest published release, verifies its
+SHA-256 checksum, and installs or updates `~/.local/bin/wald`. Set `WALD_INSTALL_DIR` to an absolute
+directory path in the Bash process to choose a different destination.
+
+If `wald` is missing from your `PATH`, run the following in Bash or Zsh and add the export to your
+shell startup file to use it in future sessions.
 
 ```sh
-git clone https://github.com/phillippbertram/wald-worktree.git
-cd wald-worktree
-pnpm install --frozen-lockfile
-pnpm run install:global
-wald --help
+export PATH="$HOME/.local/bin:$PATH"
+wald --version
+```
+
+### Install from a download
+
+Download your archive and `SHA256SUMS` from the same [GitHub release](https://github.com/phillippbertram/wald-worktree/releases).
+In the download directory, set `archive` to the file you selected and verify it. Use `shasum` on
+macOS or `sha256sum -c` in place of `shasum -a 256 -c` on Linux.
+
+```sh
+archive=wald-darwin-arm64.tar.gz
+awk -v archive="$archive" '$2 == archive' SHA256SUMS | shasum -a 256 -c
+```
+
+Once the checksum reports `OK`, extract and install the executable.
+
+```sh
+tar -xzf "$archive"
+mkdir -p "$HOME/.local/bin"
+install -m 755 wald "$HOME/.local/bin/wald"
+"$HOME/.local/bin/wald" --version
 ```
 
 ## Keep the checkout you already have
