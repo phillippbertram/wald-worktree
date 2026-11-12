@@ -76,10 +76,10 @@ It asserts that neither Node nor Bun is discoverable. It then verifies:
 It does not edit user shell profiles or global Git configuration. Its temporary files are removed
 after the run, including on failure.
 
-The **Release binaries** workflow tests Linux x64 and macOS ARM64 on pull requests and
-pushes to `main`. Manual runs and version-tag pushes also test Linux ARM64 and macOS Intel. Each
-runner tests the native executable and runs `scripts/test-release.py` against its own archive with
-simulated GitHub downloads.
+The **Release binaries** workflow builds Linux x64 on pushes to `main`. The smoke test checks the
+version, help output, and bundled runtime. Manual runs and version-tag pushes build and test all
+four release targets. Each release runner tests the native executable and runs
+`scripts/test-release.py` against its own archive with simulated GitHub downloads.
 
 ## Prepare a release
 

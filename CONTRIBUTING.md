@@ -27,7 +27,8 @@ synthetic files in tests. Follow the [brand guidelines](docs/brand.md) for produ
 | Ubuntu 24.04 | Node 22.13.0 | CLI lint, typecheck, tests, build, and Bash/Zsh/Fish integration |
 | macOS | Node 24 | CLI lint, typecheck, tests, and build |
 | Minimum Git on Ubuntu 24.04 | Node 22.13.0, Git 2.31.0 | Git integration tests |
-| Linux and macOS binary | Bun from .bun-version | Native build, integration tests, isolated PTY checks, and installer verification |
+| Linux x64 binary on `main` | Bun from `.bun-version` | Build, version check, and standalone smoke test |
+| Release preview and version tags | Bun from `.bun-version` | Four native builds, integration and PTY tests, installer verification, and archives |
 | Docs on Ubuntu 24.04 | Node 24 and Python 3 | Demo transcripts, static export, links, and browser tests |
 
 Run `pnpm ci:cli` for CLI checks alone. `pnpm test:git` runs the CLI integration tests and
