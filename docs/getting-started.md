@@ -5,9 +5,20 @@ description: "Install Wald, keep your existing checkout, and create your first w
 
 Create a worktree beside a project you already use. The existing checkout stays in place.
 
+## Supported platforms
+
+| Platform | Wald CLI support | Standard CLI test environment |
+| --- | --- | --- |
+| macOS | Supported | macOS with Node.js 24 |
+| Linux | Supported | Ubuntu 24.04 with Node.js 22.13.0 |
+| Native Windows | Unsupported | — |
+
+See [binary packaging](binary-packaging.md) for the experimental standalone executable and its
+platform verification.
+
 ## Install Wald
 
-The standard installation builds from source. Use macOS or Linux, Node.js 22.13.0 or newer,
+The standard installation builds from source and requires Node.js 22.13.0 or newer,
 Git 2.31.0 or newer, and pnpm 11.15.1.
 
 ```sh
@@ -17,9 +28,6 @@ pnpm install --frozen-lockfile
 pnpm run install:global
 wald --help
 ```
-
-See [binary packaging](binary-packaging.md) for the experimental Bun build and native CI
-artifacts. The prototype is a separate build path.
 
 ## Keep the checkout you already have
 
