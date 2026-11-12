@@ -11,7 +11,7 @@ pnpm dev --help
 pnpm run ci
 ```
 
-The pnpm workspace contains the [CLI package](packages/cli/) and the
+The pnpm workspace contains the [CLI package](apps/cli/) and the
 [documentation app](apps/docs/). Commands in the root package delegate to them.
 The portable [agent skill](skills/wald-worktrees/) remains at the repository root and is
 included when packaging the CLI.

@@ -20,12 +20,12 @@ user-facing CLI text.
 
 - The root `package.json` owns the runtime, package manager, and shared scripts. Each workspace
   package owns its own dependencies and build scripts.
-- `packages/cli/src/cli/` owns commands, option parsing, input validation, and interactive orchestration.
-- `packages/cli/src/domain/` owns shared domain contracts and expected domain errors.
-- `packages/cli/src/services/` owns workflows and business behavior.
-- `packages/cli/src/infrastructure/` owns Git, process, filesystem, and path boundaries.
-- `packages/cli/src/ui/` owns terminal prompts and presentation, not repository mutation rules.
-- `packages/cli/tests/` owns executable behavior and regression coverage.
+- `apps/cli/src/cli/` owns commands, option parsing, input validation, and interactive orchestration.
+- `apps/cli/src/domain/` owns shared domain contracts and expected domain errors.
+- `apps/cli/src/services/` owns workflows and business behavior.
+- `apps/cli/src/infrastructure/` owns Git, process, filesystem, and path boundaries.
+- `apps/cli/src/ui/` owns terminal prompts and presentation, not repository mutation rules.
+- `apps/cli/tests/` owns executable behavior and regression coverage.
 - `apps/docs/` owns the Fumadocs site, demo tooling, and static export.
 - `README.md` owns the product overview and first-use journey.
 - `docs/brand.md` owns the product name, message, visual language, and tone.
@@ -60,7 +60,7 @@ pnpm run ci
 - `pnpm run ci` is the canonical full validation: CLI lint, typecheck, tests, and build, plus docs validation and static export.
 - `pnpm lint:fix` rewrites files. Do not run it across a dirty worktree unless every resulting
   change is in scope. Prefer formatting only files owned by the current task.
-- CLI builds go to `packages/cli/dist/` and the static site exports to `apps/docs/out/`. Both
+- CLI builds go to `apps/cli/dist/` and the static site exports to `apps/docs/out/`. Both
   directories are generated and ignored.
 
 Do not add or upgrade dependencies unless the requested change needs them. Explain the need and

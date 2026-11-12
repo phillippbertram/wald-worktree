@@ -20,7 +20,7 @@
       "!!apps/docs/playwright-report",
       "!apps/docs/next-env.d.ts",
       "!apps/docs/lib/demos.generated.json",
-      "!!packages/cli/skills"
+      "!!apps/cli/skills"
     ]
   },
   "formatter": {

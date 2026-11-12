@@ -13,4 +13,4 @@ coverage/
 /apps/docs/playwright-report/
 __pycache__/
 /apps/docs/tsconfig.tsbuildinfo
-/packages/cli/skills/
+/apps/cli/skills/

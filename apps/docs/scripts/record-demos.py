@@ -48,7 +48,7 @@ class Fixture:
         git = shutil.which("git")
         if not node or not git:
             raise RuntimeError("Install Node.js and Git before recording.")
-        self.wald = [node, str(ROOT / "packages/cli/dist/cli.js")]
+        self.wald = [node, str(ROOT / "apps/cli/dist/cli.js")]
         self.env = {
             "PATH": os.pathsep.join([str(Path(node).parent), str(Path(git).parent), os.defpath]),
             "HOME": str(home),
@@ -315,7 +315,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="Compare observed transcripts with the recorded demos")
     args = parser.parse_args()
-    if not (ROOT / "packages/cli/dist/cli.js").is_file():
+    if not (ROOT / "apps/cli/dist/cli.js").is_file():
         raise SystemExit("Build Wald with pnpm build before recording.")
     previous = json.loads(MANIFEST.read_text(encoding="utf-8")) if args.check else {}
     if not args.check:

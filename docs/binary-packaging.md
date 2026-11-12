@@ -26,12 +26,12 @@ the caller still reach hooks and tools normally.
 ```sh
 pnpm install --frozen-lockfile
 pnpm build:binary
-./packages/cli/dist/binary/wald --version
+./apps/cli/dist/binary/wald --version
 ```
 
-The native executable is written to `packages/cli/dist/binary/wald`. Generated binaries remain ignored.
+The native executable is written to `apps/cli/dist/binary/wald`. Generated binaries remain ignored.
 The build script runs in the CLI package. Additional arguments go directly to Bun, so relative
-output paths resolve from `packages/cli/`:
+output paths resolve from `apps/cli/`:
 
 ```sh
 pnpm build:binary --target=bun-linux-x64-baseline --outfile=dist/binary/wald-linux-x64
