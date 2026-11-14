@@ -1,4 +1,5 @@
 import { TreePine } from "lucide-react";
+import { brand } from "../lib/site.mjs";
 
 export function WaldMark() {
   return (
@@ -6,7 +7,7 @@ export function WaldMark() {
       <span className="wald-mark-icon">
         <TreePine aria-hidden="true" size={17} strokeWidth={2.35} />
       </span>
-      <span>Wald</span>
+      <span>{brand}</span>
     </span>
   );
 }

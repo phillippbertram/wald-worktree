@@ -1,33 +1,73 @@
 ---
 title: "Get started"
-description: "Install Wald, keep your existing checkout, and create your first worktree."
+description: "Install wald, keep your existing checkout, and create your first worktree."
 ---
 
 Create a worktree beside a project you already use. The existing checkout stays in place.
 
 ## Supported platforms
 
-| Platform | Wald CLI support | Standard CLI test environment |
+| Platform | Processor | Release archive |
 | --- | --- | --- |
-| macOS | Supported | macOS with Node.js 24 |
-| Linux | Supported | Ubuntu 24.04 with Node.js 22.13.0 |
-| Native Windows | Unsupported | — |
+| macOS | Apple Silicon (ARM64) | `wald-darwin-arm64.tar.gz` |
+| macOS | Intel (x64) | `wald-darwin-x64.tar.gz` |
+| Linux (glibc) | ARM64 | `wald-linux-arm64.tar.gz` |
+| Linux (glibc) | x64 | `wald-linux-x64.tar.gz` |
 
-See [binary packaging](binary-packaging.md) for the experimental standalone executable and its
-platform verification.
+Release binaries are tested on macOS 15 and Ubuntu 24.04. wald needs Git 2.31.0 or newer.
+The binary includes the Bun runtime.
 
-## Install Wald
+## Install wald
 
-The standard installation builds from source and requires Node.js 22.13.0 or newer,
-Git 2.31.0 or newer, and pnpm 11.15.1.
+```bash
+curl -fsSL https://raw.githubusercontent.com/phillippbertram/wald-worktree/main/install.sh | bash
+```
+
+The installer selects the archive for your machine from the latest published release, verifies its
+SHA-256 checksum, and installs or updates `~/.local/bin/wald`. Set `WALD_INSTALL_DIR` to an absolute
+directory path in the Bash process to choose a different destination.
+
+If `wald` is missing from your `PATH`, run the following in Bash or Zsh and add the export to your
+shell startup file to use it in future sessions.
 
 ```sh
-git clone https://github.com/phillippbertram/wald-worktree.git
-cd wald-worktree
-pnpm install --frozen-lockfile
-pnpm run install:global
-wald --help
+export PATH="$HOME/.local/bin:$PATH"
+wald --version
 ```
+
+### Install from a download
+
+Download your archive and `SHA256SUMS` from the same [GitHub release](https://github.com/phillippbertram/wald-worktree/releases).
+In the download directory, set `archive` to the file you selected and verify it. Use `shasum` on
+macOS or `sha256sum -c` in place of `shasum -a 256 -c` on Linux.
+
+```sh
+archive=wald-darwin-arm64.tar.gz
+awk -v archive="$archive" '$2 == archive' SHA256SUMS | shasum -a 256 -c
+```
+
+Once the checksum reports `OK`, extract and install the executable.
+
+```sh
+tar -xzf "$archive"
+mkdir -p "$HOME/.local/bin"
+install -m 755 wald "$HOME/.local/bin/wald"
+"$HOME/.local/bin/wald" --version
+```
+
+### Uninstall wald
+
+Remove the installed executable:
+
+```sh
+rm -- "$HOME/.local/bin/wald"
+```
+
+If you installed with `WALD_INSTALL_DIR`, remove `wald` from that directory instead. If you added
+wald shell integration, remove its initialization line from your shell startup file and open a new
+terminal. You can keep `~/.local/bin` on your `PATH` for other tools.
+
+Your repositories, worktrees, and project configuration stay in place.
 
 ## Keep the checkout you already have
 
@@ -37,7 +77,7 @@ wald init
 ```
 
 Choose to retain the existing checkout. Check the proposed paths and confirm initialization.
-Wald keeps your primary checkout in place and proposes a separate directory for new worktrees.
+wald keeps your primary checkout in place and proposes a separate directory for new worktrees.
 The optional project-configuration step can wait until you need [project setup](project-setup.md).
 
 Starting from a remote instead? See [workspace layouts](worktrees.md#workspace-layouts).
@@ -61,7 +101,7 @@ if you prefer to open the folder yourself.
 
 ## Work from any terminal
 
-The global `-C` option selects the starting directory for Wald. From elsewhere, point it at the
+The global `-C` option selects the starting directory for wald. From elsewhere, point it at the
 primary checkout or another worktree in the workspace:
 
 ```sh

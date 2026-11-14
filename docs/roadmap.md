@@ -1,9 +1,9 @@
 ---
 title: "Roadmap"
-description: "Current scope and future ideas for Wald."
+description: "Current scope and future ideas for wald."
 ---
 
-Wald's v1 covers the day-to-day worktree lifecycle. It can create, prepare, inspect, rename, hand
+wald's v1 covers the day-to-day worktree lifecycle. It can create, prepare, inspect, rename, hand
 off, and safely remove worktrees from the interactive CLI or direct commands. Trusted YAML
 automation, shell integration, JSON output, diagnostics, and the portable Agent Skill work on macOS
 and Linux.
@@ -17,7 +17,7 @@ features can wait until everyday use shows which ones are actually needed.
 
 - Add Flutter, iOS, Rust, or other setup detection once concrete repositories establish safe
   defaults.
-- Projects that Wald does not detect can still use commands written by hand in `.wald/project.yml`
+- Projects that wald does not detect can still use commands written by hand in `.wald/project.yml`
   or `.wald.yml`.
 
 ## Later, if real projects need it
@@ -31,8 +31,7 @@ features can wait until everyday use shows which ones are actually needed.
   safe to run in parallel; a later doctor check can identify abandoned operations before recovery.
 - Run one command across explicitly selected worktrees and report a result for each one.
 - Show optional GitHub or GitLab pull-request metadata.
-- Prepare the package for distribution with publishable boundaries, a changelog, provenance,
-  release automation, and global-install verification. That work follows broader real-world use.
+- Add release provenance and a maintained changelog as the binary distribution matures.
 - Treat Windows as a separate platform effort, backed by dedicated tests for paths, processes, and
   symlinks.
 - Consider running agent-session transfer, reusable patch apply/unapply, and sandbox orchestration

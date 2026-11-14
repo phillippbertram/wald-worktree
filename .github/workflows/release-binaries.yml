@@ -1,0 +1,160 @@
+name: Release binaries
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  binary:
+    name: Binary (${{ matrix.os }})
+    timeout-minutes: 15
+    env:
+      RELEASE_BUILD: ${{ (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') && 'true' || 'false' }}
+      NO_COLOR: "1"
+      VITEST_MAX_WORKERS: "4"
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON((github.event_name == 'workflow_dispatch' || github.ref_type == 'tag') && '["macos-15","macos-15-intel","ubuntu-24.04","ubuntu-24.04-arm"]' || '["ubuntu-24.04"]') }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - run: pnpm install --frozen-lockfile
+      - name: Install Linux shell test tools
+        if: env.RELEASE_BUILD == 'true' && runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes bash-completion zsh fish
+          echo "BASH_COMPLETION_FILE=/usr/share/bash-completion/bash_completion" >> "$GITHUB_ENV"
+      - name: Install macOS shell test tools
+        if: env.RELEASE_BUILD == 'true' && runner.os == 'macOS'
+        run: |
+          brew install bash bash-completion@2 fish
+          echo "BASH_BINARY=$(brew --prefix bash)/bin/bash" >> "$GITHUB_ENV"
+          echo "BASH_COMPLETION_FILE=$(brew --prefix bash-completion@2)/share/bash-completion/bash_completion" >> "$GITHUB_ENV"
+      - name: Select binary target
+        id: target
+        run: |
+          case "$RUNNER_OS/$RUNNER_ARCH" in
+            macOS/ARM64) platform=darwin-arm64 ;;
+            macOS/X64) platform=darwin-x64 ;;
+            Linux/ARM64) platform=linux-arm64 ;;
+            Linux/X64) platform=linux-x64 ;;
+            *) echo "Unsupported runner: $RUNNER_OS/$RUNNER_ARCH" >&2; exit 1 ;;
+          esac
+          target="bun-$platform"
+          if [[ "$platform" == linux-x64 ]]; then
+            target="$target-baseline"
+          fi
+          echo "platform=$platform" >> "$GITHUB_OUTPUT"
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+      - name: Build standalone binary
+        env:
+          BUN_TARGET: ${{ steps.target.outputs.target }}
+        run: pnpm build:binary --target="$BUN_TARGET"
+      - name: Verify the binary version
+        run: |
+          tag=()
+          if [[ "$GITHUB_EVENT_NAME" == push && "$GITHUB_REF_TYPE" == tag ]]; then
+            tag=("$GITHUB_REF_NAME")
+          fi
+          bash apps/cli/scripts/release-binaries.sh check-version apps/cli/dist/binary/wald "${tag[@]}"
+      - name: Smoke-test the Linux binary from main
+        if: env.RELEASE_BUILD != 'true'
+        working-directory: ${{ runner.temp }}
+        run: |
+          smoke_dir=$(mktemp -d "$RUNNER_TEMP/wald-smoke.XXXXXX")
+          mkdir "$smoke_dir/bin"
+          ln -s "$(command -v git)" "$smoke_dir/bin/git"
+          wald="$GITHUB_WORKSPACE/apps/cli/dist/binary/wald"
+          env -i PATH="$smoke_dir/bin" HOME="$smoke_dir" "$wald" --help >/dev/null
+          doctor=$(env -i PATH="$smoke_dir/bin" HOME="$smoke_dir" "$wald" doctor --json)
+          jq -e 'any(.checks[]; .id == "runtime.bun" and .status == "pass")' <<< "$doctor"
+      - run: pnpm test:binary
+        if: env.RELEASE_BUILD == 'true'
+      - run: pnpm test:binary:smoke
+        if: env.RELEASE_BUILD == 'true'
+      - name: Archive executable with permissions
+        if: env.RELEASE_BUILD == 'true'
+        env:
+          PLATFORM: ${{ steps.target.outputs.platform }}
+        run: |
+          COPYFILE_DISABLE=1 tar -czf "apps/cli/dist/wald-$PLATFORM.tar.gz" \
+            -C apps/cli/dist/binary wald -C "$GITHUB_WORKSPACE" LICENSE
+      - name: Test installing the archive
+        if: env.RELEASE_BUILD == 'true'
+        env:
+          PLATFORM: ${{ steps.target.outputs.platform }}
+        run: python3 apps/cli/scripts/test-release.py "apps/cli/dist/wald-$PLATFORM.tar.gz"
+      - uses: actions/upload-artifact@v7
+        if: env.RELEASE_BUILD == 'true'
+        with:
+          name: binary-${{ steps.target.outputs.platform }}
+          path: apps/cli/dist/wald-${{ steps.target.outputs.platform }}.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+
+  package:
+    name: Prepare release assets
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_type == 'tag')
+    needs: binary
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: binary-*
+          path: release-assets
+          merge-multiple: true
+      - name: Verify the archive set and generate checksums
+        run: bash apps/cli/scripts/release-binaries.sh prepare release-assets
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wald-release-assets
+          path: release-assets/
+          if-no-files-found: error
+          compression-level: 0
+
+  release:
+    name: Create GitHub release draft
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    concurrency:
+      group: wald-release-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: wald-release-assets
+          path: release-assets
+      - name: Attach assets to a draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash apps/cli/scripts/release-binaries.sh draft release-assets "$GITHUB_REPOSITORY" "$GITHUB_REF_NAME"

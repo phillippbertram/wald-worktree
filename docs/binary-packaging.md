@@ -1,16 +1,11 @@
 ---
-title: "Binary packaging prototype"
-description: "Build and verify the experimental standalone executable."
+title: "Binary packaging"
+description: "Build, verify, and prepare standalone wald binaries for GitHub Releases."
 ---
 
-Wald can be bundled with Bun into one executable. The destination machine needs Git 2.31.0 or
-newer and the programs used by configured hooks or tools, but no separate Node.js, Bun,
-`node_modules`, or source checkout. Shell navigation still requires the normal
-[shell integration](cli-reference.md#wald-completion).
-
-This is an experimental packaging path, not a published or signed release. The standard Node
-installation remains supported. pnpm still owns dependency installation and the lockfile; Bun is
-only an additional build tool. No production dependency was added or upgraded.
+wald release archives contain a standalone executable built with Bun. To install a released
+binary, follow the [Quickstart](getting-started.md#install-wald). Build dependencies are managed by
+pnpm, and Bun compiles the executable.
 
 ## Build
 
@@ -19,7 +14,7 @@ The build script rejects a different Bun version before building. `BUN_BINARY` c
 isolated Bun executable without replacing an existing installation.
 
 The build disables Bun's automatic runtime loading of `.env`, `bunfig.toml`, `tsconfig.json` and
-`package.json`. Repository-local Bun settings and preload scripts must not change Wald's behavior
+`package.json`. Repository-local Bun settings and preload scripts must not change wald's behavior
 or bypass its explicit configuration/trust model. Environment variables explicitly supplied by
 the caller still reach hooks and tools normally.
 
@@ -39,9 +34,8 @@ pnpm build:binary --target=bun-linux-arm64 --outfile=dist/binary/wald-linux-arm6
 pnpm build:binary --target=bun-darwin-x64 --outfile=dist/binary/wald-darwin-x64
 ```
 
-Cross-compilation is not runtime verification. Linux's default GNU target needs a compatible
-system C library. This prototype does not establish support for every Linux distribution or
-for Windows. See [Bun's compiler documentation](https://bun.sh/docs/compiler).
+Run verification on the target platform after cross-compiling. Linux release builds use glibc.
+See [Bun's compiler documentation](https://bun.sh/docs/compiler).
 
 ## Verification
 
@@ -82,37 +76,25 @@ It asserts that neither Node nor Bun is discoverable. It then verifies:
 It does not edit user shell profiles or global Git configuration. Its temporary files are removed
 after the run, including on failure.
 
-The `Binary prototype` GitHub Actions workflow runs for pull requests, pushes to `main`, and manual
-dispatches. It builds native binaries on macOS and Ubuntu 24.04, runs both the binary integration suite
-and isolated shell/PTY smoke suite, and uploads archives preserving executable permissions. These
-checks execute the Linux binary on a Linux runner; they do not publish a release.
-The Ubuntu runner is pinned so changes to the `ubuntu-latest` alias cannot silently change the
-binary's build environment and system C library baseline.
+The **Release binaries** workflow builds Linux x64 on pushes to `main`. The smoke test checks the
+version, help output, and bundled runtime. Manual runs and version-tag pushes build and test all
+four release targets. Each release runner tests the native executable and runs
+`scripts/test-release.py` against its own archive with simulated GitHub downloads.
 
-## Local findings (2026-11-11)
+## Prepare a release
 
-Native verification used macOS ARM64 and Bun 1.4.4. The binary is approximately 86 MiB uncompressed.
-The standalone runtime works with the current Commander, Clack, Execa, YAML, Zod and completion
-dependencies. Runtime reporting in `wald doctor` identifies Bun instead of treating Bun's emulated
-Node version as an installed Node runtime. File automation uses the `glob` package to keep explicit
-dotfile patterns such as `**/.env*` working across runtimes, including Node 22.13.0, whose experimental
-`fs.glob` misses these matches. The existing path validation and preflight checks still apply.
+1. Update the CLI package and `wald --version` to the same version. Run **Release binaries** manually
+   on the branch to produce the `wald-release-assets` Actions artifact with four native archives and
+   `SHA256SUMS`.
+2. After merging, create an annotated `vX.Y.Z` tag on the release commit and push that tag. For
+   version `0.14.0`, use `git tag -a v0.14.0 -m 'wald 0.14.0'` and `git push origin v0.14.0`.
+   The tag workflow verifies the version and prepares a GitHub Release draft after all builds and
+   tests pass.
+3. Review the generated notes, the four archives, and `SHA256SUMS` in
+   [GitHub Releases](https://github.com/phillippbertram/wald-worktree/releases). Review dependency
+   notices for the bundled runtime and packages before publishing. Publish the draft when it is
+   ready for public downloads and the installer.
 
-The binary integration suite also exercises dotfile copying and rejects source symlinks that
-escape their configured root before writing any targets. The Node CI caps Vitest at two workers, and
-multi-process integration suites that exceeded their previous limits allow 30 seconds per test.
-Unit-test timeouts and all behavioral assertions remain unchanged.
-
-The isolated smoke suite passed with Bash 5.3 and bash-completion 2.17.0, Zsh 5.9, and Fish 4.9.3.
-It exercised all shell navigation checks, real Bash/Zsh Tab input, Fish completion, guided creation,
-confirmation rejection, Escape, Ctrl+C, relocation without Node/Bun, and disabled configuration
-autoloading. Shell tools were kept outside the repository; no user shell installation was changed.
-
-Cross-compilation succeeded for macOS x64, Linux x64 baseline and Linux ARM64. Only macOS ARM64
-was executed locally. Check the pull request's native CI results separately; cross-built artifacts
-for architectures outside that matrix still need native tests.
-
-Before distribution, run the native platform workflow, decide the supported architecture and Linux
-libc matrix, and prepare release archives, checksums, dependency notices and macOS signing/notarization.
-The portable `skills/` directory is not embedded; a release that distributes the agent skill must
-include it separately. Startup performance and memory usage have not been benchmarked.
+If an upload leaves an incomplete draft, confirm its status in GitHub Releases, delete the draft
+while keeping the tag, and rerun the failed workflow job. The workflow stops if a release already
+exists for that tag.

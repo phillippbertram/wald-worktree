@@ -35,7 +35,7 @@ export function createProgram(
   const program = new Command()
     .name("wald")
     .description("🌲 Where Git worktrees grow — safe, guided workspaces for parallel work.")
-    .version("0.10.0")
+    .version("0.14.0")
     .option(
       "-C, --directory <path>",
       "Run from this directory; repeat to resolve paths in order",

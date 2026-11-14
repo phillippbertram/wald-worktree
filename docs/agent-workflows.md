@@ -27,7 +27,7 @@ project/
 └── feature-ui/              Codex App edits and commits feature/ui here
 ```
 
-Wald knows how to open Code, Cursor, Zed, Codex, Codex App, and Claude out of the box. Projects can
+wald knows how to open Code, Cursor, Zed, Codex, Codex App, and Claude out of the box. Projects can
 define or replace profiles under `tools`. A custom profile overrides a built-in with the same name,
 and a workspace-local profile overrides its repository counterpart.
 
@@ -67,7 +67,7 @@ contains those changes:
 wald handoff feature/review --tool codex
 ```
 
-Wald creates the branch at the current `HEAD`, reproduces staged, unstaged, and non-ignored untracked
+wald creates the branch at the current `HEAD`, reproduces staged, unstaged, and non-ignored untracked
 state in the new worktree, verifies both sides, and keeps the source unchanged. `wald create
 feature/review --carry` uses the same lifecycle. This transfers code only: start the new editor or
 agent separately, and explicitly pass it any task context. Running processes and agent sessions do
@@ -93,7 +93,7 @@ not move between worktrees.
   success, the changes exist in both worktrees.
 - Inspect dirty, unmerged, and locked state before any forced removal.
 
-Wald does not decide which agent owns a task or move a running session between folders. A handoff
+wald does not decide which agent owns a task or move a running session between folders. A handoff
 only makes a verified copy of the local code in a fresh worktree.
 
 See [Wald Flow](worktrees.md#wald-flow) for the recommended workspace layout,

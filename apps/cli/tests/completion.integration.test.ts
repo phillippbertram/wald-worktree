@@ -104,7 +104,7 @@ tools:
         "utf8",
       ),
     ]);
-  });
+  }, 30_000);
 
   afterEach(async () => {
     await fs.rm(temporaryRoot, { force: true, recursive: true });

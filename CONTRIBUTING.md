@@ -27,13 +27,14 @@ synthetic files in tests. Follow the [brand guidelines](docs/brand.md) for produ
 | Ubuntu 24.04 | Node 22.13.0 | CLI lint, typecheck, tests, build, and Bash/Zsh/Fish integration |
 | macOS | Node 24 | CLI lint, typecheck, tests, and build |
 | Minimum Git on Ubuntu 24.04 | Node 22.13.0, Git 2.31.0 | Git integration tests |
-| Linux and macOS binary | Bun from .bun-version | Native build, integration tests, and isolated PTY checks |
+| Linux x64 binary on `main` | Bun from `.bun-version` | Build, version check, and standalone smoke test |
+| Release preview and version tags | Bun from `.bun-version` | Four native builds, integration and PTY tests, installer verification, and archives |
 | Docs on Ubuntu 24.04 | Node 24 and Python 3 | Demo transcripts, static export, links, and browser tests |
 
 Run `pnpm ci:cli` for CLI checks alone. `pnpm test:git` runs the CLI integration tests and
 worktree-transfer tests. Use the `.integration.test.ts` suffix for new Git integration
 coverage so the minimum-Git job includes it. See [Binary packaging](docs/binary-packaging.md)
-for standalone test requirements.
+for standalone test requirements and how to prepare a release draft.
 
 ## Work on the docs
 

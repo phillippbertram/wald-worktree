@@ -15,7 +15,7 @@ Start with [doctor](cli-reference.md#wald-doctor) for runtime, Git, workspace, a
 checks. [Status](cli-reference.md#wald-status) shows the current checkout and local tracking
 information. [List](cli-reference.md#wald-list) shows the exact paths.
 
-If Wald cannot find the workspace from your current directory, use
+If wald cannot find the workspace from your current directory, use
 [`-C`](cli-reference.md#working-directory) to select an existing workspace directory. If
 `wald cd` prints a path, load [shell integration](cli-reference.md#wald-completion) for your shell
 or run the printed `cd` command.

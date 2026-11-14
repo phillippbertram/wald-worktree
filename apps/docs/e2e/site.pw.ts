@@ -5,9 +5,13 @@ test("serves docs and search results under the GitHub Pages prefix", async ({ pa
   await page.emulateMedia({ colorScheme: "light" });
   await page.goto("./");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(/Git worktrees/);
+  await expect(page.getByRole("link", { name: "Configure lifecycle hooks" })).toHaveAttribute(
+    "href",
+    /\/docs\/project-setup/,
+  );
   await page.getByRole("link", { name: "Get started", exact: true }).first().click();
   await expect(page).toHaveURL(/\/wald-worktree\/docs\/getting-started\/$/);
-  await expect(page.getByRole("heading", { name: "Install Wald" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: /^Install wald\b/ })).toBeVisible();
 
   await page.keyboard.press("ControlOrMeta+k");
   const input = page.getByRole("combobox", { name: /search/i });
@@ -83,8 +87,12 @@ test("serves the quickstart and demo transcript without JavaScript", async ({
   const context = await browser.newContext({ javaScriptEnabled: false });
   try {
     const page = await context.newPage();
+    await page.goto(new URL("docs/", baseURL).href);
+    await expect(page.getByRole("heading", { name: "Why wald?" })).toBeVisible();
+    await expect(page.getByText(/pronounced \/valt\//)).toBeVisible();
     await page.goto(new URL("docs/getting-started/", baseURL).href);
-    await expect(page.getByRole("heading", { name: "Install Wald" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: /^Install wald\b/ })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 3, name: /^Uninstall wald\b/ })).toBeVisible();
     await page.getByText("Read transcript", { exact: true }).click();
     await expect(page.getByText(/Created feature-search at/)).toBeVisible();
   } finally {
