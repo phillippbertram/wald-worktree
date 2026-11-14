@@ -55,6 +55,20 @@ install -m 755 wald "$HOME/.local/bin/wald"
 "$HOME/.local/bin/wald" --version
 ```
 
+### Uninstall wald
+
+Remove the installed executable:
+
+```sh
+rm -- "$HOME/.local/bin/wald"
+```
+
+If you installed with `WALD_INSTALL_DIR`, remove `wald` from that directory instead. If you added
+wald shell integration, remove its initialization line from your shell startup file and open a new
+terminal. You can keep `~/.local/bin` on your `PATH` for other tools.
+
+Your repositories, worktrees, and project configuration stay in place.
+
 ## Keep the checkout you already have
 
 ```sh
