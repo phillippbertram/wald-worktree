@@ -67,8 +67,8 @@ It asserts that neither Node nor Bun is discoverable. It then verifies:
 - Relocated execution, help, version, non-TTY behavior and Git workspace creation.
 - Doctor reporting the actual Bun runtime.
 - Repository-local `.env` and Bun preload configuration having no runtime effect.
-- Real PTY keypresses for menu selection, branch selection, text input, confirmation and creation.
-- Declined creation preserving both the directory and branch state, Escape, and Ctrl+C exit 130.
+- Guided creation in a real PTY, declined creation preserving directory and branch state, and
+  Ctrl+C exit 130.
 - Bash, Zsh and Fish integration: completion registration/protocol, `cd`, `plant --cd`,
   `handoff --cd`, and preserving the current directory after a rejected `cd`.
 - Fish completion through `complete -C`, and actual Zsh and Bash Tab input (Bash when configured).
@@ -83,9 +83,8 @@ four release targets. Each release runner tests the native executable and runs
 
 ## Prepare a release
 
-1. Update the CLI package and `wald --version` to the same version. Run **Release binaries** manually
-   on the branch to produce the `wald-release-assets` Actions artifact with four native archives and
-   `SHA256SUMS`.
+1. Update the version in `apps/cli/package.json`. Run **Release binaries** manually on the branch to
+   produce the `wald-release-assets` Actions artifact with four native archives and `SHA256SUMS`.
 2. After merging, create an annotated `vX.Y.Z` tag on the release commit and push that tag. For
    version `0.14.0`, use `git tag -a v0.14.0 -m 'wald 0.14.0'` and `git push origin v0.14.0`.
    The tag workflow verifies the version and prepares a GitHub Release draft after all builds and

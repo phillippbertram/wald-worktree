@@ -57,7 +57,7 @@ pnpm run ci
 
 - `pnpm dev <arguments>` runs the CLI from TypeScript source.
 - `pnpm test <test-file>` runs focused Vitest coverage.
-- `pnpm run ci` is the canonical full validation: CLI lint, typecheck, tests, and build, plus docs validation and static export.
+- `pnpm run ci` runs lint, CLI typecheck, tests, and build. `pnpm docs:build` exports the docs site.
 - `pnpm lint:fix` rewrites files. Do not run it across a dirty worktree unless every resulting
   change is in scope. Prefer formatting only files owned by the current task.
 - CLI builds go to `apps/cli/dist/` and the static site exports to `apps/docs/out/`. Both
@@ -140,8 +140,12 @@ files, or local configuration based on an inferred cleanup request.
 
 ## Testing Rules
 
-- Add or update tests for every behavior change and bug fix.
-- Use focused unit tests for parsing, validation, rendering, and deterministic domain decisions.
+- Keep automated tests in the CLI domain. The docs workflow builds the static site for deployment.
+- Add or update coverage for CLI behavior changes and bug fixes. Assert observable results such as
+  Git state, files, configuration, exit codes, JSON, and shell behavior.
+- Use focused unit tests for parsing, validation, and domain decisions. Cover guided commands when
+  their effects matter, such as consent, cancellation, or preserving state. Skip tests for styling,
+  layout, exact prompt sequences, and presentation snapshots.
 - Use integration tests with temporary repositories for Git, filesystem, worktree, configuration,
   process, and end-to-end CLI behavior.
 - Never run mutation tests against a developer's real repository, global Git configuration, shell
@@ -150,14 +154,11 @@ files, or local configuration based on an inferred cleanup request.
   dirty state, trust rejection, partial failure, interruption, or cleanup.
 - Preserve state in failure tests. Assert what remains after an interrupted or rejected operation,
   not only the reported error.
-- Update snapshots only when the public output intentionally changes, and review the snapshot diff.
-- For command-surface changes, cover direct invocation, help or completion contracts, and guided
-  navigation when each path is affected.
+- For command-surface changes, cover direct invocation and affected help or completion contracts.
 
 Run the smallest relevant test file first. Before handoff, run `pnpm run ci` when code or executable
-behavior changed. For documentation-only changes, inspect links and run whitespace/diff checks; full
-application tests are optional. Report commands that were not run or failures that are unrelated to
-the task.
+behavior changed. For documentation-only changes, inspect links and run whitespace and diff checks.
+Report skipped checks and unrelated failures.
 
 ## Documentation Rules
 

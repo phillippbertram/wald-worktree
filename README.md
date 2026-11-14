@@ -59,7 +59,8 @@ reviewed and trusted its [project setup](docs/project-setup.md), a single
 
 See [Contributing](CONTRIBUTING.md) for the pnpm workspace, CLI checks, and local docs preview.
 
-If wald saves you a few stashes or context switches, you can also
-[buy me a coffee](https://www.buymeacoffee.com/phillippbertram).
+<a href="https://buymeacoffee.com/phillippbertram">
+  <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" width="180">
+</a>
 
 [MIT License](LICENSE)

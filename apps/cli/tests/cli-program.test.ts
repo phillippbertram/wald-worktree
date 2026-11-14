@@ -1,9 +1,8 @@
 import { PassThrough } from "node:stream";
-import { stripVTControlCharacters } from "node:util";
 import { execa } from "execa";
 import { describe, expect, it } from "vitest";
+import manifest from "../package.json" with { type: "json" };
 import { createProgram } from "../src/cli/create-program.js";
-
 import { cliArguments, cliExecutable, projectRoot } from "./helpers/cli.js";
 
 describe("CLI contract", () => {
@@ -230,28 +229,16 @@ describe("CLI contract", () => {
     ]);
   });
 
-  it("colors root and subcommand help while respecting NO_COLOR", async () => {
-    const helpArguments = cliArguments();
-    const [root, subcommand, plain] = await Promise.all([
-      execa(cliExecutable, [...helpArguments, "--help"], {
-        cwd: projectRoot,
-        env: { FORCE_COLOR: "1", NO_COLOR: undefined },
-      }),
-      execa(cliExecutable, [...helpArguments, "create", "--help"], {
-        cwd: projectRoot,
-        env: { FORCE_COLOR: "1", NO_COLOR: undefined },
-      }),
-      execa(cliExecutable, [...helpArguments, "--help"], {
-        cwd: projectRoot,
-        env: { FORCE_COLOR: undefined, NO_COLOR: "1" },
-      }),
-    ]);
+  it("shows help and exits when started without a terminal", async () => {
+    const result = await execa(cliExecutable, cliArguments(), { cwd: projectRoot });
 
-    expect(root.stdout).toContain("\u001B[");
-    expect(subcommand.stdout).toContain("\u001B[");
-    expect(stripVTControlCharacters(root.stdout)).toContain("Usage: wald");
-    expect(stripVTControlCharacters(subcommand.stdout)).toContain("Usage: wald create");
-    expect(plain.stdout).not.toContain("\u001B[");
-    expect(plain.stdout).toContain("Usage: wald");
+    expect(result.stdout).toContain("Usage: wald");
+    expect(result.stderr).toBe("");
+  });
+
+  it("reports the package version", async () => {
+    const result = await execa(cliExecutable, cliArguments("--version"), { cwd: projectRoot });
+
+    expect(result.stdout).toBe(manifest.version);
   });
 });

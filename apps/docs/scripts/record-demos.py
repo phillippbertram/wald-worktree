@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Record real Wald sessions in disposable repositories, or check their transcripts."""
+"""Record real Wald sessions in disposable repositories."""
 
 import argparse
 import errno
@@ -330,15 +330,11 @@ SCENARIOS = {"create": guided, "parallel": parallel, "handoff": handoff, "cleanu
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check", action="store_true", help="Compare observed transcripts with the recorded demos")
-    args = parser.parse_args()
+    argparse.ArgumentParser(description=__doc__).parse_args()
     if not (ROOT / "apps/cli/dist/cli.js").is_file():
         raise SystemExit("Build Wald with pnpm build before recording.")
-    previous = json.loads(MANIFEST.read_text(encoding="utf-8")) if args.check else {}
-    if not args.check:
-        ASSETS.mkdir(parents=True, exist_ok=True)
-        MANIFEST.parent.mkdir(parents=True, exist_ok=True)
+    ASSETS.mkdir(parents=True, exist_ok=True)
+    MANIFEST.parent.mkdir(parents=True, exist_ok=True)
     demos = {}
     for name, scenario in SCENARIOS.items():
         demos[name] = {}
@@ -346,27 +342,18 @@ def main():
             with tempfile.TemporaryDirectory(dir="/tmp", prefix="w-") as directory:
                 fixture = Fixture(Path(directory).resolve())
                 session = scenario(fixture, width)
-                chapters = session.chapters
                 output = ASSETS / f"{name}-{size}.cast"
-                data = {"file": output.name, "chapters": chapters}
-                if args.check:
-                    assert data == previous["demos"][name][size], f"{name} ({size}) changed. Run pnpm docs:demos:record and review the output."
-                    cast = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
-                    assert cast[0] == {"version": 2, "width": width, "height": ROWS}, output.name
-                    assert cast[-1][0] > chapters[-1]["time"], output.name
-                    assert all("/private/" not in str(event) and "/tmp/" not in str(event) and "wald-demo-" not in str(event) for event in cast), output.name
-                    captured = readable("".join(event[2] for event in cast[1:] if event[1] == "o"))
-                    assert all(line in captured for chapter in chapters for line in chapter["lines"]), output.name
-                else:
-                    recorded = session.cast()
-                    assert str(fixture.root) not in recorded and fixture.root.name not in recorded
-                    assert "/private/" not in recorded and "/tmp/" not in recorded
-                    output.write_text(recorded, encoding="utf-8")
-                demos[name][size] = data
-        print(f"{'Checked' if args.check else 'Recorded'} {name}", flush=True)
-    if not args.check:
-        revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
-        MANIFEST.write_text(json.dumps({"revision": revision, "demos": demos}, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+                recorded = session.cast()
+                assert str(fixture.root) not in recorded and fixture.root.name not in recorded
+                assert "/private/" not in recorded and "/tmp/" not in recorded
+                output.write_text(recorded, encoding="utf-8")
+                demos[name][size] = {"file": output.name, "chapters": session.chapters}
+        print(f"Recorded {name}", flush=True)
+    revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+    MANIFEST.write_text(
+        json.dumps({"revision": revision, "demos": demos}, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
 
 
 if __name__ == "__main__":

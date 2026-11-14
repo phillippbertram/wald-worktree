@@ -5,7 +5,6 @@ import { PassThrough } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initializeWorkspace } from "../src/cli/commands/init.js";
 import { createCliContext } from "../src/cli/context.js";
-import { PromptBackError } from "../src/ui/terminal.js";
 import { createTestRepository, type TestRepository } from "./helpers/git-repository.js";
 
 const prompts = vi.hoisted(() => ({
@@ -18,7 +17,6 @@ const prompts = vi.hoisted(() => ({
   }>,
   textQuestions: [] as string[],
   textDefaults: [] as Array<string | undefined>,
-  selectionDefaults: [] as Array<string | undefined>,
   tables: [] as Array<Array<[string, string]>>,
   confirmationQuestions: [] as string[],
 }));
@@ -32,13 +30,11 @@ vi.mock("../src/ui/terminal.js", async (importOriginal) => {
     selectValue: async (
       question: string,
       options: Array<{ label: string; value: string; description?: string }>,
-      promptOptions?: { initialValue?: string },
     ) => {
       prompts.choices.push({
         question,
         options: options.map(({ label, description }) => ({ label, description })),
       });
-      prompts.selectionDefaults.push(promptOptions?.initialValue);
       const selection = prompts.selections.shift() ?? null;
       if (selection instanceof Error) throw selection;
       return selection;
@@ -81,7 +77,6 @@ describe("interactive init wizard", () => {
     prompts.choices = [];
     prompts.textQuestions = [];
     prompts.textDefaults = [];
-    prompts.selectionDefaults = [];
     prompts.tables = [];
     prompts.confirmationQuestions = [];
     temporaryRoot = await fs.realpath(
@@ -267,35 +262,6 @@ describe("interactive init wizard", () => {
     });
   });
 
-  it("offers separate remote and local sources outside a Git repository", async () => {
-    process.chdir(temporaryRoot);
-    const output = new PassThrough();
-    const context = createCliContext({ stdout: output, stderr: output });
-
-    await initializeWorkspace({}, context);
-
-    expect(readOutput(output)).toContain(
-      `No Git repository or wald workspace found in ${temporaryRoot}.`,
-    );
-    expect(prompts.choices[0]).toEqual({
-      question: "Initialize › Source · How would you like to start?",
-      options: [
-        {
-          label: "Clone a remote repository",
-          description: "Use an SSH or HTTPS URL from GitHub, GitLab, or another Git host.",
-        },
-        {
-          label: "Use an existing local repository",
-          description: "Use an existing checkout or bare repository on this computer.",
-        },
-      ],
-    });
-    expect(prompts.textQuestions).toEqual([]);
-    await expect(fs.stat(path.join(temporaryRoot, ".wald"))).rejects.toMatchObject({
-      code: "ENOENT",
-    });
-  });
-
   it("initializes a remote repository through the guided source selection", async () => {
     process.chdir(temporaryRoot);
     const target = path.join(temporaryRoot, "remote-workspace");
@@ -320,26 +286,6 @@ describe("interactive init wizard", () => {
     const rendered = readOutput(output);
     expect(rendered).toContain("First worktree plan");
     expect(rendered).toContain(path.join(target, "main"));
-  });
-
-  it("returns from confirmation to the layout and keeps earlier remote answers", async () => {
-    process.chdir(temporaryRoot);
-    const target = path.join(temporaryRoot, "remote-after-back");
-    prompts.selections.push("remote", ".", ".");
-    prompts.texts.push(`file://${repository.remote}`, target);
-    prompts.confirmations.push(new PromptBackError(), true, false);
-    const output = new PassThrough();
-    const context = createCliContext({ stdout: output, stderr: output });
-
-    await initializeWorkspace({}, context);
-
-    const layoutCalls = prompts.choices.filter((choice) =>
-      choice.question.includes("Where should worktrees be created?"),
-    );
-    expect(layoutCalls).toHaveLength(2);
-    expect(prompts.selectionDefaults.at(-1)).toBe(".");
-    const workspace = await context.workspaces.find(target);
-    expect(workspace.root).toBe(target);
   });
 
   it("cancels a remote workspace plan without creating its target", async () => {

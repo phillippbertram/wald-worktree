@@ -1,7 +1,6 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { stripVTControlCharacters } from "node:util";
 import { execa } from "execa";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { cliArguments, cliExecutable } from "./helpers/cli.js";
@@ -34,22 +33,12 @@ describe("wald status", { timeout: 30_000 }, () => {
     await fs.rm(temporaryRoot, { force: true, recursive: true });
   });
 
-  it("prints a five-line dashboard and stable JSON for the current worktree", async () => {
-    const human = await runCli(main, "status");
+  it("reports the current worktree and workspace totals in JSON", async () => {
     const json = await execa(cliExecutable, cliArguments("status", "--json"), {
       cwd: main,
       env: { FORCE_COLOR: "1", NO_COLOR: undefined },
       reject: false,
     });
-
-    expect(human.exitCode, human.stderr).toBe(0);
-    const lines = stripVTControlCharacters(human.stdout).split("\n");
-    expect(lines).toHaveLength(5);
-    expect(lines[0]).toContain(`Workspace  ${await fs.realpath(workspace)} · default main`);
-    expect(lines[1]).toContain("Current    main · main · linked · clean");
-    expect(lines[2]).toContain("Tracking   origin/main · ahead 0 · behind 0 · local refs");
-    expect(lines[3]).toBe("Project    none");
-    expect(lines[4]).toContain("Worktrees  1 total · 1 clean · 0 modified · 0 locked · 0 missing");
 
     expect(json.exitCode, json.stderr).toBe(0);
     expect(json.stdout).not.toContain("\u001B[");
@@ -106,10 +95,6 @@ describe("wald status", { timeout: 30_000 }, () => {
     const status = await runCli(workspace, "status", "--json");
     expect(status.exitCode, status.stderr).toBe(0);
     expect(JSON.parse(status.stdout).project.trust).toBe("trusted");
-
-    const human = await runCli(workspace, "status");
-    expect(stripVTControlCharacters(human.stdout)).toContain("Current    workspace root");
-    expect(stripVTControlCharacters(human.stdout)).toContain("Tracking   not applicable");
   });
 
   it("compares only local tracking refs and preserves ahead/behind direction", async () => {

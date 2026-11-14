@@ -4,21 +4,17 @@ This pnpm package builds the Wald product page and Fumadocs site. The Markdown a
 the root [docs directory](../../docs/) provide the docs content and remain readable on GitHub.
 Edit `docs/meta.json` to change the sidebar order.
 
-## Preview and verify
+## Preview and build
 
 From the workspace root:
 
 ```sh
 pnpm docs:dev
-pnpm docs:check
-pnpm --filter @wald/docs exec playwright install chromium
-pnpm docs:test
+pnpm docs:build
 ```
 
-Open `http://localhost:3000/wald-worktree/` for development. `docs:check` builds the CLI,
-checks demo transcripts against current output, exports the site, and checks local links,
-assets, and anchors. `docs:test` serves the static export for browser tests. It expects
-a completed build in `apps/docs/out/`.
+Open `http://localhost:3000/wald-worktree/` for development. The static export goes to
+`apps/docs/out/`.
 
 ## Record a demo
 
@@ -42,7 +38,7 @@ The site uses WebP and JPEG exports of the canonical
 
 In the repository’s **Settings → Pages**, choose **GitHub Actions** as the source. The
 [Docs workflow](../../.github/workflows/docs.yml) builds on pull requests and uploads a
-preview artifact. Pushes to `main` and manual runs from `main` deploy the verified export to
+preview artifact. Pushes to `main` and manual runs from `main` deploy the export to
 [the Wald site](https://phillippbertram.github.io/wald-worktree/). Check the deployment
 environment URL and open a nested guide directly after the first release.
 

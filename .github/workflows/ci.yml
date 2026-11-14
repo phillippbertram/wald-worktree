@@ -33,7 +33,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: git --version
-      - run: pnpm ci:cli
+      - run: pnpm run ci
       - run: node apps/cli/dist/cli.js --help
       - name: Install Linux shell test tools
         if: runner.os == 'Linux'

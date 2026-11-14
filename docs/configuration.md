@@ -61,31 +61,9 @@ It does not switch existing branches, rename worktrees, or override an explicit 
 
 ### Supported layouts
 
-The recommended flat standalone workspace is called
-[Wald Flow](worktrees.md#wald-flow). It uses `paths.worktrees: ..`:
-
-```text
-project/
-├── .wald/workspace.yml
-├── .wald/project.yml         optional local automation and overrides
-├── .wald/shared/
-├── repo.git/
-├── main/
-└── feature-payment/
-```
-
-A grouped standalone workspace uses a child path such as `paths.worktrees: ../worktrees`:
-
-```text
-project/
-├── .wald/workspace.yml
-├── .wald/project.yml         optional local automation and overrides
-├── .wald/shared/
-├── repo.git/
-└── worktrees/
-    ├── main/
-    └── feature-payment/
-```
+[Wald Flow](worktrees.md#wald-flow) uses `paths.worktrees: ..`.
+A [grouped workspace](worktrees.md#grouped-standalone-workspace) uses a child path such as
+`paths.worktrees: ../worktrees`.
 
 For standalone workspaces, `paths.worktrees` must resolve to the workspace root or one of its
 descendants and must not overlap `.wald` or `repo.git`. Use `--worktrees-dir` during `wald init` rather
@@ -97,21 +75,8 @@ the Git directory and primary checkout. The physical configuration and shared fi
 canonical `workspace_config`, `workspace_root`, `worktrees_path`, and `shared_path` for both layouts.
 Re-running `wald init` restores this link and its configured worktree container if either was deleted.
 
-```text
-parent/
-├── project/                         existing primary checkout
-│   └── .git/wald/
-│       ├── workspace.yml
-│       ├── project.yml      optional local automation and overrides
-│       └── shared/
-└── project-worktrees/
-    └── .wald -> ../project/.git/wald
-```
-
-For a visual explanation of the shared and local pieces, see
-[Shared and independent state](worktrees.md#shared-and-independent-state). A separate workspace
-copied from a local repository starts with independent Git object files and does not use local clone
-hardlinks.
+See the [retained checkout layout](worktrees.md#retained-existing-checkout) and
+[shared Git state](worktrees.md#shared-and-independent-state) for how the paths relate.
 
 ### Local shared files
 
@@ -520,28 +485,6 @@ Removal runs:
 
 ```text
 safety inspection -> trust -> pre_remove -> git worktree remove -> post_remove -> optional local branch deletion
-```
-
-```mermaid
-flowchart LR
-    subgraph Creation[Creation with hooks enabled]
-      C1[Resolve repository base and local overrides] --> C2[Validate and trust]
-      C2 --> C3[pre_create]
-      C3 --> C4[git worktree add]
-      C4 --> C5[post_create]
-      C5 --> C6[Ready]
-      C5 -- Failure --> C7[Kept for wald setup]
-    end
-
-    subgraph Removal
-      R1[Inspect safety] --> R2[Validate and trust]
-      R2 --> R3[pre_remove]
-      R3 --> R4[git worktree remove]
-      R4 --> R5[post_remove]
-      R5 --> R8[Optional local branch deletion]
-      R3 -- Failure --> R6[Worktree preserved]
-      R5 -- Failure --> R7[Removal kept, branch preserved, failure reported]
-    end
 ```
 
 `pre_create` failure leaves no new worktree. `post_create` failure keeps the worktree and reports

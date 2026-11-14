@@ -3,7 +3,7 @@ import pc from "picocolors";
 import type { Worktree } from "../domain/types.js";
 import { style } from "./style.js";
 
-export type WelcomeSummary = {
+type WelcomeSummary = {
   workspaceRoot: string;
   current: (Pick<Worktree, "name" | "branch"> & Partial<Pick<Worktree, "state">>) | null;
   worktreeCount: number;
@@ -24,15 +24,7 @@ const wisdoms = [
   "Grow experiments freely; prune with care.",
 ] as const;
 
-export function selectWisdom(random: () => number = Math.random): string {
-  const sample = Math.min(Math.max(random(), 0), 1 - Number.EPSILON);
-  return wisdoms[Math.floor(sample * wisdoms.length)] as string;
-}
-
-export function renderWelcome(
-  summary: WelcomeSummary | null,
-  random: () => number = Math.random,
-): string {
+export function renderWelcome(summary: WelcomeSummary | null): string {
   const lines = [
     pc.green("      🌲  🌳  🌲"),
     `          ${pc.green(pc.bold("Wald"))}`,
@@ -44,7 +36,8 @@ export function renderWelcome(
     lines.push("", renderSummary(summary));
   }
 
-  lines.push("", `  ${pc.dim(`“${selectWisdom(random)}”`)}`, "");
+  const wisdom = wisdoms[Math.floor(Math.random() * wisdoms.length)];
+  lines.push("", `  ${pc.dim(`“${wisdom}”`)}`, "");
   return lines.join("\n");
 }
 
