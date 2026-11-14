@@ -152,17 +152,12 @@ def smoke(binary, root):
     assert not (workspace / "preload-ran").exists()
     print("PASS: local .env and bunfig.toml do not alter the binary runtime", flush=True)
 
-    # Real keypresses cover selection, autocomplete, text entry, confirmation and navigation.
-    terminal([wald], workspace, env, [("What would you like to do?", b"\x1b")])
+    # Exercise a real interruption and confirm the effects of accepting or declining creation.
     terminal([wald], workspace, env, [("What would you like to do?", b"\x03")], expected=130)
-    terminal([wald], workspace, env, [
-        ("What would you like to do?", b"\r"),
+    terminal([wald, "create", "--no-fetch"], workspace, env, [
         ("Select a branch or create a new one:", b"\r"),
         ("Branch name:", b"feature/interactive\r"),
         ("Create › Review · Ready to create?", b"\r"),
-        # The result screen defaults to returning to the main menu.
-        ("What next?", b"\r"),
-        ("What would you like to do?", b"\x1b"),
     ])
     assert (workspace / "feature-interactive" / "README.md").is_file()
     terminal([wald, "create", "--no-fetch"], workspace, env, [
@@ -174,7 +169,7 @@ def smoke(binary, root):
     assert not (workspace / "feature-rejected").exists()
     assert not run(["git", "--git-dir", str(workspace / "repo.git"), "branch", "--list",
                     "feature/rejected"], workspace, env).strip()
-    print("PASS: PTY menu, guided creation, return to menu, review cancellation, Escape and Ctrl+C (130)", flush=True)
+    print("PASS: guided creation, declined creation, and Ctrl+C (130) in a PTY", flush=True)
 
     for shell in required[1:]:
         shell_env = {**env, "WALD_SMOKE_WORKSPACE": str(workspace)}

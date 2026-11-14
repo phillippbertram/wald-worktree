@@ -1,8 +1,6 @@
 import { WaldError } from "../domain/errors.js";
 import { renderShellCompletion } from "./shell-completion.js";
 
-export type SupportedShell = "bash" | "zsh" | "fish";
-
 export class ShellService {
   renderCompletion(shell: string): string {
     return renderShellCompletion(shell);

@@ -519,16 +519,6 @@ export class WorkspaceService {
     throw new WaldError("No wald workspace found. Run wald init inside or for this repository.");
   }
 
-  async ensureSharedDirectory(workspace: Workspace): Promise<void> {
-    const existing = await lstatOrNull(workspace.sharedDir);
-    if (existing?.isSymbolicLink() || (existing && !existing.isDirectory())) {
-      throw new WaldError(
-        `Shared path must be a directory, not a link or file: ${workspace.sharedDir}`,
-      );
-    }
-    await fs.mkdir(workspace.sharedDir, { recursive: true, mode: 0o700 });
-  }
-
   async repair(workspace: Workspace): Promise<WorkspaceRepair> {
     const worktreeDirState = await lstatOrNull(workspace.worktreeDir);
     if (worktreeDirState && !worktreeDirState.isDirectory()) {

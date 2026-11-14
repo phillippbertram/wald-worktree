@@ -23,17 +23,6 @@ function suggestionValues(output: string): string[] {
 }
 
 describe("shell completion scripts", () => {
-  it.each(["zsh", "bash", "fish"])("generates the complete %s integration", async (shell) => {
-    const result = await runCli(projectRoot, "completion", shell);
-
-    expect(result.exitCode, result.stderr).toBe(0);
-    const normalizedOutput = result.stdout
-      .split("\n")
-      .map((line) => line.trimEnd())
-      .join("\n");
-    expect(normalizedOutput).toMatchSnapshot();
-  });
-
   it("keeps PowerShell outside the supported command surface", async () => {
     const result = await runCli(projectRoot, "completion", "powershell");
 

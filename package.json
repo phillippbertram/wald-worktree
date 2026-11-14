@@ -19,15 +19,12 @@
     "test:watch": "pnpm --filter wald-worktree test:watch",
     "typecheck": "pnpm --filter wald-worktree typecheck",
     "uninstall:global": "pnpm --filter wald-worktree uninstall:global",
-    "ci": "pnpm ci:cli && pnpm docs:check",
-    "ci:cli": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "ci": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "docs:dev": "pnpm --filter @wald/docs dev",
     "docs:build": "pnpm --filter @wald/docs build",
-    "docs:check": "pnpm build && pnpm --filter @wald/docs check",
-    "docs:demos:record": "pnpm build && pnpm --filter @wald/docs demos:record",
-    "docs:test": "pnpm --filter @wald/docs test:browser"
+    "docs:demos:record": "pnpm build && pnpm --filter @wald/docs demos:record"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.10"

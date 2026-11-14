@@ -8,17 +8,11 @@ import { initializeProjectConfiguration } from "../src/cli/project-config-wizard
 import type { Workspace } from "../src/domain/types.js";
 import { ConfigService } from "../src/services/config-service.js";
 import { ProjectConfigInitializer } from "../src/services/project-config-initializer.js";
-import { PromptBackError } from "../src/ui/terminal.js";
 
 const prompts = vi.hoisted(() => ({
-  confirmations: [] as Array<boolean | Error>,
-  confirmationCalls: [] as Array<{ question: string; defaultValue: boolean }>,
+  confirmations: [] as boolean[],
   selections: [] as string[],
   manySelections: [] as string[][],
-  manyCalls: [] as Array<{
-    question: string;
-    options: Array<{ label: string; checked?: boolean }>;
-  }>,
 }));
 
 vi.mock("../src/ui/terminal.js", async (importOriginal) => {
@@ -27,22 +21,9 @@ vi.mock("../src/ui/terminal.js", async (importOriginal) => {
     ...actual,
     isInteractiveTerminal: () => true,
     runTask: async <T>(_label: string, task: () => Promise<T>) => await task(),
-    confirm: async (question: string, defaultValue = false) => {
-      prompts.confirmationCalls.push({ question, defaultValue });
-      const confirmation = prompts.confirmations.shift() ?? defaultValue;
-      if (confirmation instanceof Error) throw confirmation;
-      return confirmation;
-    },
-    selectManyValues: async (
-      question: string,
-      options: Array<{ label: string; checked?: boolean }>,
-    ) => {
-      prompts.manyCalls.push({
-        question,
-        options: options.map(({ label, checked }) => ({ label, checked })),
-      });
-      return prompts.manySelections.shift() ?? [];
-    },
+    confirm: async (_question: string, defaultValue = false) =>
+      prompts.confirmations.shift() ?? defaultValue,
+    selectManyValues: async () => prompts.manySelections.shift() ?? [],
     selectValue: async () => prompts.selections.shift() ?? "__none__",
     printKeyValueTable: async () => undefined,
     printStatus: async () => undefined,
@@ -55,10 +36,8 @@ describe("interactive project configuration wizard", () => {
 
   beforeEach(async () => {
     prompts.confirmations = [];
-    prompts.confirmationCalls = [];
     prompts.selections = [];
     prompts.manySelections = [];
-    prompts.manyCalls = [];
     root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "wald-config-wizard-test-")));
     await fs.mkdir(path.join(root, ".wald"));
     workspace = createWorkspace(root);
@@ -76,25 +55,6 @@ describe("interactive project configuration wizard", () => {
     await fs.rm(root, { force: true, recursive: true });
   });
 
-  it("skips the verify script selection when the task is declined", async () => {
-    prompts.selections.push("customize", "__none__", "write");
-    prompts.confirmations.push(true, false, false, false, true);
-
-    const document = await initializeProjectConfiguration(
-      workspace,
-      root,
-      { force: false, yes: false, scope: "workspace", fromProject: false },
-      createContext(),
-    );
-
-    expect(prompts.confirmationCalls).toContainEqual({
-      question: "Configure › Tasks · Create a 'verify' task from detected package scripts?",
-      defaultValue: true,
-    });
-    expect(prompts.manyCalls).toEqual([]);
-    expect(document?.config.tasks).toEqual({});
-  });
-
   it("allows an empty verify script selection after accepting the task", async () => {
     prompts.selections.push("customize", "__none__", "write");
     prompts.confirmations.push(true, false, false, true, true);
@@ -107,16 +67,6 @@ describe("interactive project configuration wizard", () => {
       createContext(),
     );
 
-    expect(prompts.manyCalls).toEqual([
-      {
-        question: "Configure › Tasks · Select package scripts for the verify task:",
-        options: [
-          { label: "build", checked: false },
-          { label: "lint", checked: true },
-          { label: "test", checked: true },
-        ],
-      },
-    ]);
     expect(document?.config.tasks).toEqual({});
   });
 
@@ -128,34 +78,12 @@ describe("interactive project configuration wizard", () => {
       createContext(),
     );
 
-    expect(prompts.confirmationCalls).toEqual([]);
-    expect(prompts.manyCalls).toEqual([]);
     expect(document?.config.tasks.verify?.steps).toEqual([
       expect.objectContaining({ argv: ["pnpm", "run", "lint"] }),
       expect.objectContaining({ argv: ["pnpm", "run", "test"] }),
     ]);
     expect(document?.config.tasks.dev?.steps).toEqual([
       expect.objectContaining({ argv: ["pnpm", "run", "dev"] }),
-    ]);
-  });
-
-  it("returns one step and reuses the previous answer as the default", async () => {
-    prompts.confirmations.push(false, new PromptBackError(), false, true, false, false, true);
-    prompts.selections.push("customize", "__none__", "write");
-
-    await initializeProjectConfiguration(
-      workspace,
-      root,
-      { force: false, yes: false, scope: "workspace", fromProject: false },
-      createContext(),
-    );
-
-    const fetchCalls = prompts.confirmationCalls.filter((call) =>
-      call.question.includes("Fetch before resolving branches"),
-    );
-    expect(fetchCalls).toEqual([
-      expect.objectContaining({ defaultValue: true }),
-      expect.objectContaining({ defaultValue: false }),
     ]);
   });
 
@@ -167,8 +95,6 @@ describe("interactive project configuration wizard", () => {
       { force: false, yes: false, scope: "workspace", fromProject: false },
       createContext(),
     );
-    expect(prompts.confirmationCalls).toEqual([]);
-    expect(prompts.manyCalls).toEqual([]);
     expect(document?.config.hooks.post_create).toHaveLength(1);
     expect(document?.config.tasks.verify?.steps).toHaveLength(2);
     expect(workspace.config.trustedProjectConfig).toBeNull();

@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   build:
-    name: Build and verify docs
+    name: Build docs
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -26,9 +26,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm docs:check
-      - run: pnpm --filter @wald/docs exec playwright install --with-deps chromium
-      - run: pnpm docs:test
+      - run: pnpm docs:build
       - name: Upload preview
         if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v7

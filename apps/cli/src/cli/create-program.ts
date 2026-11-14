@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import pc from "picocolors";
+import manifest from "../../package.json" with { type: "json" };
 import { registerCdCommand } from "./commands/cd.js";
 import { registerCompletionCommand } from "./commands/completion.js";
 import { registerConfigCommand } from "./commands/config.js";
@@ -35,7 +36,7 @@ export function createProgram(
   const program = new Command()
     .name("wald")
     .description("🌲 Where Git worktrees grow — safe, guided workspaces for parallel work.")
-    .version("0.14.0")
+    .version(manifest.version)
     .option(
       "-C, --directory <path>",
       "Run from this directory; repeat to resolve paths in order",

@@ -67,11 +67,9 @@ contains those changes:
 wald handoff feature/review --tool codex
 ```
 
-wald creates the branch at the current `HEAD`, reproduces staged, unstaged, and non-ignored untracked
-state in the new worktree, verifies both sides, and keeps the source unchanged. `wald create
-feature/review --carry` uses the same lifecycle. This transfers code only: start the new editor or
-agent separately, and explicitly pass it any task context. Running processes and agent sessions do
-not move between worktrees.
+Pass the task context to the new agent session. See
+[Hand off and finish work](finish.md#continue-unfinished-code-in-a-new-worktree) for which local
+changes carry over.
 
 ## Operating rules for agents
 
