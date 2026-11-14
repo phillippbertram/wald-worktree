@@ -1,67 +1,65 @@
 # Project automation
 
-Wald merges optional repository-owned `.wald.yml` behavior with workspace-local
-`.wald/project.yml` overrides. Validate both reported sources and the effective behavior before
-granting trust:
+## Review configuration in the right context
 
 ```sh
-wald config
-wald config trust --yes
+wald -C "$checkout" config --json
 ```
 
-Create the recommended local starting configuration with `wald config init`. In non-interactive
-sessions, use `wald config init <worktree> --yes`; replacing an existing local file also requires
-`--force`. Use `--scope project` only when `.wald.yml` should be committed and shared. To migrate an
-existing repository file locally without deleting it, use
-`wald config init <worktree> --scope workspace --from-project --yes`.
+Wald combines repository-owned `.wald.yml` with workspace-local `.wald/project.yml` overrides.
+The JSON reports their sources, the effective behavior hash, and trust state. Read both sources
+and the scripts referenced by the relevant hooks, tasks, or tool profile. Command steps can invoke
+a direct `argv` array or use `shell` to run through `/bin/sh`.
 
-Run named tasks in the selected worktree:
+Inspect from the relevant checkout because its project configuration can differ from the default
+checkout's. Normal creation plans hooks against the selected ref plus the local override. Handoff
+plans them against the source checkout. If creation reports an untrusted config at a Git revision,
+inspect that revision's `.wald.yml` as well as the override. Trust in a different checkout can refer
+to a different behavior hash.
+
+With authority to trust the reviewed configuration, run
+`wald -C "$checkout" config trust --yes` in the context that resolves that configuration. Trust
+is local to the workspace and tied to the effective behavior hash. A behavior change requires a
+new decision. If only an unprepared checkout is needed, `create` and `handoff` support
+`--skip-hooks`. This skips all create hook steps for that invocation, including file copies and
+symlinks. It still validates configuration, and opening a configured tool retains its trust check.
+If the reviewed revision has no checkout yet, this also lets you create it first, then review
+and trust the resulting checkout before running setup. Setup runs `post_create` only.
+
+When asked to set up project automation, `wald config init <worktree> --yes` writes detected
+defaults to the local `.wald/project.yml`. Use `--scope project` for a shared `.wald.yml`, or
+`--scope workspace --from-project` to copy existing project configuration into the local
+scope. This copy keeps the repository file. Review the resulting behavior before trusting it.
+
+## Prepare, verify, and open
 
 ```sh
-wald run <task> <worktree>
+wald -C "$workspace" run verify "$checkout"
+wald -C "$workspace" open "$checkout" --tool codex
 ```
 
-An automatically detected package script named exactly `dev` is exposed separately as
-`wald run dev`; it is not part of the one-shot `verify` task. Interrupting a foreground task with
-`Ctrl-C` exits with status 130.
+Use a configured task if it performs the requested check. Wald applies the task's working
+directory, environment, timeout, and failure policy. If the task is absent, use
+`wald exec <worktree> -- <command> [arguments...]` with the project's documented command.
+Long-running tasks such as `dev` run in the foreground, separately from one-shot verification.
 
-Prefer tasks over reimplementing their commands because tasks preserve configured order,
-environment variables, timeouts, working directories, and failure handling.
+Run `wald open --help` to see built-in profile names. Project profiles can override built-ins.
+Check the effective configuration for the selected checkout and use an available profile when the
+task calls for launching an editor or agent. A new session should receive the task context and the
+worktree path.
 
-Run any configured lifecycle hook manually after changing project configuration:
+## Recover from automation errors
 
-```sh
-wald hook run <pre_create|post_create|pre_remove|post_remove> <worktree>
-```
-
-The command reloads the effective repository base and workspace-local overrides, requires semantic
-trust, and runs only the selected steps. It never creates or removes a worktree. Manual
-`pre_create` and `post_remove` use an existing target and therefore do not reproduce their automatic
-lifecycle state; Wald prints a warning. `wald setup <worktree>` remains the recovery shortcut for
-`post_create`.
-
-Command steps using `argv` do not invoke a shell. A configured `shell` step explicitly uses
-`/bin/sh -c`; review quoting and expansion accordingly. `copy` and `symlink` steps are restricted to
-the target worktree and supported source roots. For multiple files, use one positive glob below an
-explicit source directory while preserving repository-relative paths:
-
-```yaml
-- type: symlink
-  source: shared
-  from: env
-  glob: "**/.env*"
-  to: .
-```
-
-Glob steps process files only, validate every destination before changing targets, and require
-`optional: true` when no match should be accepted. Copy and symlink steps print scoped source and
-target paths for every processed file. Commands print their exact configured invocation and resolved
-working directory before execution, followed by the outcome; environment values are never printed.
-Each hook or named task has its own labeled output block. Consecutive hooks and the individual step
-groups inside a block are separated by blank lines; every step prints `RUNNING` before execution.
-
-An already correct symlink is `UNCHANGED`. Other existing targets fail safely by default. Configure
-`on_existing: skip` to preserve them with a `SKIPPED` status or `on_existing: replace` to remove and
-recreate them. Do not look for a runtime `--force`: replacement is intentionally part of the trusted
-configuration. Legacy `overwrite: true` remains compatible with `on_existing: replace`. Optional
-missing sources and empty globs print a skip reason; non-optional cases remain errors.
+- If `post_create` failed, keep the created checkout. Review what already ran, fix the cause, and
+  retry with `wald -C "$workspace" setup "$checkout"` when repeating the hook is appropriate.
+  The same command can run `post_create` after creation with `--skip-hooks`.
+- To test a specific configured hook against an existing checkout, use
+  `wald hook run <event> <worktree>`. It runs just that event's trusted steps. Manual
+  `pre_create` and `post_remove` use an existing checkout, so their target state differs from
+  automatic execution.
+- For file steps, an already correct symlink is `UNCHANGED`. Existing target conflicts fail by
+  default. Inspect the path before changing the configuration to `on_existing: skip` or
+  `on_existing: replace`. Replacement belongs in the reviewed configuration.
+- Use `wald doctor --json` to diagnose paths, registrations, config trust, missing file sources,
+  and unavailable executables. A failing check can exit 1 with a valid report on stdout. Read any
+  proposed repair before applying it.

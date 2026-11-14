@@ -1,139 +1,72 @@
 # Worktree operations
 
-**Wald Flow** means the recommended flat standalone layout: `.wald`, `repo.git`, and all worktrees are
-siblings in one workspace root. It does not define a branch or merge strategy. Other Wald layouts use
-the same commands and safety rules.
+## Select or initialize a workspace
 
-## Discover and select
+Discovery works from the workspace root, a retained primary checkout, or a linked worktree. In
+Wald Flow, `.wald`, `repo.git`, and all worktrees are siblings. Other layouts can keep an existing
+checkout or group worktrees under a separate directory. Read the actual paths from `list --json`.
 
-Use `wald status --json` for the current context and local tracking comparison. Use `wald list --json`
-for complete worktree records and `wald cd <name-or-branch>` for the canonical path. `wald cd` only
-changes the parent shell when shell integration is installed.
-The [release binary](https://github.com/phillippbertram/wald-worktree/releases) includes the Bun
-runtime, reported as `runtime.bun` by `wald doctor`. Configured hooks and tools need their own
-executables.
-Use `wald doctor --json` for a read-only runtime, configuration, path, Git-registration, trust, file
-source, and executable diagnosis. Review its suggestions before applying any repair.
+If a checkout is unmanaged and the task calls for onboarding it to Wald, use
+`wald -C "$checkout" init --adopt . --yes --json` to keep it in place. Add
+`--worktrees-dir <path>` if a particular worktree container is needed. Use
+`wald init <repository> <directory> --json` when the requested layout is a standalone clone.
+Initialization writes workspace metadata. Confirm the intended source and destination before
+running it. Use `--no-remote` with adoption when the repository is intentionally local-only.
 
-## Create
+## Create a checkout
 
 ```sh
-wald create <branch>
-wald create <new-branch> --from <commit-ish>
-wald create <new-branch> --carry
-wald create <branch> --skip-hooks
-wald handoff <new-branch>
+wald -C "$workspace" create feature/search --json
+wald -C "$workspace" create feature/review --from release/1.x --no-fetch --json
 ```
 
-Use `--cd` to enter the new worktree through shell integration, or `--tool <profile>` to open an
-editor or agent. These destinations cannot be combined. When run inside a worktree, an explicit
-`--from HEAD` uses that worktree's current commit; without `--from`, new branches use the configured
-default branch. This start point defines history, not tracking: a new local branch has no upstream.
-Do not publish it unless the user explicitly requests that external change; Wald prints the matching
-`git push -u <remote> HEAD` command for an authorized first push. Existing remote branches continue
-to track their same-named remote ref.
+These are alternative examples. Choose a branch and base for the task. Wald resolves a name to an
+existing local branch, then a matching remote-tracking branch, then a new branch. If the branch is
+already checked out, locate it with `list --json` and decide whether to reuse it. If only the
+directory name conflicts, use `--name <directory>` for a different directory.
 
-An interactive branch or handoff choice opens a create-plan review before trust, hooks, or Git
-mutation. **Change options…** exposes the directory, eligible base, hook policy, and opening behavior.
-`Esc` returns to the preceding choice and retains previous values; cancelling creation prevents the
-mutation. Explicit branch commands do not add this review. In automation, `create` and `handoff`
-with `--json` require a branch and cannot be combined with navigation or tool-opening options.
+- For a new branch, `--from <ref>` selects the base. `--from HEAD` from a concrete worktree uses
+  that checkout's current commit. Without `--from`, Wald prefers the configured default branch's
+  remote-tracking ref when available and otherwise uses the local default branch.
+- Creation can fetch and update shared refs according to project settings. Use `--no-fetch` when
+  the selected local refs must be used and `--fetch` when the task needs refreshed remote refs.
+  `status --json` compares local refs without contacting the remote.
+- A new branch has no upstream. A branch created from a matching remote-tracking branch tracks
+  that branch. Publishing is a separate Git operation.
+- Use `worktree.path` from the JSON result for subsequent work. JSON mode requires an explicit
+  branch and conflicts with `--cd`, `--open`, and `--tool`. If opening a tool is part of the
+  task, run `wald open` separately with the returned path.
+- Creation normally runs trusted `pre_create` and `post_create` hooks. Read
+  [automation and recovery](automation.md) before skipping or retrying setup.
 
-Fetching follows the effective project-configuration default. Override it only when the task
-requires it with `--fetch` or `--no-fetch`. Use `--tool <profile>` to open an editor or agent after
-setup.
+For parallel tasks, use one checkout and branch per task. Pass each agent its checkout path and
+task context. Coordinate shared resources such as ports and databases separately.
 
-`--carry` and `handoff` use the current worktree's exact `HEAD` and require a new branch. They copy
-staged, unstaged, and non-ignored untracked code, verify that the source stayed unchanged, and leave
-the changes in both worktrees. Ignored files remain in the source. `handoff` is code-only and does
-not move an editor, process, or agent session. If transfer fails before `post_create`, Wald rolls back
-the fresh target and branch when it can do so safely; a `post_create` failure keeps the transferred
-target for `wald setup` recovery.
-
-By default, creation runs trusted `pre_create` before Git creates the checkout, followed by
-`post_create`. If the latter phase fails, keep the created checkout, inspect the error, fix the
-cause, and retry the printed `wald setup <worktree>` command. To test hooks independently after a
-configuration change, use `wald hook run <event> <worktree>`; this runs no Git creation or removal.
-
-When the task calls for skipping setup, `create`, `plant`, and `handoff` accept `--skip-hooks`.
-It skips both create events and all their command, copy, and symlink steps for that invocation.
-Creation then needs no trust approval and does not alter saved trust; validation and carry checks
-still apply. Tool opening retains its trust check. `wald setup <worktree>` can run `post_create`
-later with the usual trust requirement.
-
-Rename an eligible linked worktree directory and its local branch, preserving `HEAD`, index, files,
-file modes, and upstream tracking:
+## Carry local edits
 
 ```sh
-wald rename <worktree> <new-name>
-wald rename <worktree> <new-name> --branch feature/payment-review
-wald rename <worktree> <new-name> --keep-branch
+wald -C "$source_checkout" handoff feature/review --json
 ```
 
-The default uses `new-name` for both directory and local branch. `--branch` supplies a different
-branch name, including `/`; `--keep-branch` moves only the directory. These options are mutually
-exclusive. Default-branch and detached worktrees require `--keep-branch`.
+Use `handoff` or `create <new-branch> --carry` when the target needs the source's unfinished changes.
+Select the actual source checkout with `-C`. Carry requires a fresh branch, starts at the source's
+exact `HEAD`, and copies staged, unstaged, and non-ignored untracked state. The source keeps its
+work. Ignored files, including ignored local settings, stay in the source. Pass task context to a
+new agent session separately.
 
-Rename refuses the primary or current checkout, external, missing, unavailable, locked, and
-submodule-containing worktrees. It checks the destination, local branch collisions, literal Git ref
-format, `HEAD`, branch identity, and upstream before mutation. Dirty worktrees are allowed. Rename
-runs no lifecycle hooks and never creates, deletes, fetches, or pushes remote branches. Existing
-tracking stays unchanged, so `payment-review` may continue to track `origin/feature/payment`.
+Carry rejects merge conflicts, active merge/rebase/cherry-pick state, sparse checkouts, and other
+unsupported source state. Inspect the failure before retrying. If Wald preserves a partial target,
+inspect its contents and branch first. If only `post_create` failed, recover the retained checkout
+with `wald setup` after reviewing the failed steps.
 
-On failure, Wald attempts an identity-checked rollback of both steps. If rollback is incomplete,
-inspect the reported paths and refs and follow the recovery guidance; do not force or overwrite
-concurrent work. `--json` adds `before.branch` and `branchChange: { before, after, renamed, upstream }`
-to the result. Branch names and upstream are `null` when not applicable.
+## Rename an existing checkout
 
-## Execute and remove
+Run `wald rename <worktree> <new-name> --json` from the workspace root or another checkout.
+By default this renames both the linked directory and its local branch. Use `--keep-branch` for
+a directory-only move, which is required for the configured default branch or a detached checkout.
+Use `--branch <new-branch>` to choose a different local branch name. Existing upstream tracking
+is preserved. Use the returned `worktree.path` after success.
 
-The global `-C <path>` / `--directory <path>` option selects the working directory before discovery
-or mutation. For example, `wald -C /dev/project/main handoff feature/review --json` copies changes
-from `main`, regardless of the agent's own directory. The directory must already exist. Repeated
-relative options resolve from the preceding selection. Arguments after `--` stay with the child
-command, so `wald -C /dev/project exec main -- tool -C other` passes `-C other` to `tool`.
-
-Pass command arguments after `--`:
-
-```sh
-wald exec <worktree> -- pnpm test
-```
-
-Before removal, inspect `wald list --json` and relevant Git state. Non-interactive removal requires
-`--yes`. Add `--force` only with explicit permission to discard dirty, unmerged, or locked worktree
-state:
-
-```sh
-wald remove <worktree> --yes
-```
-
-Add `--json` for one machine-readable result. It does not preview or confirm the removal, so both
-the explicit worktree identifiers and `--yes` remain required.
-
-This default removes only the checkout and preserves its branch. In a terminal, Wald previews the
-target and offers explicit cancel, keep-branch removal, and branch-deleting removal actions, with
-cancel selected by default. Batch branch selection starts empty and requires a final confirmation.
-With `--force`, unmerged local branches are also offered and clearly labeled. In automation, use
-`--delete-branch --yes` only when the user explicitly authorizes deleting the corresponding local
-branch, and add `--force` only with permission to
-discard unmerged work. The configured default branch, detached checkouts, and remote branches are
-never deleted; `--force` alone grants no branch-deletion permission.
-
-`wald prune` is different from removal: it previews stale Git registrations for worktree directories
-that are already missing. To apply that metadata-only cleanup non-interactively, use:
-
-```sh
-wald prune --apply --yes
-```
-
-Pruning never deletes a branch or directory and leaves locked registrations untouched.
-
-After pruning manually deleted worktrees, re-run `wald init` to restore a missing configured worktree
-container or `.wald` metadata link. To disconnect the repository from Wald instead, preview:
-
-```sh
-wald uninit
-```
-
-Apply non-interactively with `wald uninit --apply --yes`. Registered linked worktrees always block the
-operation. Local metadata and shared files require explicit permission to discard with `--force`.
+The primary and current checkouts are ineligible. Wald also checks for locks, unavailable or
+external checkouts, submodules, and collisions. If rollback is incomplete, inspect the reported
+paths and refs before any repair.

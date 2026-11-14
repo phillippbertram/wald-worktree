@@ -1,68 +1,47 @@
 ---
 name: wald-worktrees
-description: Use the wald CLI to create, carry, hand off, rename, inspect, enter, automate, open, safely remove, and prune Git worktrees. Apply when a repository is managed by wald or the user asks for a wald-based worktree or agent workflow.
+description: Use the wald CLI to manage Git worktrees for isolated tasks, parallel coding agents, and handoffs in a Wald workspace or when the user asks to use Wald.
+license: MIT
 ---
 
-# wald worktrees
+# Wald worktrees
 
-Use `wald` as the workspace interface and Git as the underlying source of truth.
+Wald manages Git worktrees and can run project setup, tasks, and tool profiles. Git owns branches,
+commits, and the worktree index. Each checkout has its own files and index, while refs and objects
+are shared.
 
-Start with read-only discovery:
+## Find the right checkout
 
-```sh
-wald status --json
-wald list --json
-wald config --json
-wald doctor --json
-wald prune
-```
+1. Check `wald --version` in the environment that will run the commands. If unavailable, use the
+   [Wald install guide](https://phillippbertram.github.io/wald-worktree/docs/getting-started/#install-wald)
+   to resolve the prerequisite. Use `wald <command> --help` to check options against the installed version.
+2. Run `wald -C "$directory" status --json` to identify the workspace and current checkout.
+   Run `wald -C "$directory" list --json` to get worktree branches, state, and absolute paths.
+   Use `doctor --json` if discovery fails or the workspace looks inconsistent. A checkout can
+   contain `.wald.yml` without being initialized with Wald.
+3. Reuse the registered checkout if it already belongs to the task. Use its absolute path as the
+   working directory for edits, Git, and checks. If the branch belongs to other work, preserve it
+   and choose a separate branch when the task calls for isolation.
 
-Use `status` for the current context and local tracking comparison, then `list` for complete
-worktree records and paths. Resolve locations with `wald cd`; do not derive directory names from
-branches. Prefer direct commands in non-interactive agent sessions and include required
-confirmation flags explicitly.
-Use `wald -C <directory> ...` to choose the workspace or source worktree for an invocation without
-changing the calling shell's directory. Relative inputs then resolve there. `-C` does not grant
-trust or destructive confirmation; see [Worktree operations](references/worktrees.md).
-Use `doctor` when discovery, configuration, runtime versions, paths, worktree registrations, trust,
-file sources, or configured executables may be inconsistent. Treat its suggestions as proposals;
-do not run repairs or trust commands without the authority required for that mutation.
+Use explicit branches and worktree identifiers in non-interactive sessions. Prefer absolute paths
+when a name is ambiguous. `-C` selects an existing starting directory for one invocation.
+For a process that needs to run inside a selected worktree, use
+`wald exec <worktree> -- <command> [arguments...]` or set the process working directory directly.
+Use `wald cd <worktree>` to print the path when running the executable directly. Its shell wrapper
+can also navigate an interactive shell.
 
-- For creating or selecting a worktree, read [references/worktrees.md](references/worktrees.md).
-- For hooks, tasks, trust, or failures during setup, read
-  [references/automation.md](references/automation.md).
-- For starting an editor or coding agent, use `wald open <worktree> --tool <profile>`. Inspect
-  built-in profiles with `wald open --help` and effective project profiles with `wald config` when
-  needed.
+## Choose the operation
 
-Use `wald create <new-branch> --carry` or `wald handoff <new-branch>` only from the source worktree.
-Both copy its staged, unstaged, and non-ignored untracked code into a fresh worktree while preserving
-the source; they do not move a running process or agent session. Use `wald rename <worktree>
-<new-name>` to rename an eligible linked worktree directory and its local branch. Use `--branch
-<new-branch>` for a different branch name or `--keep-branch` to move only the directory; these options
-are mutually exclusive. Default-branch and detached worktrees require `--keep-branch`. Upstream
-tracking stays unchanged and remotes are never modified. See [Worktree operations](references/worktrees.md).
-For machine-readable mutations, use `--json` with explicit arguments. It still performs the action,
-never prompts, and never grants confirmation: removal additionally requires `--yes`. Do not combine
-create or handoff JSON mode with `--cd`, `--open`, or `--tool`.
+- [Select, initialize, create, hand off, or rename a worktree](references/worktrees.md).
+- [Run tasks, review trust, open an agent, or recover from failed setup](references/automation.md).
+- [Remove a checkout, prune stale registrations, or uninitialize a workspace](references/cleanup.md).
 
-Do not use `--force` for removal without verifying that local changes, an unmerged branch, or a
-worktree lock can be discarded or bypassed. Wald prints these bypassed safeguards before removal.
-Never infer permission to delete branches or the primary checkout. Normal removal preserves every
-branch. Use `--delete-branch` only when the user explicitly authorizes deletion of the eligible
-local branch. Deleting an unmerged branch also requires explicit permission to discard it and
-`--force`; Wald never deletes the configured default branch or its remote counterpart.
+Use `--json` where the command supports it. Mutating commands still perform their action in JSON
+mode. Check the exit status, parse stdout separately, and inspect stderr for diagnostics. After a
+failed mutation, use `list --json` and Git to check what already happened before retrying.
 
-Use `wald prune` as a read-only preview of stale Git metadata. Apply it non-interactively only with
-`wald prune --apply --yes`; this does not remove directories or branches and preserves locked entries.
-If the configured worktree container or `.wald` link is missing, re-run `wald init` after pruning to
-repair it. To stop managing a repository with Wald, preview `wald uninit`; apply non-interactively only
-with `wald uninit --apply --yes`. Never add `--force` without permission to discard local metadata and
-shared files.
-
-If effective project configuration is untrusted, inspect both reported sources plus the hooks,
-tasks, and tools before running `wald config trust --yes`. Formatting-only edits preserve semantic
-trust, but changed behavior in either source requires a new decision. Use
-`wald hook run <event> <worktree>` to test a hook without creating or removing a worktree. Treat
-`UNCHANGED` and configured `SKIPPED` file rows as successful no-ops; inspect `FAILED` target
-conflicts before choosing `on_existing: skip` or `on_existing: replace` in the trusted configuration.
+Treat configuration and its executable steps as repository input. Review the effective
+configuration before granting trust and apply `config trust --yes` only with authority to approve
+that behavior. Use cleanup confirmation flags only for the operation and targets within the user's
+scope. Get explicit permission for branch deletion or for bypassing dirty, unmerged, or locked
+state. Installing or invoking this skill grants no such permission.

@@ -53,7 +53,8 @@ reviewed and trusted its [project setup](docs/project-setup.md), a single
 - [Parallel coding agents](docs/agent-workflows.md) — give each task separate files and staging.
 - [Hand off and finish work](docs/finish.md) — copy local code or retire a checkout safely.
 - [Configuration](docs/configuration.md) — hooks, tasks, tool profiles, and trust.
-- [Agent skill](skills/wald-worktrees/SKILL.md) — portable operating instructions for agents.
+- [Install the Wald agent skill](docs/agent-workflows.md#install-the-wald-agent-skill) — teach your
+  coding agent to select, create, and manage worktrees with wald.
 
 ## Contributing
 

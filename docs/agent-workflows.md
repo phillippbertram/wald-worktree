@@ -98,11 +98,27 @@ See [Wald Flow](worktrees.md#wald-flow) for the recommended workspace layout,
 [four everyday workflows](worktrees.md#four-everyday-workflows) for the general worktree model, and
 [Configuration](configuration.md#named-tasks-and-tool-profiles) for custom tools and tasks.
 
-## Portable Agent Skill
+## Install the Wald agent skill
 
-[`skills/wald-worktrees`](../skills/wald-worktrees/SKILL.md) teaches compatible agents how to discover
-and use the CLI safely. Copy that directory into the skill location supported by the agent host, or
-include it with the repository so the host can discover it.
+[`wald-worktrees`](../skills/wald-worktrees/SKILL.md) teaches agents how to find the right checkout,
+create or hand off a worktree, run trusted project tasks, and recover safely from failures.
+[Install the wald CLI](getting-started.md#install-wald) so `wald --version` works in the environment
+where the agent runs. The skill contains instructions and reference files.
 
-The main skill stays short. Separate references cover worktree creation, automation, and lifecycle
-details when an agent needs them.
+From the project where you want to use it, run the [Skills CLI](https://www.skills.sh/docs/cli) and
+choose your agent:
+
+```sh
+pnpm dlx skills add phillippbertram/wald-worktree --skill wald-worktrees
+```
+
+Add `--global` to install for your user across projects. For Codex, you can select the target
+explicitly with `--agent codex`.
+
+For a manual installation, copy the whole `skills/wald-worktrees/` directory, including
+`references/`, into the skill directory for your agent. For Codex, use `.agents/skills/` in the
+project or `~/.agents/skills/` for your user.
+
+Start a new agent session in the target project. In Codex, try
+“Use `$wald-worktrees` to find the checkout for `feature/search` and run its verification task.”
+The agent can also pick up the skill when you ask it to work in a Wald workspace.
