@@ -138,4 +138,34 @@ describe("worktree domain", () => {
       hardBlockers: ["the worktree state could not be read safely"],
     });
   });
+
+  it("does not let a lock hide an unreadable worktree state during removal inspection", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "wald-locked-unavailable-test-"));
+    try {
+      const git = {
+        run: vi.fn().mockResolvedValue({ stdout: "", stderr: "broken metadata", exitCode: 128 }),
+        succeeds: vi.fn().mockResolvedValue(false),
+      } as unknown as GitClient;
+      const service = new WorktreeService(git);
+      vi.spyOn(service, "resolve").mockResolvedValue({
+        name: "broken",
+        role: "linked",
+        path: root,
+        head: "abc123",
+        branch: "broken",
+        branchRef: "refs/heads/broken",
+        locked: true,
+        lockReason: "unfinished work",
+        prunable: false,
+        state: "locked",
+      });
+      const workspace = { config: { defaultBranch: "main", remote: null } } as Workspace;
+      await expect(service.inspectRemoval(workspace, "broken")).resolves.toMatchObject({
+        hardBlockers: ["the worktree state could not be read safely"],
+        blockers: ["the branch is not merged into main", "the worktree is locked"],
+      });
+    } finally {
+      await fs.rm(root, { force: true, recursive: true });
+    }
+  });
 });

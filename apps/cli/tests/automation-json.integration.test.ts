@@ -105,6 +105,69 @@ describe("automation JSON contracts", { timeout: 20_000 }, () => {
     });
   });
 
+  it("requires explicit force for a dirty, unmerged, locked batch in JSON mode", async () => {
+    const workspace = path.join(temporaryRoot, "workspace");
+    await runCli(temporaryRoot, "init", repository.remote, workspace, "--json");
+    await runCli(workspace, "create", "feature/one", "--no-fetch", "--json");
+    await runCli(workspace, "create", "feature/two", "--no-fetch", "--json");
+    const first = path.join(workspace, "feature-one");
+    const second = path.join(workspace, "feature-two");
+    await execa("git", ["config", "user.email", "tests@example.invalid"], { cwd: first });
+    await execa("git", ["config", "user.name", "wald tests"], { cwd: first });
+    await fs.writeFile(path.join(first, "README.md"), "unmerged work\n");
+    await execa("git", ["add", "README.md"], { cwd: first });
+    await execa("git", ["commit", "-m", "unmerged work"], { cwd: first });
+    await fs.writeFile(path.join(first, "README.md"), "local work\n");
+    await execa("git", ["worktree", "lock", first], { cwd: first });
+
+    const args = ["remove", "feature-one", "feature-two", "--delete-branch", "--yes", "--json"];
+    const refused = await runCli(workspace, ...args);
+    expect(refused.exitCode).toBe(1);
+    expect(refused.stdout).toBe("");
+    const error = JSON.parse(refused.stderr);
+    expect(error).toMatchObject({ exitCode: 1 });
+    expect(error.message).toContain("contains staged, unstaged, or untracked changes");
+    expect(error.message).toContain("the branch is not merged into main");
+    expect(error.message).toContain("the worktree is locked");
+    expect(await fs.readFile(path.join(first, "README.md"), "utf8")).toBe("local work\n");
+    await expect(fs.stat(second)).resolves.toSatisfy((stat) => stat.isDirectory());
+    for (const branch of ["feature/one", "feature/two"]) {
+      const ref = await execa("git", ["show-ref", "--verify", `refs/heads/${branch}`], {
+        cwd: second,
+      });
+      expect(ref.exitCode).toBe(0);
+    }
+
+    const removed = await runCli(workspace, ...args, "--force");
+    expect(removed.exitCode, removed.stderr).toBe(0);
+    expect(JSON.parse(removed.stdout)).toMatchObject({
+      action: "removed",
+      worktrees: [
+        { name: "feature-one", branch: "feature/one" },
+        { name: "feature-two", branch: "feature/two" },
+      ],
+      deletedBranches: ["feature/one", "feature/two"],
+      keptBranches: [],
+    });
+    expect(removed.stderr).toContain("Warning: --force bypasses these removal safeguards:");
+    await expect(fs.stat(first)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(fs.stat(second)).rejects.toMatchObject({ code: "ENOENT" });
+    for (const branch of ["feature/one", "feature/two"]) {
+      const ref = await execa(
+        "git",
+        [
+          `--git-dir=${path.join(workspace, "repo.git")}`,
+          "show-ref",
+          "--verify",
+          "--quiet",
+          `refs/heads/${branch}`,
+        ],
+        { reject: false },
+      );
+      expect(ref.exitCode).toBe(1);
+    }
+  });
+
   it("exposes custom, kept, default and detached rename branches in terminal and JSON output", async () => {
     const workspace = path.join(temporaryRoot, "workspace");
     await runCli(temporaryRoot, "init", repository.remote, workspace, "--json");

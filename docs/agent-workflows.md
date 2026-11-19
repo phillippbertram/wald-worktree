@@ -52,8 +52,11 @@ wald run verify feature-ui
 wald remove feature-ui
 ```
 
-Removal preserves each branch by default. Interactive users may select eligible local branches for
-deletion; an unmerged branch additionally requires `--force`. Automation must request deletion
+Removal preserves each branch by default. Interactive users can select several worktrees from
+**Remove worktrees…** in the main menu or `wald remove`, then delete all eligible local branches
+or choose branches individually. See [removal and branch deletion](cli-reference.md#wald-remove)
+for the confirmation flow. Dirty files, unmerged branches, and locks require explicit interactive
+force consent or `--force`. Automation must request deletion
 explicitly with `--delete-branch --yes` and must not add `--force` without permission to discard the
 unmerged work. If another person or agent still needs a worktree or branch, do not remove it without
 an explicit handoff.

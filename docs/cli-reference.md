@@ -482,15 +482,21 @@ wald rename main main-checkout --keep-branch --json
 wald remove [worktrees...] [--delete-branch] [--force] [--yes] [--json]
 ```
 
-Without identifiers, a terminal offers removable linked worktrees. Non-interactive use requires
-explicit identifiers and `--yes`. An interactive terminal previews each worktree, branch, and full
+Without identifiers, a terminal offers removable linked worktrees with a checkbox selection.
+The same flow is available from **Remove worktrees…** in the main menu and **Remove multiple
+worktrees…** under **Maintenance & diagnostics…**. The selection excludes the primary checkout
+and the current worktree. Non-interactive use requires explicit identifiers and `--yes`.
+An interactive terminal previews each worktree, branch, and full
 path, then offers **Cancel** (selected by default), removal while keeping branches, or removal with
 eligible local branch deletion. Each action names its effect; choosing to keep branches still
 explicitly removes the worktrees. With `--delete-branch`, the removal action includes branch deletion.
 
-For multiple worktrees, optional branch deletion uses an initially empty checkbox list followed by
-a confirmation that lists the branches to delete. `Esc` returns to branch selection and retains the
-selection. With `--force`, eligible unmerged branches are also offered and clearly labeled.
+For multiple worktrees, choose removal while keeping every branch, removal with **all eligible
+local branches**, or an initially empty checkbox list to select individual branches. A shared
+confirmation lists every worktree and the local branches to delete or keep, including reasons for
+ineligible branches. The all-branches action skips the branch checkbox list. `Esc` from the shared
+confirmation returns to individual branch selection when used, retaining the selection; otherwise
+it returns to the action menu. Eligible unmerged branches are clearly labeled.
 `--yes` without `--delete-branch` keeps every branch.
 
 | Option | Meaning |
@@ -503,17 +509,35 @@ selection. With `--force`, eligible unmerged branches are also offered and clear
 The three bypassable safeguards are staged, unstaged, or untracked changes; a branch not merged
 into the configured default branch; and a Git worktree lock. With `--force`, wald prints the branch,
 path, and every bypassed safeguard before confirmation, including with `--yes`.
+Without `--force`, interactive removal shows the same safeguards and asks for explicit force
+consent after the removal action is selected and any batch confirmation is complete. **Cancel** is
+selected by default. Declining preserves every worktree and branch; `Esc` returns to the action
+menu and retains individual branch selections. Returning to worktree selection rebuilds the plan
+and requires fresh consent for any safeguards. Trust prompts, removal hooks, and deletion happen
+only after confirmation. With `--yes`, in non-interactive use, and in JSON mode, bypassing safeguards
+still requires explicit `--force`; no force question is asked.
 
 The retained primary checkout and a worktree whose state is unavailable are hard blockers and
 cannot be bypassed. Duplicate identifiers resolving to the same worktree are removed once. Branches
 are kept unless selected interactively or requested with `--delete-branch`. A local branch with a
 known HEAD is eligible unless it is the configured default branch. Deleting an unmerged branch
-additionally requires `--force`; `--force` alone never selects a branch for deletion. Detached
-checkouts and remote branches are never deleted, and `--delete-branch` rejects the entire plan
+additionally requires interactive force consent or `--force`; neither alone selects a branch for
+deletion. Detached checkouts and remote branches are never deleted, and `--delete-branch` rejects the entire plan
 before mutation if any selected worktree has an ineligible branch. Trusted `pre_remove` and
 `post_remove` hooks run around Git removal; an eligible branch is deleted only after `post_remove`
 succeeds and its identity is revalidated.
 JSON mode requires explicit worktrees and `--yes`; it never prompts or implies branch deletion.
+
+```sh
+# Select several worktrees interactively, then choose whether to delete their branches.
+wald remove
+
+# Review these worktrees and remove all their eligible local branches.
+wald remove feature-api feature-ui --delete-branch
+
+# Non-interactive deletion still requires explicit confirmation flags.
+wald remove feature-api feature-ui --delete-branch --yes
+```
 
 ## `wald prune`
 

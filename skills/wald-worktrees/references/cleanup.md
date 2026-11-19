@@ -15,8 +15,13 @@ wald -C "$workspace" remove "$checkout" --yes --json
 ```
 
 This removes the checkout and preserves its branch. Without `--yes`, the interactive command
-offers a preview and confirmation. For automation, inspect the target before invoking the command.
-A dirty worktree, unmerged branch, or lock needs explicit authority to bypass with `--force`.
+offers a preview and confirmation. Interactive users can select multiple checkouts with `wald remove`
+or **Remove worktrees…** in the main menu, then delete all eligible local branches or select them
+individually. Dirty files, unmerged branches, and locks trigger a separate force-consent question
+with cancellation selected by default. Declining preserves all selected worktrees and branches.
+For automation, inspect the target before invoking the command. With `--yes` or `--json`, no force
+question is asked: a dirty worktree, unmerged branch, or lock needs explicit authority to bypass
+with `--force`.
 Use `--delete-branch` only when the user explicitly requests deletion of the eligible local branch.
 Wald protects the primary checkout and configured default branch and never deletes remote branches.
 

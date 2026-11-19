@@ -323,7 +323,10 @@ export class WorktreeService {
 
   async inspectRemoval(workspace: Workspace, identifier: string): Promise<RemovalInspection> {
     const worktree = await this.resolve(workspace, identifier);
-    const dirty = worktree.state === "modified";
+    const state = worktree.locked
+      ? await this.readState(worktree, { ignoreLock: true })
+      : worktree.state;
+    const dirty = state === "modified";
     const merged =
       worktree.role === "primary" || (await this.isMergedIntoDefault(workspace, worktree));
     const blockers: string[] = [];
@@ -332,7 +335,7 @@ export class WorktreeService {
     if (worktree.role === "primary") {
       hardBlockers.push("the primary checkout cannot be removed by wald");
     }
-    if (worktree.state === "unavailable") {
+    if (state === "unavailable") {
       hardBlockers.push("the worktree state could not be read safely");
     }
 
@@ -981,11 +984,14 @@ export class WorktreeService {
     );
   }
 
-  private async readState(worktree: ParsedWorktree): Promise<WorktreeState> {
+  private async readState(
+    worktree: Pick<Worktree, "path" | "locked">,
+    options: { ignoreLock?: boolean } = {},
+  ): Promise<WorktreeState> {
     if (!(await pathExists(worktree.path))) {
       return "missing";
     }
-    if (worktree.locked) {
+    if (worktree.locked && !options.ignoreLock) {
       return "locked";
     }
 

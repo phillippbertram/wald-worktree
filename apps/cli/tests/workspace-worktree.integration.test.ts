@@ -294,6 +294,17 @@ describe("managed Git workspace", { timeout: 30_000 }, () => {
       expectedHead: inspection.worktree.head,
       mergedIntoDefault: false,
     });
+
+    await git.run(["worktree", "lock", feature.path], { gitDir: workspace.gitDir });
+    const locked = await worktrees.inspectRemoval(workspace, feature.name);
+    expect(locked.dirty).toBe(true);
+    expect(locked.worktree.state).toBe("locked");
+    expect(locked.blockers).toEqual([
+      "the worktree contains staged, unstaged, or untracked changes",
+      "the branch is not merged into main",
+      "the worktree is locked",
+    ]);
+    expect(await fs.readFile(path.join(feature.path, "untracked.txt"), "utf8")).toBe("change\n");
   });
 
   it("refuses to delete a branch while another worktree still checks it out", async () => {

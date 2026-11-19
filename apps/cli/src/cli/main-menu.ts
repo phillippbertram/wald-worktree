@@ -5,6 +5,7 @@ import { renderWelcome, renderWorkspaceContext } from "../ui/welcome.js";
 import { createWorktree } from "./commands/create.js";
 import { handoffWorktree } from "./commands/handoff.js";
 import { initializeWorkspace } from "./commands/init.js";
+import { removeWorktrees } from "./commands/remove.js";
 import { runProjectTask } from "./commands/run.js";
 import type { CliContext } from "./context.js";
 import { findWorkspaceOrNull, resolveWorktree } from "./helpers.js";
@@ -55,6 +56,11 @@ export async function runMainMenu(program: Command, context: CliContext): Promis
             value: "worktrees",
             description: "Select a checkout to open, rename, or remove.",
           },
+          {
+            label: "Remove worktrees…",
+            value: "remove",
+            description: "Select worktrees to remove and optionally delete their local branches.",
+          },
           ...(current
             ? [
                 {
@@ -95,6 +101,12 @@ export async function runMainMenu(program: Command, context: CliContext): Promis
         case "worktrees":
           if ((await browseWorktrees(workspace, context)) === "exit") return;
           continue;
+        case "remove":
+          await removeWorktrees(
+            { worktrees: [], force: false, deleteBranch: false, yes: false },
+            context,
+          );
+          break;
         case "tasks": {
           const worktree = await resolveWorktree(workspace, undefined, context.worktrees, {
             forcePrompt: true,
