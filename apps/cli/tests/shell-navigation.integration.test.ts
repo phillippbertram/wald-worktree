@@ -80,6 +80,7 @@ describe("shell directory integration", { timeout: 30_000 }, () => {
           shell === "fish"
             ? `
 source "$WALD_TEST_INTEGRATION"
+test (wald -C "$WALD_TEST_WORKSPACE" path main) = "$WALD_TEST_WORKSPACE/main"; or exit 1
 wald -C "$WALD_TEST_WORKSPACE" status; or exit 2
 test "$PWD" = "$WALD_TEST_ROOT"; or exit 3
 wald -C --cd create feature/no-navigation --no-fetch; or exit 4
@@ -101,6 +102,7 @@ printf 'NAVIGATION_OK\\n'
             : `
 ${shell === "zsh" ? "autoload -Uz compinit; compinit -D" : ""}
 source "$WALD_TEST_INTEGRATION"
+[ "$(wald -C "$WALD_TEST_WORKSPACE" path main)" = "$WALD_TEST_WORKSPACE/main" ] || exit 1
 wald -C "$WALD_TEST_WORKSPACE" status || exit 2
 [ "$PWD" = "$WALD_TEST_ROOT" ] || exit 3
 wald -C --cd create feature/no-navigation --no-fetch || exit 4

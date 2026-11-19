@@ -20,7 +20,7 @@ async function main(): Promise<void> {
       return;
     }
 
-    if (error instanceof WaldError && error.exitCode === 130) {
+    if (error instanceof WaldError && error.exitCode === 130 && !error.effects) {
       process.exitCode = 130;
       return;
     }

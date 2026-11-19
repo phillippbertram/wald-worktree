@@ -26,10 +26,14 @@ export function registerCompletionCommand(program: Command, context: CliContext)
   runtimeCommand.addOption(
     new Option("--shell <shell>", "Completion input quoting").choices(["bash"]),
   );
-  const directoryOption = completion.options.get("directory");
-  if (!directoryOption) throw new Error("Missing global directory completion option.");
-  for (const command of completion.commands.values())
-    command.options.set("directory", directoryOption);
+  for (const [path, command] of completion.commands) {
+    const parentPath = path.slice(0, path.lastIndexOf(" ") + 1).trimEnd();
+    const parent = parentPath ? requiredTabCommand(completion, parentPath) : completion;
+    for (const [name, option] of parent.options) {
+      if (name !== "version" && option.value !== "--version" && !command.options.has(name))
+        command.options.set(name, option);
+    }
+  }
 
   publicCommand
     .description(completionDescription)
@@ -102,7 +106,7 @@ export function registerCompletionCommand(program: Command, context: CliContext)
       context,
       parsed.args.includes("--keep-branch"),
     );
-    applyDynamicHandlers(completion, candidates);
+    applyDynamicHandlers(completion, candidates, parsed.args.includes("--list"));
     completion.parse(parsed.args);
   });
 }
@@ -146,6 +150,7 @@ function requestedCompletionKinds(args: string[]): Set<CompletionKind> {
     case "handoff":
       return new Set(["tools"]);
     case "cd":
+    case "path":
     case "setup":
     case "remove":
     case "exec":
@@ -155,7 +160,7 @@ function requestedCompletionKinds(args: string[]): Set<CompletionKind> {
     case "open":
       return new Set(["worktrees", "tools"]);
     case "run":
-      return new Set(["tasks", "worktrees"]);
+      return args.includes("--list") ? new Set(["worktrees"]) : new Set(["tasks", "worktrees"]);
     case "hook":
       return args[1] === "run" ? new Set(["worktrees"]) : new Set();
     case "config":
@@ -244,10 +249,14 @@ function emptyCompletionCandidates(): CompletionCandidates {
   return { worktrees: [], renamableWorktrees: [], branches: [], tasks: [], tools: [] };
 }
 
-function applyDynamicHandlers(completion: RootCommand, candidates: CompletionCandidates): void {
+function applyDynamicHandlers(
+  completion: RootCommand,
+  candidates: CompletionCandidates,
+  listTasks: boolean,
+): void {
   setArgumentHandler(completion, "create", "branch", candidates.branches);
   setArgumentHandler(completion, "plant", "branch", candidates.branches);
-  for (const command of ["cd", "open", "setup", "remove", "exec"]) {
+  for (const command of ["cd", "path", "open", "setup", "remove", "exec"]) {
     setArgumentHandler(
       completion,
       command,
@@ -256,8 +265,13 @@ function applyDynamicHandlers(completion: RootCommand, candidates: CompletionCan
     );
   }
   setArgumentHandler(completion, "rename", "worktree", candidates.renamableWorktrees);
-  setArgumentHandler(completion, "run", "task", candidates.tasks);
-  setArgumentHandler(completion, "run", "worktree", candidates.worktrees);
+  setArgumentHandler(
+    completion,
+    "run",
+    "task",
+    listTasks ? candidates.worktrees : candidates.tasks,
+  );
+  setArgumentHandler(completion, "run", "worktree", listTasks ? [] : candidates.worktrees);
   setArgumentHandler(completion, "hook run", "worktree", candidates.worktrees);
   setArgumentHandler(completion, "config init", "worktree", candidates.worktrees);
   setOptionHandler(completion, "create", "tool", candidates.tools);

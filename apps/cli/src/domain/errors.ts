@@ -1,10 +1,23 @@
+import type { Worktree } from "./types.js";
+
+type RemovalTarget = Pick<Worktree, "name" | "path" | "branch">;
+
+export type RemovalEffects = {
+  removedWorktrees: RemovalTarget[];
+  deletedBranches: string[];
+  keptBranches: string[];
+  completedWorktrees?: RemovalTarget[];
+  failedWorktree?: RemovalTarget;
+  pendingWorktrees?: RemovalTarget[];
+};
+
 export class WaldError extends Error {
   readonly exitCode: number;
-  readonly effects: unknown;
+  readonly effects?: RemovalEffects;
 
   constructor(
     message: string,
-    options?: { cause?: unknown; exitCode?: number; effects?: unknown },
+    options?: { cause?: unknown; exitCode?: number; effects?: RemovalEffects },
   ) {
     super(message, { cause: options?.cause });
     this.name = "WaldError";

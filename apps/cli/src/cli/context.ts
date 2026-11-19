@@ -11,6 +11,7 @@ import { WorkspaceStatusService } from "../services/workspace-status-service.js"
 import { WorktreeService } from "../services/worktree-service.js";
 import { WorktreeWorkflowService } from "../services/worktree-workflow-service.js";
 import { createAutomationReporter } from "../ui/automation-reporter.js";
+import { isInteractiveTerminal, runTask } from "../ui/terminal.js";
 
 export type CliOutput = {
   stdout: NodeJS.WritableStream;
@@ -19,10 +20,12 @@ export type CliOutput = {
 
 export type CliExecutionState = {
   json: boolean;
+  noInput: boolean;
+  implicitExecCommand?: string[];
 };
 
 export function createCliExecutionState(): CliExecutionState {
-  return { json: false };
+  return { json: false, noInput: false };
 }
 
 export type CliContext = ReturnType<typeof createCliContext>;
@@ -35,12 +38,18 @@ export function createCliContext(
   const configs = new ConfigService();
   const workspaces = new WorkspaceService(git, configs);
   const worktrees = new WorktreeService(git);
-  const processes = new ProcessRunner();
-  const automation = new AutomationService(processes, createAutomationReporter);
+  const canPrompt = () => !execution.noInput && !execution.json && isInteractiveTerminal();
+  const processes = new ProcessRunner(canPrompt);
+  const automation = new AutomationService(processes, (output, context) =>
+    createAutomationReporter(output, context, canPrompt()),
+  );
   const tools = new ToolService(processes);
   return {
     output,
     execution,
+    canPrompt,
+    runTask: <T>(label: string, task: () => Promise<T>) =>
+      canPrompt() ? runTask(label, task) : task(),
     git,
     configs,
     projectConfigs: new ProjectConfigInitializer(),

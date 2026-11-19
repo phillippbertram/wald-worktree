@@ -20,21 +20,24 @@ import type { CliContext, CliOutput } from "./context.js";
 export async function resolveWorktree(
   workspace: Workspace,
   identifier: string | undefined,
-  worktrees: WorktreeService,
+  context: CliContext,
   options: {
     forcePrompt?: boolean;
+    promptOutput?: NodeJS.WriteStream;
     initialPath?: string;
     navigation?: PromptNavigation;
   } = {},
 ): Promise<Worktree> {
+  const { worktrees } = context;
   if (identifier) return await worktrees.resolve(workspace, identifier);
   const current = await worktrees.current(workspace);
   if (current && !options.forcePrompt) return current;
   const all = await worktrees.list(workspace);
   if (all.length === 0) throw new WaldError("The workspace has no worktrees. Use wald create.");
   if (all.length === 1) return all[0] as Worktree;
-  if (!isInteractiveTerminal()) throw new WaldError("Specify a worktree without a TTY.");
+  if (!context.canPrompt()) throw new WaldError("Specify a worktree name or path.");
   const selected = await selectWorktree(all, {
+    output: options.promptOutput,
     navigation: options.navigation,
     initialValue: options.initialPath ?? current?.path,
   });
@@ -63,7 +66,7 @@ export async function ensureTrusted(
   options: { navigation?: PromptNavigation; nonInteractive?: boolean } = {},
 ): Promise<void> {
   if (context.configs.isTrusted(workspace, project) || !project) return;
-  if (options.nonInteractive || !isInteractiveTerminal()) {
+  if (options.nonInteractive || !context.canPrompt()) {
     throw new WaldError(
       `Project configuration is not trusted: ${project.path}\nReview it, then run: wald config trust --yes`,
     );
@@ -99,7 +102,6 @@ export async function chooseBranch(
   worktrees: WorktreeService,
   state: { selectedValue?: string; branchValue?: string; searchValue?: string } = {},
 ): Promise<string> {
-  if (!isInteractiveTerminal()) throw new WaldError("Branch is required without a TTY.");
   const checkedOut = new Map(
     (await worktrees.list(workspace))
       .filter((item) => item.branch)
@@ -177,7 +179,6 @@ export async function chooseNewBranch(
   state: { branchValue?: string } = {},
   validateAsync?: (value: string) => Promise<void>,
 ): Promise<string> {
-  if (!isInteractiveTerminal()) throw new WaldError("Branch is required without a TTY.");
   const branch = await promptText(prompt, state.branchValue, {
     navigation: "cancel",
     validate: (value) => (value ? undefined : "Enter a new branch name."),
@@ -202,7 +203,7 @@ export async function findWorkspaceOrNull(context: CliContext): Promise<Workspac
   }
 }
 
-export function removalError(worktree: Worktree, blockers: string[]): WaldError {
+export function removalError(worktree: Pick<Worktree, "name">, blockers: string[]): WaldError {
   return new WaldError(
     `Refusing to remove ${worktree.name}:\n${blockers.map((item) => `- ${item}`).join("\n")}`,
   );

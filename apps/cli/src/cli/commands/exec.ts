@@ -2,7 +2,7 @@ import type { Command } from "commander";
 import { z } from "zod";
 import { WaldError } from "../../domain/errors.js";
 import { style } from "../../ui/style.js";
-import { isInteractiveTerminal, isPromptBackError, promptText } from "../../ui/terminal.js";
+import { isPromptBackError, promptText } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
 import { resolveWorktree, writeLine } from "../helpers.js";
 import { nonEmptyCliString, parseCliInput } from "../input.js";
@@ -25,9 +25,16 @@ export function registerExecCommand(program: Command, context: CliContext): void
     .argument("[worktree]", "Worktree name, branch, or path")
     .argument("[command...]", "Command and arguments after --")
     .allowUnknownOption(true)
-    .addHelpText("after", "\nExample:\n  wald exec feature-payment -- pnpm test\n")
+    .addHelpText(
+      "after",
+      "\nExamples:\n  wald exec -- pnpm test\n  wald exec feature-payment -- pnpm test\n",
+    )
     .action(async (worktree: unknown, command: unknown) => {
-      const input = parseCliInput(execInputSchema, { worktree, command });
+      const child = context.execution.implicitExecCommand;
+      const input = parseCliInput(
+        execInputSchema,
+        child === undefined ? { worktree, command } : { command: child },
+      );
       await executeCommand(input, context);
     });
 }
@@ -42,7 +49,7 @@ export async function executeCommand(
   let initialPath: string | undefined;
   let rawCommand: string | undefined;
   while (true) {
-    const selected = await resolveWorktree(workspace, input.worktree, context.worktrees, {
+    const selected = await resolveWorktree(workspace, input.worktree, context, {
       forcePrompt,
       initialPath,
       navigation: forcePrompt ? "cancel" : undefined,
@@ -52,8 +59,8 @@ export async function executeCommand(
       await context.processes.runInteractive(input.command, selected.path);
       return;
     }
-    if (!isInteractiveTerminal()) {
-      throw new WaldError("Non-interactive execution requires: wald exec <worktree> -- <command>");
+    if (!context.canPrompt()) {
+      throw new WaldError("Specify a command: wald exec [worktree] -- <command>.");
     }
     try {
       rawCommand = await promptText(

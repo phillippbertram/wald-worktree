@@ -7,7 +7,7 @@ import { builtInToolNames } from "../../services/tool-service.js";
 import type { CreatedWorktree, CreatePlan } from "../../services/worktree-workflow-service.js";
 import { type CreateDestination, printCreatePlan } from "../../ui/create-plan.js";
 import { style } from "../../ui/style.js";
-import { isPromptBackError, promptText, runTask, selectValue } from "../../ui/terminal.js";
+import { isPromptBackError, promptText, selectValue } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
 import {
   chooseBranch,
@@ -128,6 +128,7 @@ export async function createWorktree(
   input = { ...input };
   const workspace = await context.workspaces.find();
   const promptedForBranch = input.branch === undefined;
+  if (promptedForBranch && !context.canPrompt()) throw new WaldError("Specify a branch name.");
   const branchState: { selectedValue?: string; branchValue?: string } = {};
   let plan: CreatePlan;
   while (true) {
@@ -151,6 +152,17 @@ export async function createWorktree(
     } catch (error) {
       if (isPromptBackError(error)) continue;
       throw error;
+    }
+  }
+  if (input.open || input.tool) {
+    const tool = input.tool ?? plan.project?.config.defaults.tool;
+    if (!tool && !context.canPrompt()) {
+      throw new WaldError(
+        "Specify a tool with --tool or configure defaults.tool before opening a worktree.",
+      );
+    }
+    if (tool && !Object.hasOwn(context.tools.profiles(plan.project), tool)) {
+      throw new WaldError(`Unknown tool profile: ${tool}`);
     }
   }
   if (!plan.skipHooks) {
@@ -180,7 +192,7 @@ export async function createWorktree(
         return created;
       }
       throw new WaldError(
-        `Worktree was created at ${created.path}, but opening it failed: ${toErrorMessage(error)}`,
+        `Worktree was created at ${created.path}, but opening it failed: ${toErrorMessage(error)}\nRetry with: wald open -C ${shellQuote(created.path)}${input.tool ? ` --tool ${shellQuote(input.tool)}` : ""}`,
         { cause: error },
       );
     }
@@ -261,7 +273,7 @@ async function prepareCreatePlan(
       carry: input.carry,
       skipHooks: input.skipHooks,
     });
-  return input.json ? await prepare() : await runTask("Preparing worktree", prepare);
+  return input.json ? await prepare() : await context.runTask("Preparing worktree", prepare);
 }
 
 async function reviewCreatePlan(

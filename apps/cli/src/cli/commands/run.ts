@@ -1,10 +1,11 @@
 import type { Command } from "commander";
 import { z } from "zod";
 import { WaldError } from "../../domain/errors.js";
+import { sanitizeTerminalText } from "../../infrastructure/safe-text.js";
 import { style } from "../../ui/style.js";
-import { isInteractiveTerminal, isPromptBackError, searchSelect } from "../../ui/terminal.js";
+import { isPromptBackError, searchSelect } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
-import { ensureTrusted, resolveWorktree, success } from "../helpers.js";
+import { ensureTrusted, resolveWorktree, success, writeJson, writeLine } from "../helpers.js";
 import { nonEmptyCliString, parseCliInput } from "../input.js";
 import { offerProjectConfiguration } from "./config.js";
 
@@ -23,13 +24,52 @@ export function registerRunCommand(program: Command, context: CliContext): void 
     .description("Run a named project task in a worktree")
     .argument("[task]", "Task name from the effective project configuration")
     .argument("[worktree]", "Worktree name, branch, or path")
+    .option("--list", "List configured tasks for the optional worktree without executing them")
+    .option("--json", "Emit the task list as JSON (requires --list)")
     .addHelpText(
       "after",
-      "\nExamples:\n  wald run verify feature-payment\n  wald run dev feature-payment\n",
+      "\nExamples:\n  wald run verify feature-payment\n  wald run --list\n  wald run --list feature-payment --json\n",
     )
-    .action(async (task: unknown, worktree: unknown) => {
-      await runProjectTask(parseCliInput(runInputSchema, { task, worktree }), context);
-    });
+    .action(
+      async (task: unknown, worktree: unknown, options: { list?: boolean; json?: boolean }) => {
+        const input = parseCliInput(runInputSchema, { task, worktree });
+        if (options.list) {
+          if (input.worktree)
+            throw new WaldError(
+              "Task listing accepts at most one worktree: wald run --list [worktree].",
+            );
+          await listProjectTasks(input.task, options.json === true, context);
+          return;
+        }
+        if (options.json) throw new WaldError("Task JSON output requires --list.");
+        await runProjectTask(input, context);
+      },
+    );
+}
+
+async function listProjectTasks(
+  identifier: string | undefined,
+  json: boolean,
+  context: CliContext,
+) {
+  const workspace = await context.workspaces.find();
+  const selected = await resolveWorktree(workspace, identifier, context);
+  const project = await context.workflow.projectForWorktree(workspace, selected);
+  const configured = project?.config.tasks ?? {};
+  const tasks = Object.keys(configured)
+    .sort()
+    .map((name) => ({ name, description: configured[name]?.description ?? null }));
+  if (json) {
+    writeJson(context.output.stdout, { worktree: selected.path, tasks });
+    return;
+  }
+  if (tasks.length === 0) writeLine(context.output.stdout, "No tasks configured.");
+  for (const { name, description } of tasks) {
+    writeLine(
+      context.output.stdout,
+      sanitizeTerminalText(description ? `${name}  ${description}` : name),
+    );
+  }
 }
 
 export async function runProjectTask(input: RunInput, context: CliContext): Promise<void> {
@@ -39,7 +79,7 @@ export async function runProjectTask(input: RunInput, context: CliContext): Prom
   let initialPath: string | undefined;
   let selectedTask: string | undefined;
   while (true) {
-    const worktree = await resolveWorktree(workspace, input.worktree, context.worktrees, {
+    const worktree = await resolveWorktree(workspace, input.worktree, context, {
       forcePrompt,
       initialPath,
       navigation: forcePrompt ? "cancel" : undefined,
@@ -50,7 +90,7 @@ export async function runProjectTask(input: RunInput, context: CliContext): Prom
       const message = project
         ? "No tasks are configured in the effective project configuration."
         : `No project configuration found for ${worktree.path}`;
-      if (input.task || !isInteractiveTerminal()) throw new WaldError(message);
+      if (input.task || !context.canPrompt()) throw new WaldError(message);
       if (await offerProjectConfiguration(worktree, "No project tasks configured.", context))
         continue;
       return;
@@ -58,7 +98,7 @@ export async function runProjectTask(input: RunInput, context: CliContext): Prom
     while (true) {
       let task = input.task;
       if (!task) {
-        if (!isInteractiveTerminal()) throw new WaldError("Task is required without a TTY.");
+        if (!context.canPrompt()) throw new WaldError("Specify a task name.");
         try {
           task = await searchSelect(
             `Run › Task · Select a task for ${style.worktree(worktree.name)}:`,

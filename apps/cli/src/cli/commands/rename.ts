@@ -3,13 +3,7 @@ import { z } from "zod";
 import { WaldError } from "../../domain/errors.js";
 import type { Worktree } from "../../domain/types.js";
 import { style } from "../../ui/style.js";
-import {
-  isInteractiveTerminal,
-  isPromptBackError,
-  promptText,
-  selectValue,
-  selectWorktree,
-} from "../../ui/terminal.js";
+import { isPromptBackError, promptText, selectValue, selectWorktree } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
 import { success, writeJson, writeLine } from "../helpers.js";
 import { nonEmptyCliString, parseCliInput } from "../input.js";
@@ -53,7 +47,7 @@ export function registerRenameCommand(program: Command, context: CliContext): vo
     .option("--json", "Emit machine-readable JSON without prompting")
     .addHelpText(
       "after",
-      "\n--branch and --keep-branch cannot be combined.\nThe default branch and detached worktrees require --keep-branch.\nUpstream tracking is kept; remotes are never changed.\n\nExamples:\n  wald rename feature-payment payment-review\n  wald rename feature-payment payment-review --branch feature/payment-review\n  wald rename feature-payment payment-review --keep-branch\n  wald rename\n",
+      "\n--branch and --keep-branch cannot be combined.\nThe default branch and detached worktrees require --keep-branch.\nUpstream tracking is kept; remotes are never changed.\n\nExamples:\n  # Rename the directory and local branch\n  wald rename feature-payment payment-review\n  # Rename the directory only\n  wald rename feature-payment payment-review --keep-branch\n  # Use a separate local branch name\n  wald rename feature-payment payment-review --branch feature/payment-review\n  wald rename\n",
     )
     .action(async (worktree: unknown, newName: unknown, options: unknown) => {
       await renameWorktree(
@@ -127,7 +121,7 @@ async function prepareGuidedRename(
   input: RenameInput,
   context: CliContext,
 ) {
-  if (!isInteractiveTerminal())
+  if (!context.canPrompt())
     throw new WaldError("Non-interactive rename requires a worktree and new name.");
   let initialPath: string | undefined;
   while (true) {

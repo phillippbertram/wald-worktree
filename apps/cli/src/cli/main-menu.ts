@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import type { Worktree } from "../domain/types.js";
-import { isInteractiveTerminal, isPromptBackError, selectValue } from "../ui/terminal.js";
+import { isPromptBackError, selectValue } from "../ui/terminal.js";
 import { renderWelcome, renderWorkspaceContext } from "../ui/welcome.js";
 import { createWorktree } from "./commands/create.js";
 import { handoffWorktree } from "./commands/handoff.js";
@@ -14,7 +14,7 @@ import { runMaintenanceMenu, runSettingsMenu } from "./workspace-menus.js";
 import { browseWorktrees } from "./worktree-menu.js";
 
 export async function runMainMenu(program: Command, context: CliContext): Promise<void> {
-  if (!isInteractiveTerminal()) {
+  if (!context.canPrompt()) {
     context.output.stdout.write(program.helpInformation());
     return;
   }
@@ -108,7 +108,7 @@ export async function runMainMenu(program: Command, context: CliContext): Promis
           );
           break;
         case "tasks": {
-          const worktree = await resolveWorktree(workspace, undefined, context.worktrees, {
+          const worktree = await resolveWorktree(workspace, undefined, context, {
             forcePrompt: true,
             navigation: "back",
           });

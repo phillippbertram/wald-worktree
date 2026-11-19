@@ -19,6 +19,7 @@ describe("CLI contract", () => {
       "status",
       "list",
       "cd",
+      "path",
       "open",
       "exec",
       "run",

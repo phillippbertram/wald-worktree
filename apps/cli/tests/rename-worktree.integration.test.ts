@@ -227,7 +227,7 @@ describe("worktree and branch rename", { timeout: 20_000 }, () => {
     ).rejects.toThrow(/primary checkout/u);
     const run = git.run.bind(git);
     vi.spyOn(git, "run").mockImplementation(async (args, options) => {
-      if (args[0] === "status" && options?.cwd === feature.path)
+      if (args.includes("status") && options?.cwd === feature.path)
         return { exitCode: 128, stdout: "", stderr: "unavailable" };
       return await run(args, options);
     });
@@ -451,7 +451,7 @@ describe("worktree and branch rename", { timeout: 20_000 }, () => {
         const move = args[0] === "worktree" && args[1] === "move";
         const branch = args[0] === "branch" && args[1] === "--move";
         const verification =
-          failure === "verification" && options?.cwd === plan.target && args[0] === "status";
+          failure === "verification" && options?.cwd === plan.target && args.includes("status");
         if (
           !injected &&
           ((move && failure !== "after branch rename" && failure !== "verification") ||

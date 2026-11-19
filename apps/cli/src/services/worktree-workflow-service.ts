@@ -188,7 +188,7 @@ export class WorktreeWorkflowService {
         await this.automation.runHook(targetProject, "post_create", postContext);
       } catch (error) {
         throw new WaldError(
-          `Worktree was created at ${created.path}, but post-create setup failed: ${toErrorMessage(error)}\nRetry with: wald setup ${shellQuote(created.name)}`,
+          `Worktree was created at ${created.path}, but post-create setup failed: ${toErrorMessage(error)}\nRetry with: wald setup -C ${shellQuote(created.path)}`,
           { cause: error },
         );
       }
@@ -437,7 +437,7 @@ export class WorktreeWorkflowService {
   }
 }
 
-function removalEffects(worktree: Worktree, deletedBranch: string | null): unknown {
+function removalEffects(worktree: Worktree, deletedBranch: string | null) {
   return {
     removedWorktrees: [{ name: worktree.name, branch: worktree.branch, path: worktree.path }],
     deletedBranches: deletedBranch ? [deletedBranch] : [],

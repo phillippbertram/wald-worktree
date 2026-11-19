@@ -16,7 +16,7 @@ resolution ([release notes](https://github.com/git/git/blob/master/Documentation
 ## General behavior
 
 ```text
-wald [-C <path>] [--version] [--help] <command>
+wald [-C <path>] [--no-input] [--version] [--help] <command>
 ```
 
 Run `wald` without a command for the guided menu. Choose **Worktrees…** to select a checkout first,
@@ -73,9 +73,19 @@ appear before or after the subcommand; arguments after `--` are not interpreted 
 cd <worktree>` and `wald -C <path> create <branch> --cd` explicitly navigate after success. A failed
 command leaves the shell in its previous directory. `-C` grants neither confirmation nor trust.
 
+### Unattended commands
+
+Pass the global `--no-input` before or after a command to disable wald prompts, even in a terminal.
+Without a subcommand it prints help. Supply required arguments and confirmation flags explicitly.
+An unresolved choice or missing trust produces an error. Commands that support `--json` follow
+the same input rules. Configured tasks and hooks receive EOF on stdin in these modes.
+Programs explicitly started by `exec` or opened as tools retain their own I/O. Arguments after
+`exec … --` belong to the child program.
+
 ### Output
 
-`--json` changes representation only: it is not a dry run and never grants confirmation or trust.
+`--json` selects machine-readable output and disables Wald prompts. Mutating commands still
+require their usual authorization and trust.
 JSON mode never prompts. Successful commands write exactly one JSON document to stdout. Hook and
 child-process output stays on stderr. Operational failures keep stdout empty and write a redacted
 JSON error with `message` and `exitCode` to stderr. `doctor` is the exception for diagnosed state:
@@ -136,7 +146,8 @@ options. Initialization never moves or deletes an existing checkout and never co
 It also never copies or removes repository configuration unless an explicit config command requests
 the copy.
 Direct and non-interactive invocations do not show the guided preview.
-JSON clone mode requires both `repository` and `directory`. JSON adoption requires `--adopt` and
+Clone mode derives an omitted destination from the repository name in both text and JSON output.
+An existing nonempty destination is rejected. JSON adoption requires `--adopt` and
 `--yes`. The result action is `initialized`, `repaired`, or `unchanged`.
 
 When the repository already has a valid wald configuration, `init` verifies its local infrastructure.
@@ -196,6 +207,11 @@ with `--open` or `--tool` retains its own trust check. Run `wald setup <worktree
 
 JSON mode requires a branch and cannot be combined with `--cd`, `--open`, `--tool`, or the internal
 shell-integration option `--print-path`.
+
+For unattended `--open`, supply `--tool` or set `defaults.tool`. Wald checks for a missing choice
+or unknown profile before running create hooks or creating the worktree. Tool startup happens
+after setup so a tool installed by a hook can run. If opening fails, the error identifies the
+created checkout and gives a command to retry opening it.
 
 `--carry` must run inside a concrete worktree and cannot be combined with `--from`. Its target must
 be a new local branch with no matching local or configured-remote ref. wald starts at the source's
@@ -326,6 +342,13 @@ wald cd [worktree]
 Prints the canonical worktree path. The shell wrapper consumes this path and changes the parent
 shell's directory. Without shell integration, use the printed path with a normal `cd`.
 
+## `wald path`
+
+`wald path [worktree]` prints the canonical checkout path on stdout, including when shell
+integration is installed. Use it in scripts, for example `checkout=$(wald path feature/api)`.
+Omitting the identifier selects the current checkout or the only worktree. An ambiguous target
+opens a picker in a terminal and requires an explicit identifier for unattended use.
+
 ## `wald open`
 
 ```text
@@ -347,16 +370,19 @@ Runs the argument array directly in the selected worktree without a shell. Keep 
 command so its options are not parsed by `wald`.
 
 ```sh
+wald exec -- pnpm test
 wald exec feature-payment -- pnpm test
 ```
 
 When the command is omitted in a terminal, `wald` prompts and explicitly runs the entered text through
-`/bin/sh`. Non-interactive execution requires both the worktree and command.
+`/bin/sh`. Unattended execution requires a command. The current or only worktree resolves an
+omitted target. With several candidates at the workspace root, provide a worktree explicitly.
 
 ## `wald run`
 
 ```text
 wald run [task] [worktree]
+wald run --list [worktree] [--json]
 ```
 
 Runs a named effective project-configuration task in the selected worktree. Omitting the task opens
@@ -368,6 +394,11 @@ not printed.
 
 If a guided task selection has no configured tasks, wald offers project automation setup or a way
 back. Supplying an explicit task still reports a missing task or configuration as an error.
+
+`--list` reads the effective configuration for that checkout without running tasks or requiring
+trust. With `--json`, the result contains the absolute `worktree` path and a `tasks` array sorted
+by name. Each entry has a `name` and a nullable `description`. An empty array is a successful
+listing. JSON output for `run` requires `--list`.
 
 ```sh
 wald run verify feature-payment
@@ -479,43 +510,36 @@ wald rename main main-checkout --keep-branch --json
 ## `wald remove`
 
 ```text
-wald remove [worktrees...] [--delete-branch] [--force] [--yes] [--json]
+wald remove [worktrees...] [--dry-run] [--delete-branch] [--force] [--yes] [--json]
 ```
 
-Without identifiers, a terminal offers removable linked worktrees with a checkbox selection.
-The same flow is available from **Remove worktrees…** in the main menu and **Remove multiple
-worktrees…** under **Maintenance & diagnostics…**. The selection excludes the primary checkout
-and the current worktree. Non-interactive use requires explicit identifiers and `--yes`.
-An interactive terminal previews each worktree, branch, and full
-path, then offers **Cancel** (selected by default), removal while keeping branches, or removal with
-eligible local branch deletion. Each action names its effect; choosing to keep branches still
-explicitly removes the worktrees. With `--delete-branch`, the removal action includes branch deletion.
+Use **Remove worktrees…** in the main menu or run `wald remove` to select one or more worktrees.
+The picker excludes the primary and current checkouts. A direct command accepts names, branches,
+or paths. Review the worktrees and choose which local branches to keep or delete. For a single
+worktree the action itself confirms removal. For a batch, the final review names the worktrees
+and branch decisions. With `--delete-branch`, wald goes straight to that review.
 
-For multiple worktrees, choose removal while keeping every branch, removal with **all eligible
-local branches**, or an initially empty checkbox list to select individual branches. A shared
-confirmation lists every worktree and the local branches to delete or keep, including reasons for
-ineligible branches. The all-branches action skips the branch checkbox list. `Esc` from the shared
-confirmation returns to individual branch selection when used, retaining the selection; otherwise
-it returns to the action menu. Eligible unmerged branches are clearly labeled.
-`--yes` without `--delete-branch` keeps every branch.
+The review lists local changes, locks, and branches outside the default branch's history. When
+any safeguard applies, the confirming action explicitly says **Force removal**. **Cancel** is the
+default. Escape returns to the preceding choice and preserves the selection. Trust for executable
+project configuration is a separate decision before removal hooks run.
 
 | Option | Meaning |
 | --- | --- |
-| `--force` | Bypass dirty, unmerged, and lock safeguards. |
-| `--delete-branch` | Delete each removed worktree's eligible local branch. |
-| `--yes` | Confirm removal without prompting. |
-| `--json` | Emit removed worktrees plus deleted and retained local branches. |
+| `--dry-run` | Inspect the requested operation and return immediately after the preview. |
+| `--delete-branch` | Request deletion of each selected worktree's local branch. |
+| `--force` | Allow bypassing dirty, unmerged, and lock safeguards. |
+| `--yes` | Confirm removal of the named worktrees; keep branches unless deletion was requested. |
+| `--json` | Emit a machine-readable preview or removal result. |
 
-The three bypassable safeguards are staged, unstaged, or untracked changes; a branch not merged
-into the configured default branch; and a Git worktree lock. With `--force`, wald prints the branch,
-path, and every bypassed safeguard before confirmation, including with `--yes`.
-Without `--force`, interactive removal shows the same safeguards and asks for explicit force
-consent after the removal action is selected and any batch confirmation is complete. **Cancel** is
-selected by default. Declining preserves every worktree and branch; `Esc` returns to the action
-menu and retains individual branch selections. Returning to worktree selection rebuilds the plan
-and requires fresh consent for any safeguards. Trust prompts, removal hooks, and deletion happen
-only after confirmation. With `--yes`, in non-interactive use, and in JSON mode, bypassing safeguards
-still requires explicit `--force`; no force question is asked.
+`wald remove feature-api feature-ui --delete-branch --dry-run --json` returns `action: "preview"`,
+the modeled `force` setting, `blocked`, and an entry for each distinct worktree. Each entry includes
+its name, path, branch, `branchAction` (keep, delete, none, or blocked), `branchReason`, `forceReasons`,
+`hardBlockers`, and `requiresTrust`. The batch is blocked when any hard blocker, missing force
+permission, or missing trust prevents the requested operation. Confirmation via `--yes` is only
+required for unattended execution. Exit 0 means inspection succeeded, including for blocked
+plans. Unknown or ambiguous identifiers and inspection failures use the normal error contract.
+A dry run runs no hooks and writes no trust decision. Each execution builds a fresh plan.
 
 The retained primary checkout and a worktree whose state is unavailable are hard blockers and
 cannot be bypassed. Duplicate identifiers resolving to the same worktree are removed once. Branches
@@ -526,7 +550,12 @@ deletion. Detached checkouts and remote branches are never deleted, and `--delet
 before mutation if any selected worktree has an ineligible branch. Trusted `pre_remove` and
 `post_remove` hooks run around Git removal; an eligible branch is deleted only after `post_remove`
 succeeds and its identity is revalidated.
-JSON mode requires explicit worktrees and `--yes`; it never prompts or implies branch deletion.
+JSON mode requires explicit worktrees and either `--dry-run` or `--yes`.
+
+If execution stops partway through a batch, the JSON error's `effects` includes
+`completedWorktrees`, `failedWorktree`, and `pendingWorktrees` in request order.
+`removedWorktrees`, `deletedBranches`, and `keptBranches` describe effects across the batch.
+A failed target can already appear in `removedWorktrees` if its post-remove hook failed.
 
 ```sh
 # Select several worktrees interactively, then choose whether to delete their branches.
@@ -581,9 +610,9 @@ requires `--force` to discard them. Project hooks are not run.
 
 ```text
 wald config [--json]
-wald config init [worktree] [--scope workspace|project] [--from-project] [--yes] [--force]
-wald config trust [--yes]
-wald config untrust [--yes]
+wald config init [worktree] [--scope workspace|project] [--from-project] [--yes] [--force] [--json]
+wald config trust [--yes] [--json]
+wald config untrust [--yes] [--json]
 ```
 
 `wald config` prints normalized workspace YAML followed by absolute workspace, worktree, shared-file,
@@ -591,6 +620,10 @@ repository-project, workspace-project, and effective configuration data, includi
 behavior hash and trust state.
 `--json` emits normalized workspace configuration, derived paths, and the nullable effective
 project record as one object.
+
+On success the configuration subcommands emit a JSON object in JSON mode with action `configured`,
+`trusted`, or `untrusted`. Initialization also reports the written scope and path and the
+effective behavior hash. Trust reports the approved configuration path and hash.
 
 | Command | Meaning |
 | --- | --- |

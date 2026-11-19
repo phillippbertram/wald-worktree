@@ -198,6 +198,7 @@ tools:
     expect(result.stderr).toContain("opening it failed");
     expect(result.stderr).toContain("not trusted");
     const created = await worktrees.resolve(workspace, "main");
+    expect(result.stderr).toContain(`Retry with: wald open -C '${created.path}'`);
     await expectNoHooks(workspace.root, created.path);
     await expect(fs.lstat(path.join(created.path, "tool.log"))).rejects.toMatchObject({
       code: "ENOENT",

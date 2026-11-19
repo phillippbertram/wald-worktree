@@ -1,7 +1,6 @@
 import type { Command } from "commander";
 import { z } from "zod";
 import { printWorkspaceStatus } from "../../ui/status.js";
-import { runTask } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
 import { writeJson } from "../helpers.js";
 import { parseCliInput } from "../input.js";
@@ -21,7 +20,9 @@ export function registerStatusCommand(program: Command, context: CliContext): vo
 
 export async function showWorkspaceStatus(input: StatusInput, context: CliContext): Promise<void> {
   const workspace = await context.workspaces.find();
-  const status = await runTask("Reading workspace status", () => context.status.inspect(workspace));
+  const status = await context.runTask("Reading workspace status", () =>
+    context.status.inspect(workspace),
+  );
   if (input.json) writeJson(context.output.stdout, status);
   else printWorkspaceStatus(status, context.output.stdout);
 }

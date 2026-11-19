@@ -163,7 +163,15 @@ tools:
       expect.arrayContaining(["--json", "--verbose", "--help"]),
     );
     expect(suggestionValues(removeOptions.stdout)).toEqual(
-      expect.arrayContaining(["--delete-branch", "--force", "--yes", "--json", "--help"]),
+      expect.arrayContaining([
+        "--delete-branch",
+        "--dry-run",
+        "--no-input",
+        "--force",
+        "--yes",
+        "--json",
+        "--help",
+      ]),
     );
     expect(suggestionValues(shells.stdout)).toEqual(["zsh", "bash", "fish"]);
     expect(suggestionValues(configScopes.stdout)).toEqual(["workspace", "project"]);
@@ -206,7 +214,7 @@ tools:
       expect.arrayContaining(["main", "feature-local"]),
     );
 
-    for (const command of ["cd", "open", "setup", "remove", "exec"]) {
+    for (const command of ["cd", "path", "open", "setup", "remove", "exec"]) {
       const worktrees = await runCli(workspace, "complete", "--", command, "");
       expect(worktrees.exitCode, worktrees.stderr).toBe(0);
       expect(worktrees.stdout).toMatch(/feature-local\tfeature\/local \(modified\)/u);
@@ -232,7 +240,13 @@ tools:
   it("completes configured tasks, worktree positions, and available tools", async () => {
     const tasks = await runCli(workspace, "complete", "--", "run", "");
     const runWorktree = await runCli(workspace, "complete", "--", "run", "verify", "");
+    const listWorktree = await runCli(workspace, "complete", "--", "run", "--list", "");
+    expect(suggestionValues(listWorktree.stdout)).toEqual(
+      expect.arrayContaining(["main", "feature-local"]),
+    );
     const configWorktree = await runCli(workspace, "complete", "--", "config", "init", "");
+    const trustJson = await runCli(workspace, "complete", "--", "config", "trust", "--j");
+    expect(suggestionValues(trustJson.stdout)).toContain("--json");
 
     expect(tasks.exitCode, tasks.stderr).toBe(0);
     expect(tasks.stdout).toContain("verify\tVerify configured project");

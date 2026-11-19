@@ -4,18 +4,14 @@ import { WaldError } from "../../domain/errors.js";
 import type { Worktree } from "../../domain/types.js";
 import { workspaceProjectConfigPath } from "../../services/config-service.js";
 import { style } from "../../ui/style.js";
-import {
-  confirm,
-  isInteractiveTerminal,
-  isPromptBackError,
-  selectValue,
-} from "../../ui/terminal.js";
+import { confirm, isPromptBackError, selectValue } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
 import {
   printTrustSummary,
   resolveProjectConfiguration,
   resolveWorktree,
   success,
+  writeJson,
   writeLine,
 } from "../helpers.js";
 import { nonEmptyCliString, parseCliInput } from "../input.js";
@@ -92,26 +88,29 @@ export async function trustConfiguration(yes: boolean, context: CliContext): Pro
   const workspace = await context.workspaces.find();
   const project = await resolveProjectConfiguration(workspace, context);
   if (!project) throw new WaldError("No effective project configuration found.");
-  printTrustSummary(project, context.output);
+  if (!context.execution.json) printTrustSummary(project, context.output);
   if (!yes) {
-    if (!isInteractiveTerminal()) throw new WaldError("Non-interactive trust requires --yes.");
+    if (!context.canPrompt()) throw new WaldError("Non-interactive trust requires --yes.");
     if (!(await confirm("Trust this project configuration until its behavior changes?"))) {
       writeLine(context.output.stdout, "Cancelled.");
       return;
     }
   }
   await context.configs.trust(workspace, project);
-  await success(`Trusted ${style.path(project.path)}`, context.output);
+  if (context.execution.json)
+    writeJson(context.output.stdout, { action: "trusted", path: project.path, hash: project.hash });
+  else await success(`Trusted ${style.path(project.path)}`, context.output);
 }
 
 export async function untrustConfiguration(yes: boolean, context: CliContext): Promise<void> {
   const workspace = await context.workspaces.find();
   if (!yes) {
-    if (!isInteractiveTerminal()) throw new WaldError("Non-interactive untrust requires --yes.");
+    if (!context.canPrompt()) throw new WaldError("Non-interactive untrust requires --yes.");
     if (!(await confirm("Remove trust for the project configuration?"))) return;
   }
   await context.configs.untrust(workspace);
-  await success("Project configuration is no longer trusted.", context.output);
+  if (context.execution.json) writeJson(context.output.stdout, { action: "untrusted" });
+  else await success("Project configuration is no longer trusted.", context.output);
 }
 
 export async function initializeProjectConfigurationForWorktree(
@@ -123,14 +122,27 @@ export async function initializeProjectConfigurationForWorktree(
   let forcePrompt = false;
   let initialPath: string | undefined;
   while (true) {
-    const selected = await resolveWorktree(workspace, input.worktree, context.worktrees, {
+    const selected = await resolveWorktree(workspace, input.worktree, context, {
       forcePrompt,
       initialPath,
       navigation: forcePrompt ? "cancel" : undefined,
     });
     initialPath = selected.path;
     try {
-      await initializeProjectConfiguration(workspace, selected.path, input, context);
+      const project = await initializeProjectConfiguration(
+        workspace,
+        selected.path,
+        { ...input, quiet: context.execution.json },
+        context,
+      );
+      if (context.execution.json && project) {
+        writeJson(context.output.stdout, {
+          action: "configured",
+          scope: input.scope,
+          path: project.sources[input.scope === "project" ? "repository" : "workspace"],
+          hash: project.hash,
+        });
+      }
       return;
     } catch (error) {
       if (!isPromptBackError(error) || !canChooseWorktree) throw error;

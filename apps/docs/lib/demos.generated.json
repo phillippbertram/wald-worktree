@@ -281,10 +281,11 @@
             "time": 0.25,
             "seek": 0.85,
             "title": "Protect unfinished work",
-            "description": "Wald rejects removal because the checkout contains local changes.",
-            "command": "wald remove feature-search",
+            "description": "The preview shows which changes would require force.",
+            "command": "wald remove feature-search --dry-run",
             "lines": [
-              "- the worktree contains staged, unstaged, or untracked changes"
+              "Removal plan",
+              "Requires force: the worktree contains staged, unstaged, or untracked changes"
             ]
           },
           {
@@ -294,8 +295,7 @@
             "description": "The clean review checkout is eligible. The menu starts on Cancel.",
             "command": "wald remove review-ui",
             "lines": [
-              "Removal plan",
-              "│  ○ Remove worktree, keep branches",
+              "│  ○ Remove 1 worktree, keep local branch",
               "Branch kept: review/ui"
             ]
           },
@@ -319,10 +319,11 @@
             "time": 0.25,
             "seek": 0.85,
             "title": "Protect unfinished work",
-            "description": "Wald rejects removal because the checkout contains local changes.",
-            "command": "wald remove feature-search",
+            "description": "The preview shows which changes would require force.",
+            "command": "wald remove feature-search --dry-run",
             "lines": [
-              "- the worktree contains staged, unstaged, or untracked changes"
+              "Removal plan",
+              "Requires force: the worktree contains staged, unstaged, or untracked changes"
             ]
           },
           {
@@ -332,8 +333,7 @@
             "description": "The clean review checkout is eligible. The menu starts on Cancel.",
             "command": "wald remove review-ui",
             "lines": [
-              "Removal plan",
-              "│  ○ Remove worktree, keep branches",
+              "│  ○ Remove 1 worktree, keep local branch",
               "Branch kept: review/ui"
             ]
           },

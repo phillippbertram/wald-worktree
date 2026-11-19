@@ -3,11 +3,9 @@ import os from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { CliContext } from "../src/cli/context.js";
+import { createCliContext } from "../src/cli/context.js";
 import { initializeProjectConfiguration } from "../src/cli/project-config-wizard.js";
 import type { Workspace } from "../src/domain/types.js";
-import { ConfigService } from "../src/services/config-service.js";
-import { ProjectConfigInitializer } from "../src/services/project-config-initializer.js";
 
 const prompts = vi.hoisted(() => ({
   confirmations: [] as boolean[],
@@ -132,13 +130,9 @@ describe("interactive project configuration wizard", () => {
   });
 });
 
-function createContext(): CliContext {
+function createContext() {
   const output = new PassThrough();
-  return {
-    output: { stdout: output, stderr: output },
-    configs: new ConfigService(),
-    projectConfigs: new ProjectConfigInitializer(),
-  } as unknown as CliContext;
+  return createCliContext({ stdout: output, stderr: output });
 }
 
 function createWorkspace(root: string): Workspace {

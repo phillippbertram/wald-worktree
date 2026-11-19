@@ -7,8 +7,15 @@ any lock, and confirm the worktree is no longer in use. Wald checks whether the 
 an ancestor of the configured default branch, preferring its local remote-tracking ref when
 available. A squash merge can leave the original commit outside that history.
 
-After verifying the checkout is in scope for removal, run the command from a directory that will
-survive cleanup:
+From a directory that survives cleanup, inspect the intended operation first:
+
+```sh
+wald -C "$workspace" remove "$checkout" --dry-run --json
+```
+
+Read every worktree entry and the batch's `blocked` field. Include `--delete-branch` in the
+preview when requested. Exit 0 means inspection succeeded even if execution would be blocked.
+After checking the targets and obtaining any required authorization, run:
 
 ```sh
 wald -C "$workspace" remove "$checkout" --yes --json
@@ -17,7 +24,7 @@ wald -C "$workspace" remove "$checkout" --yes --json
 This removes the checkout and preserves its branch. Without `--yes`, the interactive command
 offers a preview and confirmation. Interactive users can select multiple checkouts with `wald remove`
 or **Remove worktrees…** in the main menu, then delete all eligible local branches or select them
-individually. Dirty files, unmerged branches, and locks trigger a separate force-consent question
+individually. Dirty files, unmerged branches, and locks require a clearly labeled force action
 with cancellation selected by default. Declining preserves all selected worktrees and branches.
 For automation, inspect the target before invoking the command. With `--yes` or `--json`, no force
 question is asked: a dirty worktree, unmerged branch, or lock needs explicit authority to bypass
@@ -28,7 +35,8 @@ Wald protects the primary checkout and configured default branch and never delet
 Configured removal hooks can run with trust. If removal reports a failure, read the error and its
 JSON `effects` when present, then refresh `list --json` and check the branch. A `post_remove`
 failure can leave the checkout already removed and the branch retained. For batched removals,
-check each target before retrying.
+inspect `completedWorktrees`, `failedWorktree`, and `pendingWorktrees` in the JSON error's
+`effects`, then check Git state before retrying.
 
 ## Repair stale registrations or stop managing the workspace
 

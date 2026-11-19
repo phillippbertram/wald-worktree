@@ -52,6 +52,11 @@ wald run verify feature-ui
 wald remove feature-ui
 ```
 
+For unattended cleanup, preview with `wald remove feature-api feature-ui --dry-run --json`.
+Check the branch actions, blockers, force reasons, and trust requirements, then execute the
+authorized removal with explicit targets and `--yes`. For text commands in an agent terminal,
+pass the global `--no-input` option.
+
 Removal preserves each branch by default. Interactive users can select several worktrees from
 **Remove worktrees…** in the main menu or `wald remove`, then delete all eligible local branches
 or choose branches individually. See [removal and branch deletion](cli-reference.md#wald-remove)
@@ -84,7 +89,8 @@ changes carry over.
 - Use `wald list --json` for complete worktree records; do not guess paths from branch names.
 - For mutations, use the command's `--json` contract with explicit branches, worktrees, and `--yes`
   where required. JSON mode performs the mutation; it is not a dry run or additional consent.
-- Resolve a path with `wald cd <worktree>`.
+- Resolve a checkout path with `wald path <worktree>`. Discover its configured tasks with
+  `wald run --list <worktree> --json` before choosing one to execute.
 - Prefer direct commands in non-interactive sessions.
 - Run shared project actions through `wald run` so configured order, environment, timeouts, and trust
   checks remain consistent.

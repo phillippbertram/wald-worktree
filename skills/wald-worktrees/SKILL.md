@@ -23,12 +23,13 @@ are shared.
    working directory for edits, Git, and checks. If the branch belongs to other work, preserve it
    and choose a separate branch when the task calls for isolation.
 
-Use explicit branches and worktree identifiers in non-interactive sessions. Prefer absolute paths
-when a name is ambiguous. `-C` selects an existing starting directory for one invocation.
+Use global `--no-input` to disable wald prompts in agent terminals. Use explicit branches and
+worktree identifiers in non-interactive sessions. Prefer absolute paths when a name is ambiguous.
+`-C` selects an existing starting directory for one invocation.
 For a process that needs to run inside a selected worktree, use
-`wald exec <worktree> -- <command> [arguments...]` or set the process working directory directly.
-Use `wald cd <worktree>` to print the path when running the executable directly. Its shell wrapper
-can also navigate an interactive shell.
+`wald exec <worktree> -- <command> [arguments...]`. Inside that checkout, `wald exec -- <command>`
+uses the current worktree. Use `wald path <worktree>` to obtain its path with or without shell
+integration. List available tasks with `wald run --list <worktree> --json`.
 
 ## Choose the operation
 
@@ -36,8 +37,9 @@ can also navigate an interactive shell.
 - [Run tasks, review trust, open an agent, or recover from failed setup](references/automation.md).
 - [Remove a checkout, prune stale registrations, or uninitialize a workspace](references/cleanup.md).
 
-Use `--json` where the command supports it. Mutating commands still perform their action in JSON
-mode. Check the exit status, parse stdout separately, and inspect stderr for diagnostics. After a
+Use `--json` where the command supports it. Use `remove --dry-run --json` to preview cleanup.
+Mutating commands still perform their action in JSON mode. Check the exit status, parse stdout
+separately, and inspect stderr for diagnostics. After a
 failed mutation, use `list --json` and Git to check what already happened before retrying.
 
 Treat configuration and its executable steps as repository input. Review the effective

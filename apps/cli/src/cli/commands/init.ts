@@ -10,11 +10,9 @@ import { printCreatePlan } from "../../ui/create-plan.js";
 import { style } from "../../ui/style.js";
 import {
   confirm,
-  isInteractiveTerminal,
   isPromptBackError,
   printKeyValueTable,
   promptText,
-  runTask,
   searchSelect,
   selectValue,
 } from "../../ui/terminal.js";
@@ -51,13 +49,6 @@ const initInputSchema = z
         code: "custom",
         path: ["configScope"],
         message: "Requires --config.",
-      });
-    }
-    if (value.json && value.repository && !value.directory) {
-      context.addIssue({
-        code: "custom",
-        path: ["directory"],
-        message: "JSON clone mode requires a repository and directory.",
       });
     }
     if (value.json && !value.repository && (value.adopt === undefined || !value.yes)) {
@@ -110,7 +101,7 @@ export async function initializeWorkspace(
   context: CliContext,
 ): Promise<Workspace | null> {
   if (!input.repository) {
-    if (isInteractiveTerminal() && !hasExplicitAdoptionInput(input)) {
+    if (context.canPrompt() && !hasExplicitAdoptionInput(input)) {
       return await initializeGuidedWorkspace(context);
     }
     return await initializeAdoptedWorkspace(input, context);
@@ -126,7 +117,7 @@ export async function initializeWorkspace(
     });
   const workspace = input.json
     ? await initialize()
-    : await runTask("Initializing workspace", initialize);
+    : await context.runTask("Initializing workspace", initialize);
   if (input.json) {
     writeInitJson(context.output.stdout, "initialized", workspace, []);
     return workspace;
@@ -368,7 +359,7 @@ async function initializeGuidedRemoteSource(context: CliContext): Promise<Worksp
       step -= 1;
     }
   }
-  const workspace = await runTask("Initializing workspace", () =>
+  const workspace = await context.runTask("Initializing workspace", () =>
     context.workspaces.initialize(repository as string, directory, process.cwd(), {
       worktreeDir,
     }),
@@ -460,7 +451,7 @@ async function initializeCopiedWorkspace(
     process.cwd(),
     { worktreeDir },
   );
-  const workspace = await runTask("Creating standalone workspace", () =>
+  const workspace = await context.runTask("Creating standalone workspace", () =>
     context.workspaces.initializeFromExisting(inspection, target.root, process.cwd(), {
       worktreeDir,
     }),
@@ -526,7 +517,7 @@ async function completeNewWorkspace(
 ): Promise<void> {
   writeLine(context.output.stdout, "");
   writeLine(context.output.stdout, style.heading("Optional setup"));
-  const plan = await runTask("Preparing default worktree", () =>
+  const plan = await context.runTask("Preparing default worktree", () =>
     context.workflow.planCreate(workspace, {
       branch: workspace.config.defaultBranch,
       fetch: false,
@@ -577,7 +568,7 @@ async function initializeAdoptedWorkspace(
   context: CliContext,
 ): Promise<Workspace | null> {
   const explicit = input.adopt !== undefined;
-  if (!isInteractiveTerminal() && (!explicit || !input.yes)) {
+  if (!context.canPrompt() && (!explicit || !input.yes)) {
     throw new WaldError("Keeping a checkout non-interactively requires --adopt and --yes.");
   }
   const source = typeof input.adopt === "string" ? input.adopt : ".";
@@ -621,7 +612,7 @@ async function initializeAdoptedWorkspace(
     context,
   );
   if (inspection.worktreeDirSelectionRequired) {
-    if (!isInteractiveTerminal() || input.yes) {
+    if (!context.canPrompt() || input.yes) {
       throw new WaldError("Could not select a safe worktree directory. Use --worktrees-dir.");
     }
     requested.worktreeDir = await promptText(
@@ -632,7 +623,7 @@ async function initializeAdoptedWorkspace(
     inspection = await context.workspaces.inspectAdoption(source, requested);
   }
   const validation = await context.workspaces.validateAdoption(inspection);
-  if (isInteractiveTerminal() && !input.yes) {
+  if (context.canPrompt() && !input.yes) {
     if (
       !(await confirmInitialization(
         {
@@ -647,7 +638,9 @@ async function initializeAdoptedWorkspace(
     }
   }
   const adopt = () => context.workspaces.adopt(inspection);
-  const workspace = input.json ? await adopt() : await runTask("Adopting repository", adopt);
+  const workspace = input.json
+    ? await adopt()
+    : await context.runTask("Adopting repository", adopt);
   if (!input.json) {
     await success(
       `Connected existing checkout to wald at ${style.path(workspace.root)}`,
@@ -677,7 +670,7 @@ async function repairOrReportExistingWorkspace(
 ): Promise<{ restored: string[] }> {
   const repair = quiet
     ? await context.workspaces.repair(workspace)
-    : await runTask("Checking workspace", () => context.workspaces.repair(workspace));
+    : await context.runTask("Checking workspace", () => context.workspaces.repair(workspace));
   const restored = [
     repair.worktreeDirCreated ? `worktree directory ${workspace.worktreeDir}` : null,
     repair.markerCreated ? `metadata link ${path.join(workspace.worktreeDir, ".wald")}` : null,
@@ -726,7 +719,7 @@ async function maybeInitializeProjectConfig(
   if (scope === "project" && (await context.configs.readProjectConfig(primaryWorktree))) {
     return;
   }
-  if (!requested && isInteractiveTerminal() && !input.yes) {
+  if (!requested && context.canPrompt() && !input.yes) {
     writeLine(context.output.stdout, "");
     writeLine(context.output.stdout, style.heading("Project automation (optional)"));
     writeLine(
@@ -853,7 +846,7 @@ async function inspectAdoption(
   context: CliContext,
 ): Promise<AdoptionInspection> {
   try {
-    return await runTask("Inspecting repository", () =>
+    return await context.runTask("Inspecting repository", () =>
       context.workspaces.inspectAdoption(source, requested),
     );
   } catch (error) {
@@ -875,7 +868,7 @@ async function resolveRepositorySettings(
   const remoteWasRequired = inspection.remoteSelectionRequired;
   let selectedRemote = requested.remote ?? inspection.remoteName ?? undefined;
   if (inspection.remoteSelectionRequired) {
-    if (!isInteractiveTerminal() || acceptDetected) {
+    if (!context.canPrompt() || acceptDetected) {
       throw new WaldError("Multiple remotes found. Select one with --remote or --no-remote.");
     }
     const selected = await selectValue(
@@ -896,7 +889,7 @@ async function resolveRepositorySettings(
         "Repository has no commits. Wald requires an existing branch with at least one commit.",
       );
     }
-    if (!isInteractiveTerminal() || acceptDetected) {
+    if (!context.canPrompt() || acceptDetected) {
       throw new WaldError("Could not determine the default branch. Use --default-branch.");
     }
     const custom = "__custom__";
@@ -954,7 +947,9 @@ async function inspectExistingRepositoryOrNull(
   context: CliContext,
 ): Promise<AdoptionInspection | null> {
   try {
-    return await runTask("Inspecting repository", () => context.workspaces.inspectAdoption(source));
+    return await context.runTask("Inspecting repository", () =>
+      context.workspaces.inspectAdoption(source),
+    );
   } catch (error) {
     if (
       error instanceof WaldError &&

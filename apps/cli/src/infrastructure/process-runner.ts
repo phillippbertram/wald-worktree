@@ -12,6 +12,11 @@ export type ProcessOptions = {
 };
 
 export class ProcessRunner {
+  constructor(
+    private readonly allowAutomationInput = () =>
+      Boolean(process.stdin.isTTY && process.stdout.isTTY),
+  ) {}
+
   async runArgv(argv: string[], options: ProcessOptions): Promise<void> {
     const [command, ...args] = argv;
     if (!command) {
@@ -80,7 +85,7 @@ export class ProcessRunner {
       cwd: options.cwd,
       env: options.env,
       reject: false,
-      stdin: process.stdin.isTTY ? "inherit" : "ignore",
+      stdin: this.allowAutomationInput() ? "inherit" : "ignore",
       stdout: "pipe",
       stderr: "pipe",
       all: true,

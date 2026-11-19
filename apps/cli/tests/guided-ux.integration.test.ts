@@ -178,7 +178,7 @@ describe("guided UX with real worktrees", () => {
     async (risk) => {
       await prepareRisk(risk);
       const execute = vi.spyOn(context.workflow, "executeRemove");
-      prompts.selections.push("keep", "force");
+      prompts.selections.push("keep");
       await removeWorktrees(
         { worktrees: [feature.path], force: false, deleteBranch: false, yes: false },
         context,
@@ -189,7 +189,10 @@ describe("guided UX with real worktrees", () => {
         expect.anything(),
         expect.objectContaining({ force: true, deleteBranch: false }),
       );
-      expect(prompts.initialValues).toEqual(["cancel", "cancel"]);
+      expect(prompts.choices[0]).toContainEqual(
+        expect.objectContaining({ value: "keep", label: expect.stringContaining("Force removal") }),
+      );
+      expect(prompts.initialValues).toEqual(["cancel"]);
       const rendered = output.read()?.toString() ?? "";
       expect(rendered).toContain(feature.path);
       expect(rendered).toContain(
@@ -212,7 +215,7 @@ describe("guided UX with real worktrees", () => {
       );
       const trust = vi.spyOn(context.configs, "trust");
       const execute = vi.spyOn(context.workflow, "executeRemove");
-      prompts.selections.push("delete", "cancel");
+      prompts.selections.push("cancel");
       await removeWorktrees(
         { worktrees: [feature.path], force: false, deleteBranch: false, yes: false },
         context,
@@ -231,11 +234,11 @@ describe("guided UX with real worktrees", () => {
     },
   );
 
-  it("returns from force confirmation to the action without granting force", async () => {
+  it("cancels a preselected branch deletion without granting force", async () => {
     await prepareRisk("dirty");
-    prompts.selections.push("delete", new PromptBackError(), "cancel");
+    prompts.selections.push("cancel");
     await removeWorktrees(
-      { worktrees: [feature.path], force: false, deleteBranch: false, yes: false },
+      { worktrees: [feature.path], force: false, deleteBranch: true, yes: false },
       context,
     );
     expect(await fs.readFile(path.join(feature.path, "README.md"), "utf8")).toBe("local work\n");
@@ -245,7 +248,7 @@ describe("guided UX with real worktrees", () => {
   it("preserves dirty files, branches and locks when force confirmation is interrupted", async () => {
     await prepareRisk("dirty");
     await prepareRisk("locked");
-    prompts.selections.push("delete", new PromptExitError());
+    prompts.selections.push(new PromptExitError());
     await expect(
       removeWorktrees(
         { worktrees: [feature.path], force: false, deleteBranch: false, yes: false },
@@ -337,7 +340,7 @@ describe("guided UX with real worktrees", () => {
     });
     await context.git.run(["checkout", "--detach"], { cwd: detached.path });
     const execute = vi.spyOn(context.workflow, "executeRemove");
-    prompts.selections.push("delete", "remove", "force");
+    prompts.selections.push("delete", "force");
     await removeWorktrees(
       {
         worktrees: [feature.path, second.path, main.path, detached.path, feature.name],
@@ -372,7 +375,7 @@ describe("guided UX with real worktrees", () => {
     expect(rendered).toContain("the worktree contains staged, unstaged, or untracked changes");
     expect(rendered).toContain("the branch is not merged into main");
     expect(rendered).toContain("the worktree is locked");
-    expect(prompts.initialValues).toEqual(["cancel", "cancel", "cancel"]);
+    expect(prompts.initialValues).toEqual(["cancel", "cancel"]);
   });
 
   it("keeps every branch when removing multiple worktrees without branch deletion", async () => {
@@ -393,7 +396,7 @@ describe("guided UX with real worktrees", () => {
 
   it("deletes an unmerged branch with --delete-branch after interactive force consent", async () => {
     await prepareRisk("unmerged");
-    prompts.selections.push("delete", "force");
+    prompts.selections.push("force");
     await removeWorktrees(
       { worktrees: [feature.path], force: false, deleteBranch: true, yes: false },
       context,
@@ -408,7 +411,7 @@ describe("guided UX with real worktrees", () => {
       branch: "feature/second",
       fetch: false,
     });
-    prompts.selections.push("choose", "remove", new PromptBackError(), "choose", "remove", "force");
+    prompts.selections.push("choose", new PromptBackError(), "force");
     prompts.branches.push(["refs/heads/feature/topic"], ["refs/heads/feature/topic"]);
     await removeWorktrees(
       { worktrees: [feature.path, second.path], force: false, deleteBranch: false, yes: false },
@@ -429,20 +432,16 @@ describe("guided UX with real worktrees", () => {
     });
     await fs.writeFile(path.join(second.path, "README.md"), "other local work\n");
     prompts.worktrees.push([feature.path], [second.path]);
-    prompts.selections.push(
-      "delete",
-      new PromptBackError(),
-      new PromptBackError(),
-      "delete",
-      "cancel",
-    );
+    prompts.selections.push(new PromptBackError(), "cancel");
     await removeWorktrees(
       { worktrees: [], force: false, deleteBranch: false, yes: false },
       context,
     );
     expect(prompts.worktreeDefaults).toEqual([[], [feature.path]]);
     expect(
-      prompts.choices.filter((choices) => choices.some(({ value }) => value === "force")),
+      prompts.choices.filter((choices) =>
+        choices.some(({ label }) => label.includes("Force removal")),
+      ),
     ).toHaveLength(2);
     expect(await fs.readFile(path.join(feature.path, "README.md"), "utf8")).toBe("local work\n");
     expect(await fs.readFile(path.join(second.path, "README.md"), "utf8")).toBe(
@@ -506,7 +505,7 @@ describe("guided UX with real worktrees", () => {
       path.join(workspace.root, ".wald", "project.yml"),
       "version: 1\nhooks:\n  pre_remove:\n    - type: command\n      argv: [node, -e, 'process.exit(7)']\n",
     );
-    prompts.selections.push("delete", "force");
+    prompts.selections.push("delete");
     await expect(
       removeWorktrees(
         { worktrees: [feature.path], force: false, deleteBranch: false, yes: false },
@@ -533,7 +532,7 @@ describe("guided UX with real worktrees", () => {
     const project = await context.configs.resolveProjectConfig(workspace, feature.path);
     if (!project) throw new Error("Missing hook configuration");
     await context.configs.trust(workspace, project);
-    prompts.selections.push("delete", "remove", "force");
+    prompts.selections.push("delete", "force");
     await expect(
       removeWorktrees(
         { worktrees: [feature.path, second.path], force: false, deleteBranch: false, yes: false },

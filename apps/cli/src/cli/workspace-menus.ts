@@ -35,7 +35,7 @@ export async function runSettingsMenu(context: CliContext): Promise<MenuResult> 
         description: "Review detected setup, tasks, and the default editor.",
         run: async () => {
           const workspace = await context.workspaces.find();
-          const worktree = await resolveWorktree(workspace, undefined, context.worktrees, {
+          const worktree = await resolveWorktree(workspace, undefined, context, {
             forcePrompt: true,
             navigation: "back",
           });
@@ -137,7 +137,7 @@ export async function runMaintenanceMenu(context: CliContext): Promise<MenuResul
 
 async function runAdvancedMenu(context: CliContext): Promise<MenuResult> {
   const chooseTarget = async () =>
-    resolveWorktree(await context.workspaces.find(), undefined, context.worktrees, {
+    resolveWorktree(await context.workspaces.find(), undefined, context, {
       forcePrompt: true,
       navigation: "back",
     });

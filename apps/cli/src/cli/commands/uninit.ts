@@ -3,7 +3,7 @@ import { z } from "zod";
 import { WaldError } from "../../domain/errors.js";
 import type { Worktree } from "../../domain/types.js";
 import { style } from "../../ui/style.js";
-import { confirm, isInteractiveTerminal } from "../../ui/terminal.js";
+import { confirm } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
 import { success, writeLine } from "../helpers.js";
 import { parseCliInput } from "../input.js";
@@ -84,7 +84,7 @@ export async function uninitializeWorkspace(
     );
   }
   if (!input.yes) {
-    if (!isInteractiveTerminal()) {
+    if (!context.canPrompt()) {
       throw new WaldError("Non-interactive uninitialization requires --apply --yes.");
     }
     const accepted = await confirm(

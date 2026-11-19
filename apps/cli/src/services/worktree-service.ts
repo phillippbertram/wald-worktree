@@ -996,7 +996,7 @@ export class WorktreeService {
     }
 
     const status = await this.git.run(
-      ["status", "--porcelain=v1", "-z", "--untracked-files=normal"],
+      ["--no-optional-locks", "status", "--porcelain=v1", "-z", "--untracked-files=normal"],
       { cwd: worktree.path, reject: false },
     );
     if (status.exitCode !== 0) {

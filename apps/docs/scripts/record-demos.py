@@ -308,13 +308,13 @@ def cleanup(fixture, width):
     dirty.write_text("Unfinished search\n", encoding="utf-8")
     session = Recording(fixture, width)
     session.command(
-        "Protect unfinished work", "Wald rejects removal because the checkout contains local changes.",
-        "wald remove feature-search", ["contains staged, unstaged, or untracked changes"], expected=1,
+        "Protect unfinished work", "The preview shows which changes would require force.",
+        "wald remove feature-search --dry-run", ["Removal plan", "Requires force:"],
     )
     assert dirty.read_text(encoding="utf-8") == "Unfinished search\n"
     session.command(
         "Review the removal", "The clean review checkout is eligible. The menu starts on Cancel.",
-        "wald remove review-ui", ["Removal plan", "Remove worktree, keep branches", "Branch kept:"],
+        "wald remove review-ui", ["Remove 1 worktree, keep local branch", "Branch kept:"],
         inputs=[PromptInput("Remove › Action · What would you like to do?", b"\x1b[B\r")],
     )
     session.command(

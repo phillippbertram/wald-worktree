@@ -44,6 +44,8 @@ type PromptOptions = {
   validateAsync?: (value: string) => Promise<void>;
 };
 
+type SearchOptions = PromptOptions & { output?: NodeJS.WriteStream };
+
 export class PromptBackError extends Error {
   constructor() {
     super("Interactive prompt went back.");
@@ -96,7 +98,7 @@ export async function confirm(
 
 export async function selectWorktree(
   worktrees: Worktree[],
-  options: PromptOptions = {},
+  options: SearchOptions = {},
 ): Promise<Worktree | null> {
   const selectedPath = await searchSelect(
     "Select a worktree:",
@@ -131,7 +133,7 @@ export async function selectValue(
 export async function searchSelect(
   question: string,
   choices: Choice[],
-  options: PromptOptions = {},
+  options: SearchOptions = {},
 ): Promise<string> {
   const matches = (term: string, choice: Choice): boolean =>
     stripVTControlCharacters(`${choice.label} ${choice.description ?? ""} ${choice.value}`)
@@ -141,6 +143,7 @@ export async function searchSelect(
     (signal) =>
       autocomplete({
         message: question,
+        output: options.output,
         options: options.createChoice
           ? function () {
               const matching = choices.filter((choice) => matches(this.userInput, choice));
@@ -162,6 +165,7 @@ export async function searchSelect(
         },
       }),
     options.navigation,
+    options.output,
   );
 }
 
@@ -314,9 +318,10 @@ function toClackChoices(choices: Choice[], includeGroups: boolean): ClackChoice[
 async function promptWithNavigation<T>(
   prompt: (signal: AbortSignal) => Promise<T | symbol>,
   navigation: PromptNavigation = "cancel",
+  output: NodeJS.WriteStream = process.stdout,
 ): Promise<T> {
   if (isInteractiveTerminal()) {
-    process.stdout.write(pc.dim(`Esc: ${navigation} · Ctrl+C: exit\n`));
+    output.write(pc.dim(`Esc: ${navigation} · Ctrl+C: exit\n`));
   }
   const controller = new AbortController();
   let cancellation: "back" | "exit" | undefined;

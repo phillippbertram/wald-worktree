@@ -14,10 +14,8 @@ import type {
 import { style } from "../ui/style.js";
 import {
   confirm,
-  isInteractiveTerminal,
   isPromptBackError,
   printKeyValueTable,
-  runTask,
   selectManyValues,
   selectValue,
 } from "../ui/terminal.js";
@@ -40,7 +38,7 @@ export async function initializeProjectConfiguration(
   options: ProjectConfigInitializationOptions,
   context: CliContext,
 ): Promise<ProjectConfigDocument | null> {
-  if (!options.yes && !isInteractiveTerminal()) {
+  if (!options.yes && !context.canPrompt()) {
     throw new WaldError("Non-interactive configuration initialization requires --yes.");
   }
 
@@ -56,7 +54,7 @@ export async function initializeProjectConfiguration(
   const exists = await fileExists(configPath);
   let overwrite = options.force;
   if (exists && !overwrite) {
-    if (options.yes || !isInteractiveTerminal()) {
+    if (options.yes || !context.canPrompt()) {
       throw new WaldError(
         `Project configuration already exists: ${configPath}. Use --force to replace it.`,
       );
@@ -96,7 +94,9 @@ export async function initializeProjectConfiguration(
   }
 
   const inspect = () => context.projectConfigs.inspect(root);
-  const inspection = options.quiet ? await inspect() : await runTask("Inspecting project", inspect);
+  const inspection = options.quiet
+    ? await inspect()
+    : await context.runTask("Inspecting project", inspect);
   let templateOptions = detectedDefaults(inspection);
   let promptState: TemplatePromptState = {
     fetch: templateOptions.fetch,
@@ -212,7 +212,7 @@ async function writeConfiguration(
     }
   };
   if (options.quiet) await write();
-  else await runTask(`Writing ${configFileName}`, write);
+  else await context.runTask(`Writing ${configFileName}`, write);
   const document = await context.configs.resolveProjectConfig(workspace, root);
   if (!document) {
     throw new WaldError(`Could not resolve project configuration after writing ${configPath}.`);

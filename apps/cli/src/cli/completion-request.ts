@@ -1,4 +1,5 @@
-import type { Command, Option } from "commander";
+import type { Command } from "commander";
+import { findOption } from "./invocation.js";
 
 export type CompletionRequest = {
   args: string[];
@@ -18,6 +19,7 @@ export function parseCompletionRequest(args: string[], program: Command): Comple
       result.afterSeparator = true;
       break;
     }
+    if (token === "--no-input" && index < args.length - 1) continue;
     if (token === "-C" || token === "--directory") {
       const value = args[index + 1];
       if (value !== undefined) {
@@ -59,11 +61,4 @@ export function parseCompletionRequest(args: string[], program: Command): Comple
     }
   }
   return result;
-}
-
-function findOption(command: Command, token: string): Option | undefined {
-  return (
-    command.options.find((option) => option.short === token || option.long === token) ??
-    (command.parent ? findOption(command.parent, token) : undefined)
-  );
 }

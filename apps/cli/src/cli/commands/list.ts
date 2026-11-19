@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { z } from "zod";
-import { isInteractiveTerminal, printWorktreeTable, runTask } from "../../ui/terminal.js";
+import { isInteractiveTerminal, printWorktreeTable } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
 import { printPlainWorktrees, writeJson, writeLine } from "../helpers.js";
 import { parseCliInput } from "../input.js";
@@ -21,7 +21,9 @@ export function registerListCommand(program: Command, context: CliContext): void
 
 export async function listWorktrees(input: ListInput, context: CliContext): Promise<void> {
   const workspace = await context.workspaces.find();
-  const worktrees = await runTask("Reading worktrees", () => context.worktrees.list(workspace));
+  const worktrees = await context.runTask("Reading worktrees", () =>
+    context.worktrees.list(workspace),
+  );
   if (input.json) writeJson(context.output.stdout, worktrees);
   else if (worktrees.length === 0) {
     writeLine(context.output.stdout, "No worktrees yet. Run wald create <branch> to create one.");

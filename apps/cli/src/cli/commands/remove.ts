@@ -1,11 +1,10 @@
 import type { Command } from "commander";
 import { z } from "zod";
-import { WaldError } from "../../domain/errors.js";
-import type { BranchDeletionPlan } from "../../services/worktree-service.js";
+import { type RemovalEffects, toErrorMessage, WaldError } from "../../domain/errors.js";
+import { previewRemoval, type RemovalPreview } from "../../services/removal-preview.js";
 import type { RemovePlan } from "../../services/worktree-workflow-service.js";
 import { style } from "../../ui/style.js";
 import {
-  isInteractiveTerminal,
   isPromptBackError,
   selectManyValues,
   selectManyWorktrees,
@@ -18,6 +17,7 @@ import { nonEmptyCliString, parseCliInput } from "../input.js";
 const removeInputSchema = z
   .object({
     worktrees: z.array(nonEmptyCliString).default([]),
+    dryRun: z.boolean().default(false),
     force: z.boolean().default(false),
     deleteBranch: z.boolean().default(false),
     yes: z.boolean().default(false),
@@ -25,22 +25,26 @@ const removeInputSchema = z
   })
   .strict()
   .superRefine((input, context) => {
-    if (input.json && (input.worktrees.length === 0 || !input.yes)) {
+    if (input.json && (input.worktrees.length === 0 || (!input.yes && !input.dryRun))) {
       context.addIssue({
         code: "custom",
         path: ["json"],
-        message: "JSON mode requires worktree names and --yes.",
+        message: "JSON removal requires worktree names and either --dry-run or --yes.",
       });
     }
   });
 
-export type RemoveInput = Omit<z.output<typeof removeInputSchema>, "json"> & { json?: boolean };
+export type RemoveInput = Omit<z.output<typeof removeInputSchema>, "json" | "dryRun"> & {
+  json?: boolean;
+  dryRun?: boolean;
+};
 
 export function registerRemoveCommand(program: Command, context: CliContext): void {
   program
     .command("remove")
     .description("Safely remove worktrees and optionally their local branches")
     .argument("[worktrees...]", "Worktree names, branches, or paths")
+    .option("--dry-run", "Inspect removal without running hooks or changing worktrees or branches")
     .option("--force", "Bypass dirty, unmerged, and lock safeguards")
     .option(
       "--delete-branch",
@@ -63,12 +67,12 @@ export async function removeWorktrees(input: RemoveInput, context: CliContext): 
   let identifiers = input.worktrees;
   let previousSelectionPaths: string[] = [];
   const branchState = { selectedRefs: [] as string[] };
-  const canPrompt = !input.yes && !input.json && isInteractiveTerminal();
+  const canPrompt = !input.yes && !input.json && context.canPrompt();
 
   while (true) {
     if (promptedForSelection) {
-      if (!isInteractiveTerminal()) {
-        throw new WaldError("Non-interactive removal requires worktree names and --yes.");
+      if (!canPrompt) {
+        throw new WaldError("Specify the worktree names to inspect or remove.");
       }
       const current = await context.worktrees.current(workspace);
       const candidates = (await context.worktrees.list(workspace)).filter(
@@ -84,7 +88,7 @@ export async function removeWorktrees(input: RemoveInput, context: CliContext): 
         { navigation: "cancel", initialValues: previousSelectionPaths },
       );
       previousSelectionPaths = selected.map((worktree) => worktree.path);
-      identifiers = selected.map((worktree) => worktree.name);
+      identifiers = previousSelectionPaths;
     }
     if (identifiers.length === 0) {
       writeLine(context.output.stdout, "Cancelled: no worktrees selected.");
@@ -98,88 +102,87 @@ export async function removeWorktrees(input: RemoveInput, context: CliContext): 
     }
     const plans = [...plansByPath.values()];
 
-    for (const plan of plans) {
-      if (plan.inspection.hardBlockers.length > 0) {
-        throw removalError(plan.inspection.worktree, plan.inspection.hardBlockers);
-      }
+    const preview = previewRemoval(plans, input.deleteBranch, input.force);
+    if (input.dryRun) {
+      if (input.json) writeJson(context.output.stdout, preview);
+      else showPreview(preview, context);
+      return;
     }
-    if (input.deleteBranch) {
-      const ineligible = plans.filter((plan) => !plan.inspection.branchDeletion.eligible);
-      if (ineligible.length > 0) {
-        throw new WaldError(
-          `Cannot delete local branches:\n${ineligible
-            .map((plan) => {
-              const deletion = plan.inspection.branchDeletion;
-              return `- ${plan.inspection.worktree.name}: ${deletion.eligible ? "not eligible" : deletion.reason}`;
-            })
-            .join("\n")}`,
-        );
-      }
-    }
-    for (const plan of plans) {
-      if (plan.inspection.blockers.length > 0 && !input.force && !canPrompt) {
-        throw removalError(plan.inspection.worktree, [
-          ...plan.inspection.blockers,
+    for (const item of preview.worktrees) {
+      if (item.hardBlockers.length) throw removalError(item, item.hardBlockers);
+      if (item.forceReasons.length && !input.force && !canPrompt) {
+        throw removalError(item, [
+          ...item.forceReasons,
           "use --force only if this data can be discarded",
         ]);
       }
     }
 
-    if (input.force) {
-      showRemovalSafeguards(plans, "Warning: --force bypasses these removal safeguards:", context);
-    }
-
-    let branchesToDelete: BranchDeletionPlan[] = [];
-    if (input.deleteBranch) {
-      branchesToDelete = plans.flatMap((plan) => {
-        const deletion = plan.inspection.branchDeletion;
-        return deletion.eligible ? [deletion] : [];
-      });
-    }
-
-    let confirmedForce = false;
+    let decision = preview;
     if (!input.yes) {
-      if (!canPrompt) {
-        throw new WaldError("Non-interactive removal requires --yes.");
-      }
+      if (!canPrompt) throw new WaldError("Non-interactive removal requires --yes.");
       try {
         const selected = await chooseRemovalAction(
           plans,
-          input.deleteBranch,
-          input.force,
+          input,
           branchState,
           promptedForSelection ? "back" : "cancel",
           context,
         );
-        if (selected === null) {
+        if (!selected) {
           writeLine(context.output.stdout, "Cancelled. Worktrees and branches were kept.");
           return;
         }
-        branchesToDelete = selected.branchesToDelete;
-        confirmedForce = selected.force;
-        branchState.selectedRefs = branchesToDelete.map((branch) => branch.branchRef);
+        decision = selected;
       } catch (error) {
         if (!isPromptBackError(error) || !promptedForSelection) throw error;
-        identifiers = [];
         continue;
       }
+    } else if (input.force) {
+      showRemovalSafeguards(plans, "Warning: --force bypasses these removal safeguards:", context);
     }
 
     for (const plan of plans) {
       await ensureTrusted(workspace, plan.project, context, { nonInteractive: input.json });
     }
-    const selectedBranchRefs = new Set(branchesToDelete.map((branch) => branch.branchRef));
-    const removedWorktrees: Array<{ name: string; branch: string | null; path: string }> = [];
+    const deletePaths = new Set(
+      decision.worktrees.filter((item) => item.branchAction === "delete").map((item) => item.path),
+    );
+    const targets = decision.worktrees.map(({ name, branch, path }) => ({ name, branch, path }));
+    const removedWorktrees: RemovalEffects["removedWorktrees"] = [];
     const deletedBranches: string[] = [];
     const keptBranches: string[] = [];
-    for (const plan of plans) {
+    for (const [index, plan] of plans.entries()) {
       const deletion = plan.inspection.branchDeletion;
-      const deleteBranch = deletion.eligible && selectedBranchRefs.has(deletion.branchRef);
-      await context.workflow.executeRemove(plan, {
-        force: input.force || (confirmedForce && plan.inspection.blockers.length > 0),
-        deleteBranch,
-        output: context.output.stderr,
-      });
+      const deleteBranch = deletePaths.has(plan.inspection.worktree.path);
+      try {
+        await context.workflow.executeRemove(plan, {
+          force: input.force || (decision.force && plan.inspection.blockers.length > 0),
+          deleteBranch,
+          output: context.output.stderr,
+        });
+      } catch (error) {
+        if (plans.length === 1) throw error;
+        const partial = error instanceof WaldError ? error.effects : undefined;
+        const pending = targets.slice(index + 1);
+        const completedNames = removedWorktrees.map((item) => item.name).join(", ") || "none";
+        const pendingNames = pending.map((item) => item.name).join(", ") || "none";
+        throw new WaldError(
+          `${toErrorMessage(error)}\nBatch stopped at ${plan.inspection.worktree.name}. Completed: ${completedNames}. Pending: ${pendingNames}.`,
+          {
+            cause: error,
+            exitCode: error instanceof WaldError ? error.exitCode : 1,
+            effects: {
+              completedWorktrees: removedWorktrees,
+              failedWorktree: targets[index],
+              pendingWorktrees: pending,
+              removedWorktrees: [...removedWorktrees, ...(partial?.removedWorktrees ?? [])],
+              deletedBranches: [...deletedBranches, ...(partial?.deletedBranches ?? [])],
+              keptBranches: [...keptBranches, ...(partial?.keptBranches ?? [])],
+            },
+          },
+        );
+      }
       const removed = plan.inspection.worktree;
       removedWorktrees.push({ name: removed.name, branch: removed.branch, path: removed.path });
       if (deleteBranch && deletion.eligible) {
@@ -213,131 +216,107 @@ export async function removeWorktrees(input: RemoveInput, context: CliContext): 
 
 async function chooseRemovalAction(
   plans: RemovePlan[],
-  deleteBranches: boolean,
-  force: boolean,
+  input: RemoveInput,
   branchState: { selectedRefs: string[] },
   navigation: "back" | "cancel",
   context: CliContext,
-): Promise<{ branchesToDelete: BranchDeletionPlan[]; force: boolean } | null> {
-  const candidates = plans.flatMap((plan) => {
-    const deletion = plan.inspection.branchDeletion;
-    return deletion.eligible ? [{ deletion, worktreeName: plan.inspection.worktree.name }] : [];
-  });
-  writeLine(context.output.stdout, style.heading("Removal plan"));
-  for (const { inspection } of plans) {
-    const { worktree } = inspection;
-    writeLine(
-      context.output.stdout,
-      `${style.label("Worktree:")} ${style.worktree(worktree.name)}`,
+): Promise<RemovalPreview | null> {
+  const candidates = plans.flatMap(({ inspection }) =>
+    inspection.branchDeletion.eligible ? [inspection.branchDeletion] : [],
+  );
+  const needsForce = plans.some(({ inspection }) => inspection.blockers.length > 0);
+  const verb = needsForce ? "Force removal of" : "Remove";
+  const noun = plans.length === 1 ? "1 worktree" : `${plans.length} worktrees`;
+  const confirmPlan = async (preview: RemovalPreview, back: "back" | "cancel") => {
+    showPreview(preview, context);
+    const deletes = preview.worktrees.filter((item) => item.branchAction === "delete").length;
+    const consequence = deletes
+      ? `delete ${deletes} local ${deletes === 1 ? "branch" : "branches"}`
+      : "keep local branches";
+    const action = await selectValue(
+      "Remove › Confirm · Apply this removal?",
+      [
+        { label: "Cancel", value: "cancel" },
+        { label: `${verb} ${noun}, ${consequence}`, value: needsForce ? "force" : "remove" },
+      ],
+      { navigation: back, initialValue: "cancel" },
     );
-    writeLine(
-      context.output.stdout,
-      `${style.label("Branch:")} ${style.branch(worktree.branch ?? "detached")}`,
+    return action === "cancel" ? null : preview;
+  };
+  if (input.deleteBranch || candidates.length === 0) {
+    return await confirmPlan(
+      previewRemoval(plans, input.deleteBranch, input.force || needsForce),
+      navigation,
     );
-    writeLine(context.output.stdout, `${style.label("Path:")} ${style.path(worktree.path)}`);
-    if (!inspection.branchDeletion.eligible) {
-      writeLine(context.output.stdout, `Local branch kept: ${inspection.branchDeletion.reason}`);
-    }
   }
-  const needsForce = plans.some((plan) => plan.inspection.blockers.length > 0);
-  if (!force) {
-    showRemovalSafeguards(plans, "Warning: removal requires bypassing these safeguards:", context);
-  }
-  const noun = plans.length === 1 ? "worktree" : `${plans.length} worktrees`;
-  const unmerged = candidates.some(({ deletion }) => !deletion.mergedIntoDefault);
+  const allRefs = new Set(candidates.map((branch) => branch.branchRef));
+  const previewFor = (refs: ReadonlySet<string>) =>
+    previewRemoval(plans, refs, input.force || needsForce);
   while (true) {
+    for (const { inspection } of plans) {
+      const { worktree } = inspection;
+      writeLine(
+        context.output.stdout,
+        `${worktree.name} (${worktree.branch ?? "detached"}, ${worktree.path})`,
+      );
+    }
+    showRemovalSafeguards(plans, "Removal safeguards:", context);
+    const single = plans.length === 1;
     const action = await selectValue(
       "Remove › Action · What would you like to do?",
       [
-        { label: "Cancel", value: "cancel", description: "Keep all worktrees and branches." },
-        ...(!deleteBranches ? [{ label: `Remove ${noun}, keep branches`, value: "keep" }] : []),
-        ...(candidates.length > 0
-          ? [
-              {
-                label: `Remove ${noun} and ${plans.length > 1 ? "all eligible " : ""}local ${candidates.length === 1 ? "branch" : "branches"}${unmerged ? " (including unmerged)" : ""}`,
-                value: "delete",
-                description: candidates
-                  .map(({ deletion }) => style.branch(deletion.branch))
-                  .join(", "),
-              },
-            ]
-          : []),
-        ...(!deleteBranches && plans.length > 1 && candidates.length > 0
-          ? [{ label: `Choose branches to delete with ${noun}…`, value: "choose" }]
-          : []),
+        { label: "Cancel", value: "cancel" },
+        {
+          label: single ? `${verb} ${noun}, keep local branch` : "Keep all local branches",
+          value: "keep",
+        },
+        {
+          label: single
+            ? `${verb} ${noun} and delete local branch`
+            : "Delete all eligible local branches",
+          value: "delete",
+          description: candidates
+            .map((branch) => branch.branch + (branch.mergedIntoDefault ? "" : " (unmerged)"))
+            .join(", "),
+        },
+        ...(!single ? [{ label: "Choose local branches to delete…", value: "choose" }] : []),
       ],
       { navigation, initialValue: "cancel" },
     );
     if (action === "cancel") return null;
-    while (true) {
-      if (action === "choose") {
+    if (action === "choose") {
+      while (true) {
         try {
           branchState.selectedRefs = await selectManyValues(
             "Remove › Branches · Select local branches to delete:",
-            candidates.map(({ deletion, worktreeName }) => ({
-              label: style.branch(deletion.branch),
-              value: deletion.branchRef,
-              description: `worktree ${style.worktree(worktreeName)}${deletion.mergedIntoDefault ? "" : ", unmerged"}`,
+            candidates.map((branch) => ({
+              label: branch.branch,
+              value: branch.branchRef,
+              description: branch.mergedIntoDefault ? undefined : "unmerged",
             })),
-            { navigation: "back", initialValues: branchState.selectedRefs },
+            {
+              navigation: "back",
+              initialValues: branchState.selectedRefs.filter((ref) => allRefs.has(ref)),
+            },
           );
         } catch (error) {
           if (isPromptBackError(error)) break;
           throw error;
         }
-      }
-      const selected = candidates.filter(
-        ({ deletion }) =>
-          action === "delete" ||
-          (action === "choose" && branchState.selectedRefs.includes(deletion.branchRef)),
-      );
-      const branchesToDelete = selected.map(({ deletion }) => deletion);
-      if (plans.length > 1) {
-        showRemovalSummary(plans, branchesToDelete, context);
-        const branches = branchesToDelete
-          .map((deletion) => style.branch(deletion.branch))
-          .join(", ");
         try {
-          const confirmed = await selectValue(
-            "Remove › Confirm · Apply this removal?",
-            [
-              { label: "Cancel", value: "cancel" },
-              {
-                label: `Remove ${noun}, ${branches ? `delete branches: ${branches}` : "keep all branches"}`,
-                value: "remove",
-              },
-            ],
-            { navigation: "back", initialValue: "cancel" },
-          );
-          if (confirmed !== "remove") return null;
+          return await confirmPlan(previewFor(new Set(branchState.selectedRefs)), "back");
         } catch (error) {
           if (!isPromptBackError(error)) throw error;
-          if (action === "choose") continue;
-          break;
         }
       }
-      if (needsForce && !force) {
-        try {
-          const confirmed = await selectValue(
-            "Remove › Force · Bypass the listed safeguards for this removal?",
-            [
-              { label: "Cancel", value: "cancel", description: "Keep all worktrees and branches." },
-              {
-                label: "Force removal of the reviewed worktrees",
-                value: "force",
-                description:
-                  "Local changes may be discarded and locks bypassed. Selected unmerged branches will be deleted.",
-              },
-            ],
-            { navigation: "back", initialValue: "cancel" },
-          );
-          if (confirmed !== "force") return null;
-        } catch (error) {
-          if (!isPromptBackError(error)) throw error;
-          break;
-        }
-      }
-      return { branchesToDelete, force: needsForce && !force };
+      continue;
+    }
+    const preview = previewFor(action === "delete" ? allRefs : new Set());
+    if (single) return preview;
+    try {
+      return await confirmPlan(preview, "back");
+    } catch (error) {
+      if (!isPromptBackError(error)) throw error;
     }
   }
 }
@@ -358,28 +337,28 @@ function showRemovalSafeguards(plans: RemovePlan[], heading: string, context: Cl
   }
 }
 
-function showRemovalSummary(
-  plans: RemovePlan[],
-  branchesToDelete: BranchDeletionPlan[],
-  context: CliContext,
-): void {
-  const selectedRefs = new Set(branchesToDelete.map((deletion) => deletion.branchRef));
-  writeLine(context.output.stdout, style.heading("Removal summary"));
-  for (const { inspection } of plans) {
-    const { worktree, branchDeletion } = inspection;
-    writeLine(context.output.stdout, `Remove worktree: ${worktree.name} (${worktree.path})`);
-    if (branchDeletion.eligible && selectedRefs.has(branchDeletion.branchRef)) {
-      writeLine(context.output.stdout, `Delete local branch: ${branchDeletion.branch}`);
-    } else if (worktree.branch) {
+function showPreview(preview: RemovalPreview, context: CliContext): void {
+  writeLine(context.output.stdout, style.heading("Removal plan"));
+  if (preview.blocked)
+    writeLine(context.output.stdout, "Blocked with the current options or project trust.");
+  for (const item of preview.worktrees) {
+    writeLine(context.output.stdout, `Worktree: ${item.name} (${item.path})`);
+    const reason = item.branchReason ? ` (${item.branchReason})` : "";
+    if (item.branchAction === "delete")
+      writeLine(context.output.stdout, `Delete local branch: ${item.branch}`);
+    else if (item.branchAction === "blocked")
       writeLine(
         context.output.stdout,
-        `Keep local branch: ${worktree.branch}${branchDeletion.eligible ? "" : ` (${branchDeletion.reason})`}`,
+        `Cannot delete local branch: ${item.branch ?? "detached"}${reason}`,
       );
-    } else {
-      writeLine(
-        context.output.stdout,
-        `No local branch deleted: ${branchDeletion.eligible ? "none selected" : branchDeletion.reason}`,
-      );
-    }
+    else if (item.branch)
+      writeLine(context.output.stdout, `Keep local branch: ${item.branch}${reason}`);
+    else writeLine(context.output.stdout, `No local branch deleted: ${item.branchReason}`);
+    for (const blocker of item.hardBlockers)
+      writeLine(context.output.stdout, `  Blocked: ${blocker}`);
+    for (const blocker of item.forceReasons)
+      writeLine(context.output.stdout, `  Requires force: ${blocker}`);
+    if (item.requiresTrust)
+      writeLine(context.output.stdout, "  Requires project configuration trust.");
   }
 }

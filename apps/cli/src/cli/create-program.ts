@@ -1,6 +1,7 @@
-import { Command } from "commander";
+import { Command, type ErrorOptions } from "commander";
 import pc from "picocolors";
 import manifest from "../../package.json" with { type: "json" };
+import { WaldError } from "../domain/errors.js";
 import { registerCdCommand } from "./commands/cd.js";
 import { registerCompletionCommand } from "./commands/completion.js";
 import { registerConfigCommand } from "./commands/config.js";
@@ -26,17 +27,44 @@ import {
   createCliExecutionState,
 } from "./context.js";
 import { applyDirectories, collectDirectories } from "./directory-option.js";
+import { inspectInvocation } from "./invocation.js";
 import { runMainMenu } from "./main-menu.js";
+
+class WaldCommand extends Command {
+  constructor(
+    name: string,
+    private readonly execution: CliExecutionState,
+  ) {
+    super(name);
+  }
+
+  override createCommand(name = ""): Command {
+    return new WaldCommand(name, this.execution);
+  }
+
+  override parseOptions(argv: string[]) {
+    if (!this.parent) Object.assign(this.execution, inspectInvocation(this, argv));
+    return super.parseOptions(argv);
+  }
+
+  override error(message: string, options?: ErrorOptions): never {
+    if (this.execution.json || this.optsWithGlobals().json === true) {
+      this.execution.json = true;
+      throw new WaldError(message, { exitCode: options?.exitCode });
+    }
+    return super.error(message, options);
+  }
+}
 
 export function createProgram(
   output: CliOutput = { stdout: process.stdout, stderr: process.stderr },
   execution: CliExecutionState = createCliExecutionState(),
 ): Command {
   const context = createCliContext(output, execution);
-  const program = new Command()
-    .name("wald")
+  const program = new WaldCommand("wald", execution)
     .description("🌲 Where Git worktrees grow — safe, guided workspaces for parallel work.")
     .version(manifest.version)
+    .option("--no-input", "Disable wald prompts and require explicit inputs")
     .option(
       "-C, --directory <path>",
       "Run from this directory; repeat to resolve paths in order",
@@ -63,6 +91,7 @@ export function createProgram(
     writeErr: (text) => output.stderr.write(text),
   });
   program.hook("preAction", async (_thisCommand, actionCommand) => {
+    execution.noInput = program.opts().input === false;
     execution.json = actionCommand.optsWithGlobals().json === true;
     await applyDirectories(program.opts().directory);
   });

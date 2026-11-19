@@ -4,12 +4,7 @@ import { toErrorMessage, WaldError } from "../../domain/errors.js";
 import type { ProjectConfigDocument, Worktree } from "../../domain/types.js";
 import { builtInToolNames } from "../../services/tool-service.js";
 import { style } from "../../ui/style.js";
-import {
-  isInteractiveTerminal,
-  isPromptBackError,
-  type PromptNavigation,
-  searchSelect,
-} from "../../ui/terminal.js";
+import { isPromptBackError, type PromptNavigation, searchSelect } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
 import { ensureTrusted, resolveWorktree, success } from "../helpers.js";
 import { nonEmptyCliString, parseCliInput } from "../input.js";
@@ -48,7 +43,7 @@ export async function openWorktree(
   let forcePrompt = false;
   let initialPath: string | undefined;
   while (true) {
-    const selected = await resolveWorktree(workspace, requestedWorktree, context.worktrees, {
+    const selected = await resolveWorktree(workspace, requestedWorktree, context, {
       forcePrompt,
       initialPath,
       navigation: forcePrompt ? "cancel" : undefined,
@@ -88,8 +83,8 @@ export async function openSelectedWorktree(
   const promptForTool = !tool;
   while (true) {
     if (!tool) {
-      if (!isInteractiveTerminal()) {
-        throw new WaldError("Tool is required without a TTY. Use --tool.");
+      if (!context.canPrompt()) {
+        throw new WaldError("Specify a tool with --tool.");
       }
       tool = await searchSelect(
         `Open › Tool · Open ${style.worktree(worktree.name)} with:`,

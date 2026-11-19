@@ -100,8 +100,9 @@ export class AutomationReporter implements AutomationObserver {
 export function createAutomationReporter(
   output: NodeJS.WritableStream | undefined,
   context: AutomationPresentationContext,
+  interactive = true,
 ): AutomationObserver {
-  if (isTtyOutput(output)) return new InteractiveAutomationReporter(output, context);
+  if (interactive && isTtyOutput(output)) return new InteractiveAutomationReporter(output, context);
   return new AutomationReporter(output, context);
 }
 

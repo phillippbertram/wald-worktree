@@ -3,7 +3,7 @@ import { z } from "zod";
 import { WaldError } from "../../domain/errors.js";
 import { type HookEvent, hookEvents } from "../../domain/types.js";
 import { style } from "../../ui/style.js";
-import { isInteractiveTerminal, isPromptBackError, searchSelect } from "../../ui/terminal.js";
+import { isPromptBackError, searchSelect } from "../../ui/terminal.js";
 import type { CliContext } from "../context.js";
 import { ensureTrusted, resolveWorktree, success, writeLine } from "../helpers.js";
 import { nonEmptyCliString, parseCliInput } from "../input.js";
@@ -55,7 +55,7 @@ export async function runProjectHook(
   let selectedEvent: HookEvent | undefined;
 
   while (true) {
-    const worktree = await resolveWorktree(workspace, input.worktree, context.worktrees, {
+    const worktree = await resolveWorktree(workspace, input.worktree, context, {
       forcePrompt,
       initialPath,
       navigation: forcePrompt ? "cancel" : undefined,
@@ -63,7 +63,7 @@ export async function runProjectHook(
     initialPath = worktree.path;
     const project = await context.workflow.projectForWorktree(workspace, worktree);
     if (!project) {
-      if ((!input.event || presentation.emptyMessage) && isInteractiveTerminal()) {
+      if ((!input.event || presentation.emptyMessage) && context.canPrompt()) {
         if (await offerProjectConfiguration(worktree, "No project automation configured.", context))
           continue;
         return;
@@ -72,7 +72,7 @@ export async function runProjectHook(
     }
     const configuredEvents = hookEvents.filter((event) => project.config.hooks[event].length > 0);
     if (configuredEvents.length === 0 && !input.event) {
-      if (isInteractiveTerminal()) {
+      if (context.canPrompt()) {
         if (await offerProjectConfiguration(worktree, "No lifecycle hooks configured.", context))
           continue;
         return;
@@ -85,7 +85,7 @@ export async function runProjectHook(
       if (input.event) {
         event = input.event;
       } else {
-        if (!isInteractiveTerminal()) throw new WaldError("Hook event is required without a TTY.");
+        if (!context.canPrompt()) throw new WaldError("Specify a hook event.");
         try {
           event = z.enum(hookEvents).parse(
             await searchSelect(
@@ -110,7 +110,7 @@ export async function runProjectHook(
       }
 
       if (project.config.hooks[event].length === 0) {
-        if (presentation.emptyMessage && isInteractiveTerminal()) {
+        if (presentation.emptyMessage && context.canPrompt()) {
           if (await offerProjectConfiguration(worktree, "No worktree setup configured.", context))
             break;
           return;
