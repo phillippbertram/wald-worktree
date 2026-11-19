@@ -5,6 +5,7 @@ import { PassThrough } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initializeWorkspace } from "../src/cli/commands/init.js";
 import { createCliContext } from "../src/cli/context.js";
+import { PromptBackError } from "../src/ui/terminal.js";
 import { createTestRepository, type TestRepository } from "./helpers/git-repository.js";
 
 const prompts = vi.hoisted(() => ({
@@ -262,27 +263,27 @@ describe("interactive init wizard", () => {
     });
   });
 
-  it("initializes a remote repository through the guided source selection", async () => {
+  it("initializes only the revised destination after going back from a remote preview", async () => {
     process.chdir(temporaryRoot);
     const target = path.join(temporaryRoot, "remote-workspace");
-    prompts.selections.push("remote", ".");
-    prompts.texts.push(`file://${repository.remote}`, target);
-    prompts.confirmations.push(true, true, false);
+    const abandoned = path.join(temporaryRoot, "first-destination");
+    const url = `file://${repository.remote}`;
+    prompts.selections.push("remote", "worktrees", new PromptBackError(), ".");
+    prompts.texts.push(url, abandoned, new PromptBackError(), url, target);
+    prompts.confirmations.push(new PromptBackError(), true, true, false);
     const output = new PassThrough();
     const context = createCliContext({ stdout: output, stderr: output });
 
     await initializeWorkspace({}, context);
 
-    expect(prompts.textQuestions.slice(0, 2)).toEqual([
-      "Initialize › Remote · Remote repository URL (SSH or HTTPS):",
-      "Initialize › Destination · Workspace root:",
-    ]);
+    await expect(fs.stat(abandoned)).rejects.toMatchObject({ code: "ENOENT" });
+    expect(prompts.textDefaults.at(-1)).toBe(abandoned);
     const workspace = await context.workspaces.find(target);
     expect(workspace.config.remote?.name).toBe("origin");
     expect(await context.worktrees.resolve(workspace, "main")).toMatchObject({
       path: path.join(target, "main"),
     });
-    expect(prompts.tables[0]).toContainEqual(["Workspace root", target]);
+    expect(prompts.tables).toContainEqual(expect.arrayContaining([["Workspace root", target]]));
     const rendered = readOutput(output);
     expect(rendered).toContain("First worktree plan");
     expect(rendered).toContain(path.join(target, "main"));

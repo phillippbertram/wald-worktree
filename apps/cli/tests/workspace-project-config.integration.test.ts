@@ -1,14 +1,9 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { execa } from "execa";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { cliArguments, cliExecutable } from "./helpers/cli.js";
+import { runCli } from "./helpers/cli.js";
 import { createTestRepository, type TestRepository } from "./helpers/git-repository.js";
-
-async function runCli(cwd: string, ...args: string[]) {
-  return await execa(cliExecutable, cliArguments(...args), { cwd, reject: false });
-}
 
 describe("workspace-local project configuration", { timeout: 30_000 }, () => {
   let temporaryRoot: string;

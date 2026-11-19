@@ -283,7 +283,10 @@ describe("managed Git workspace", { timeout: 30_000 }, () => {
     await git.run(["commit", "-m", "feature change"], { cwd: feature.path });
     await fs.writeFile(path.join(feature.path, "untracked.txt"), "change\n", "utf8");
 
-    const inspection = await worktrees.inspectRemoval(workspace, feature.name);
+    const inspection = await worktrees.inspectRemoval(
+      workspace,
+      await worktrees.resolve(workspace, feature.name),
+    );
     expect(inspection.dirty).toBe(true);
     expect(inspection.merged).toBe(false);
     expect(inspection.blockers).toHaveLength(2);
@@ -296,7 +299,10 @@ describe("managed Git workspace", { timeout: 30_000 }, () => {
     });
 
     await git.run(["worktree", "lock", feature.path], { gitDir: workspace.gitDir });
-    const locked = await worktrees.inspectRemoval(workspace, feature.name);
+    const locked = await worktrees.inspectRemoval(
+      workspace,
+      await worktrees.resolve(workspace, feature.name),
+    );
     expect(locked.dirty).toBe(true);
     expect(locked.worktree.state).toBe("locked");
     expect(locked.blockers).toEqual([
@@ -316,7 +322,10 @@ describe("managed Git workspace", { timeout: 30_000 }, () => {
       branch: "feature/checked-out",
       fetch: false,
     });
-    const inspection = await worktrees.inspectRemoval(workspace, feature.name);
+    const inspection = await worktrees.inspectRemoval(
+      workspace,
+      await worktrees.resolve(workspace, feature.name),
+    );
     if (!inspection.branchDeletion.eligible) {
       throw new Error(`Expected eligible branch deletion: ${inspection.branchDeletion.reason}`);
     }

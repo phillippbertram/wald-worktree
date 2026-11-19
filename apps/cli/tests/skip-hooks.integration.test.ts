@@ -1,7 +1,6 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { execa } from "execa";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Workspace } from "../src/domain/types.js";
 import { GitClient } from "../src/infrastructure/git-client.js";
@@ -9,7 +8,7 @@ import { ConfigService } from "../src/services/config-service.js";
 import { WorkspaceService } from "../src/services/workspace-service.js";
 import { WorktreeService } from "../src/services/worktree-service.js";
 import { WorktreeWorkflowService } from "../src/services/worktree-workflow-service.js";
-import { cliArguments, cliExecutable } from "./helpers/cli.js";
+import { runCli } from "./helpers/cli.js";
 import { createTestRepository } from "./helpers/git-repository.js";
 
 describe("skipping create hooks", { timeout: 30_000 }, () => {
@@ -282,13 +281,6 @@ tools:
     expect(workspace.config.trustedProjectConfig).toBeNull();
   });
 });
-
-async function runCli(cwd: string, ...args: string[]) {
-  return await execa(cliExecutable, cliArguments(...args), {
-    cwd,
-    reject: false,
-  });
-}
 
 async function expectNoHooks(workspaceRoot: string, target: string): Promise<void> {
   for (const file of [

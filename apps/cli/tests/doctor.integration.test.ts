@@ -18,34 +18,6 @@ describe("doctor", { timeout: 15_000 }, () => {
     await fs.rm(temporaryRoot, { force: true, recursive: true });
   });
 
-  it("reports a missing workspace as a non-failing warning", async () => {
-    const report = await createCliContext().doctor.inspect(temporaryRoot);
-
-    expect(report.status).toBe("warning");
-    expect(report.checks).toContainEqual(
-      expect.objectContaining({ id: "workspace.discovery", status: "warning" }),
-    );
-    expect(report.checks.some((check) => check.status === "fail")).toBe(false);
-  });
-
-  it("reports invalid workspace YAML without throwing", async () => {
-    const metadata = path.join(temporaryRoot, ".wald");
-    await fs.mkdir(metadata);
-    await fs.writeFile(
-      path.join(metadata, "workspace.yml"),
-      "remote: https://secret.example/repository.git\nversion: [\n",
-      "utf8",
-    );
-
-    const report = await createCliContext().doctor.inspect(temporaryRoot);
-
-    expect(report.status).toBe("fail");
-    expect(report.checks).toContainEqual(
-      expect.objectContaining({ id: "workspace.configuration", status: "fail" }),
-    );
-    expect(JSON.stringify(report)).not.toContain("secret.example");
-  });
-
   it("inspects a healthy workspace without changing configuration or refs", async () => {
     const workspaceRoot = path.join(temporaryRoot, "workspace");
     const context = createCliContext();

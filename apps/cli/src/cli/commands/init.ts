@@ -20,6 +20,7 @@ import type { CliContext } from "../context.js";
 import { ensureTrusted, shellQuote, success, writeJson, writeLine } from "../helpers.js";
 import {
   initializationPreviewSummary,
+  type ManagedWorkspacePreview,
   renderInitializationPreview,
   type WorkspaceInitializationPreview,
 } from "../init-preview.js";
@@ -301,72 +302,41 @@ async function initializeGuidedSource(context: CliContext): Promise<Workspace | 
 }
 
 async function initializeGuidedRemoteSource(context: CliContext): Promise<Workspace | null> {
-  let repository: string | undefined;
-  let directory: string | undefined;
-  let worktreeDir: string | undefined;
-  let step = 0;
-  while (step < 4) {
-    try {
-      if (step === 0) {
-        repository = await promptText(
-          "Initialize › Remote · Remote repository URL (SSH or HTTPS):",
-          repository,
-          { navigation: "back" },
-        );
-        if (!repository) {
-          writeLine(context.output.stdout, "Cancelled.");
-          return null;
-        }
-        await rejectExistingLocalPath(repository);
-      } else if (step === 1) {
-        directory = await promptText(
-          "Initialize › Destination · Workspace root:",
-          directory ?? humanizeRepositoryName(repository as string),
-          { navigation: "back" },
-        );
-        if (!directory) {
-          writeLine(context.output.stdout, "Cancelled.");
-          return null;
-        }
-      } else if (step === 2) {
-        worktreeDir = await chooseManagedWorktreeDirectory(worktreeDir);
-      } else {
-        const target = await context.workspaces.planManagedInitialization(
-          repository as string,
-          directory as string,
-          process.cwd(),
-          { worktreeDir },
-        );
-        if (
-          !(await confirmInitialization(
-            {
-              mode: "remote",
-              source: repository as string,
-              target,
-              remoteName: "origin",
-              defaultBranch: null,
-            },
-            context,
-          ))
-        ) {
-          return null;
-        }
-      }
-      step += 1;
-    } catch (error) {
-      if (!isPromptBackError(error)) throw error;
-      if (step === 0) throw error;
-      step -= 1;
+  let previousUrl: string | undefined;
+  const destination: ManagedDestination = {};
+  while (true) {
+    const repository = await promptText(
+      "Initialize › Remote · Remote repository URL (SSH or HTTPS):",
+      previousUrl,
+      { navigation: "back" },
+    );
+    if (!repository) {
+      writeLine(context.output.stdout, "Cancelled.");
+      return null;
     }
+    await rejectExistingLocalPath(repository);
+    previousUrl = repository;
+    let target: ManagedWorkspacePreview["target"] | null;
+    try {
+      target = await reviewManagedDestination(
+        { mode: "remote", source: repository, remoteName: "origin", defaultBranch: null },
+        humanizeRepositoryName(repository),
+        context,
+        destination,
+      );
+    } catch (error) {
+      if (isPromptBackError(error)) continue;
+      throw error;
+    }
+    if (!target) return null;
+    const { root, worktreeDir } = target;
+    const workspace = await context.runTask("Initializing workspace", () =>
+      context.workspaces.initialize(repository, root, process.cwd(), { worktreeDir }),
+    );
+    await success(`Initialized workspace at ${style.path(workspace.root)}`, context.output);
+    await completeNewWorkspace(workspace, context);
+    return workspace;
   }
-  const workspace = await context.runTask("Initializing workspace", () =>
-    context.workspaces.initialize(repository as string, directory, process.cwd(), {
-      worktreeDir,
-    }),
-  );
-  await success(`Initialized workspace at ${style.path(workspace.root)}`, context.output);
-  await completeNewWorkspace(workspace, context);
-  return workspace;
 }
 
 async function initializeGuidedLocalSource(context: CliContext): Promise<Workspace | null> {
@@ -396,64 +366,23 @@ async function initializeCopiedWorkspace(
   const sourceRepository = inspection.primaryWorktree ?? inspection.gitDir;
   const repositoryName = path.basename(sourceRepository).replace(/\.git$/u, "") || "repository";
   const suggestedRoot = path.join(path.dirname(sourceRepository), `${repositoryName}-workspace`);
-  let directory: string | undefined;
-  let worktreeDir: string | undefined;
-  let step = 0;
-  while (step < 3) {
-    try {
-      if (step === 0) {
-        directory = await promptText(
-          "Initialize › Destination · New workspace root:",
-          directory ?? suggestedRoot,
-          { navigation: "back" },
-        );
-        if (!directory) {
-          writeLine(context.output.stdout, "Cancelled.");
-          return null;
-        }
-      } else if (step === 1) {
-        worktreeDir = await chooseManagedWorktreeDirectory(worktreeDir);
-      } else {
-        const target = await context.workspaces.planManagedInitialization(
-          inspection.source,
-          directory as string,
-          process.cwd(),
-          { worktreeDir },
-        );
-        if (
-          !(await confirmInitialization(
-            {
-              mode: "copy",
-              source: sourceRepository,
-              target,
-              remoteName: inspection.remoteName,
-              defaultBranch: inspection.defaultBranch,
-              modifiedWorktrees: inspection.modifiedWorktrees,
-              detachedWorktrees: inspection.detachedWorktrees,
-              stashCount: inspection.stashCount,
-            },
-            context,
-          ))
-        ) {
-          return null;
-        }
-      }
-      step += 1;
-    } catch (error) {
-      if (!isPromptBackError(error)) throw error;
-      if (step === 0) throw error;
-      step -= 1;
-    }
-  }
-  const target = await context.workspaces.planManagedInitialization(
-    inspection.source,
-    directory as string,
-    process.cwd(),
-    { worktreeDir },
+  const target = await reviewManagedDestination(
+    {
+      mode: "copy",
+      source: sourceRepository,
+      remoteName: inspection.remoteName,
+      defaultBranch: inspection.defaultBranch,
+      modifiedWorktrees: inspection.modifiedWorktrees,
+      detachedWorktrees: inspection.detachedWorktrees,
+      stashCount: inspection.stashCount,
+    },
+    suggestedRoot,
+    context,
   );
+  if (!target) return null;
   const workspace = await context.runTask("Creating standalone workspace", () =>
     context.workspaces.initializeFromExisting(inspection, target.root, process.cwd(), {
-      worktreeDir,
+      worktreeDir: target.worktreeDir,
     }),
   );
   await success(`Initialized workspace at ${style.path(workspace.root)}`, context.output);
@@ -463,6 +392,48 @@ async function initializeCopiedWorkspace(
   );
   await completeNewWorkspace(workspace, context);
   return workspace;
+}
+
+type ManagedDestination = { directory?: string; worktreeDir?: string };
+
+async function reviewManagedDestination(
+  preview: Omit<ManagedWorkspacePreview, "target">,
+  suggestedRoot: string,
+  context: CliContext,
+  previous: ManagedDestination = {},
+): Promise<ManagedWorkspacePreview["target"] | null> {
+  const prompt = preview.mode === "copy" ? "New workspace root:" : "Workspace root:";
+  while (true) {
+    previous.directory = await promptText(
+      `Initialize › Destination · ${prompt}`,
+      previous.directory ?? suggestedRoot,
+      { navigation: "back" },
+    );
+    if (!previous.directory) {
+      writeLine(context.output.stdout, "Cancelled.");
+      return null;
+    }
+    while (true) {
+      try {
+        previous.worktreeDir = await chooseManagedWorktreeDirectory(previous.worktreeDir);
+      } catch (error) {
+        if (isPromptBackError(error)) break;
+        throw error;
+      }
+      const target = await context.workspaces.planManagedInitialization(
+        preview.source,
+        previous.directory,
+        process.cwd(),
+        { worktreeDir: previous.worktreeDir },
+      );
+      try {
+        return (await confirmInitialization({ ...preview, target }, context)) ? target : null;
+      } catch (error) {
+        if (isPromptBackError(error)) continue;
+        throw error;
+      }
+    }
+  }
 }
 
 async function chooseManagedWorktreeDirectory(initialValue?: string): Promise<string> {

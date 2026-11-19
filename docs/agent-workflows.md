@@ -27,44 +27,26 @@ project/
 └── feature-ui/              Codex App edits and commits feature/ui here
 ```
 
-wald knows how to open Code, Cursor, Zed, Codex, Codex App, and Claude out of the box. Projects can
-define or replace profiles under `tools`. A custom profile overrides a built-in with the same name,
-and a workspace-local profile overrides its repository counterpart.
-
-Open foreground agents from separate terminals:
+Open the agents from separate terminals:
 
 ```sh
-# Terminal A
 wald open feature-api --tool codex
-
-# Terminal B
 wald open feature-ui --tool codex-app
 ```
 
-Each agent remains responsible for its own edits and commits. If the project has a `verify` task,
-run it in each worktree before removing that worktree:
+When both agents finish, run any configured checks and preview cleanup:
 
 ```sh
 wald run verify feature-api
-wald remove feature-api
-
 wald run verify feature-ui
-wald remove feature-ui
+wald remove feature-api feature-ui --dry-run --json
 ```
 
-For unattended cleanup, preview with `wald remove feature-api feature-ui --dry-run --json`.
-Check the branch actions, blockers, force reasons, and trust requirements, then execute the
-authorized removal with explicit targets and `--yes`. For text commands in an agent terminal,
-pass the global `--no-input` option.
-
-Removal preserves each branch by default. Interactive users can select several worktrees from
-**Remove worktrees…** in the main menu or `wald remove`, then delete all eligible local branches
-or choose branches individually. See [removal and branch deletion](cli-reference.md#wald-remove)
-for the confirmation flow. Dirty files, unmerged branches, and locks require explicit interactive
-force consent or `--force`. Automation must request deletion
-explicitly with `--delete-branch --yes` and must not add `--force` without permission to discard the
-unmerged work. If another person or agent still needs a worktree or branch, do not remove it without
-an explicit handoff.
+Check the branch actions, blockers, force reasons, and trust requirements. Once authorized,
+repeat the command with `--yes` in place of `--dry-run`. Branches are kept by default.
+If branch deletion is intended, include `--delete-branch` in both the preview and execution.
+Use `--force` only with permission to discard the reported work or bypass a lock.
+See [removal and partial failures](cli-reference.md#wald-remove).
 
 ## Hand off unfinished code
 
@@ -81,31 +63,17 @@ changes carry over.
 
 ## Operating rules for agents
 
-- Use `wald -C <directory> ...` to select a workspace or source worktree without changing the
-  calling process's directory. See [working directory](cli-reference.md#working-directory) for
-  relative paths, repeated options, and shell navigation.
-- Start with `wald doctor --json` when runtime or workspace consistency is uncertain.
-- Use `wald status --json` to understand the current context and local tracking state.
-- Use `wald list --json` for complete worktree records; do not guess paths from branch names.
-- For mutations, use the command's `--json` contract with explicit branches, worktrees, and `--yes`
-  where required. JSON mode performs the mutation; it is not a dry run or additional consent.
-- Resolve a checkout path with `wald path <worktree>`. Discover its configured tasks with
-  `wald run --list <worktree> --json` before choosing one to execute.
-- Prefer direct commands in non-interactive sessions.
-- Run shared project actions through `wald run` so configured order, environment, timeouts, and trust
-  checks remain consistent.
-- Use either `--tool` to open an agent or `--cd` to enter the worktree during creation; they cannot
-  be combined.
-- Use `wald handoff <new-branch>` only when duplicating the current local code is intended; after
-  success, the changes exist in both worktrees.
-- Inspect dirty, unmerged, and locked state before any forced removal.
+- Select the working directory with `wald -C <directory>`. Use `--no-input` for unattended text
+  commands, including agents running in a terminal.
+- Read `wald status --json` for the current checkout and tracking state, or `wald list --json`
+  for all worktree paths. Use `wald doctor --json` to diagnose inconsistent state.
+- Supply explicit targets and any required confirmations. `--json` sets the output format and
+  disables prompts. Mutating commands still apply their changes.
+- Discover configured tasks with `wald run --list <worktree> --json`, then run a trusted task
+  with `wald run <task> <worktree>`.
 
-wald does not decide which agent owns a task or move a running session between folders. A handoff
-only makes a verified copy of the local code in a fresh worktree.
-
-See [Wald Flow](worktrees.md#wald-flow) for the recommended workspace layout,
-[four everyday workflows](worktrees.md#four-everyday-workflows) for the general worktree model, and
-[Configuration](configuration.md#named-tasks-and-tool-profiles) for custom tools and tasks.
+See [working directory](cli-reference.md#working-directory) for relative paths and
+[configuration](configuration.md#named-tasks-and-tool-profiles) for custom tools and tasks.
 
 ## Install the Wald agent skill
 

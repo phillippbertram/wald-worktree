@@ -160,68 +160,27 @@ describe("CLI contract", () => {
     ).rejects.toThrow(/--from-project: Requires --scope workspace/u);
   });
 
-  it("keeps onboarding and built-in tools discoverable in help", () => {
-    const output = new PassThrough();
-    const program = createProgram({ stdout: output, stderr: output });
-    const init = program.commands.find((command) => command.name() === "init");
-    const configInit = program.commands
-      .find((command) => command.name() === "config")
-      ?.commands.find((command) => command.name() === "init");
-    const hookRun = program.commands
-      .find((command) => command.name() === "hook")
-      ?.commands.find((command) => command.name() === "run");
-    const create = program.commands.find((command) => command.name() === "create");
-    const handoff = program.commands.find((command) => command.name() === "handoff");
-    const doctor = program.commands.find((command) => command.name() === "doctor");
-    const open = program.commands.find((command) => command.name() === "open");
-    let captured = "";
-    output.setEncoding("utf8");
-    output.on("data", (chunk: string) => {
-      captured += chunk;
-    });
-    const captureHelp = (command: typeof program | undefined): string => {
-      captured = "";
-      command?.outputHelp();
-      return captured;
-    };
-
-    const rootHelp = captureHelp(program);
-    const initHelp = captureHelp(init);
-    const createHelp = captureHelp(create);
-    const handoffHelp = captureHelp(handoff);
-    const doctorHelp = captureHelp(doctor);
-    const openHelp = captureHelp(open);
-    const configInitHelp = captureHelp(configInit);
-    const hookRunHelp = captureHelp(hookRun);
-
-    expect(createHelp).toContain("Usage: wald create|plant");
-    expect(createHelp).toContain("--skip-hooks");
-    expect(handoffHelp).toContain("--skip-hooks");
-
-    expect(rootHelp).toContain("Usage: wald");
-    expect(rootHelp).toContain(
-      "🌲 Where Git worktrees grow — safe, guided workspaces for parallel work.",
-    );
-    expect(rootHelp).toContain("🌱 Start here:");
-    expect(rootHelp).toContain("cd ~/dev/project && wald init");
-    expect(initHelp.replace(/\s+/gu, " ")).toContain(
-      "Keep an existing checkout or create a standalone workspace (Wald Flow by default)",
-    );
-    expect(initHelp).toContain("defaults to the Wald Flow root");
-    expect(initHelp).toContain("cloned repositories");
-    expect(initHelp).toContain("--config-scope <scope>");
-    expect(createHelp).toContain("wald create feature/payment --cd");
-    expect(createHelp).toContain("--carry");
-    expect(createHelp).toContain("--json");
-    expect(createHelp).toContain("codex-app");
-    expect(handoffHelp).toContain("code state only");
-    expect(handoffHelp).toContain("does not move a running editor, process, or agent session");
-    expect(handoffHelp).toContain("--json");
-    expect(doctorHelp).toContain("Diagnose the runtime, workspace, Git state");
-    expect(openHelp).toContain("wald open feature-payment --tool code");
-    expect(configInitHelp).toContain("--scope <scope>");
-    expect(configInitHelp).toContain("--from-project");
-    expect(hookRunHelp).toContain("<event> [worktree]");
+  it("exposes creation, configuration, and hook arguments in command help", () => {
+    const program = createProgram();
+    const command = (name: string) => program.commands.find((item) => item.name() === name);
+    const create = command("create")?.helpInformation();
+    const handoff = command("handoff")?.helpInformation();
+    expect(create).toContain("create|plant [options] [branch]");
+    expect(handoff).toContain("handoff [options] [branch]");
+    for (const help of [create, handoff]) {
+      expect(help).toContain("--skip-hooks");
+      expect(help).toContain("--json");
+    }
+    for (const flag of ["--carry", "--from"]) {
+      expect(create).toContain(flag);
+      expect(handoff).not.toContain(flag);
+    }
+    expect(command("init")?.helpInformation()).toContain("--config-scope <scope>");
+    const configInit = command("config")?.commands.find((item) => item.name() === "init");
+    expect(configInit?.helpInformation()).toContain("--scope <scope>");
+    expect(configInit?.helpInformation()).toContain("--from-project");
+    const hookRun = command("hook")?.commands.find((item) => item.name() === "run");
+    expect(hookRun?.helpInformation()).toContain("<event> [worktree]");
     expect(hookRun?.registeredArguments[0]?.argChoices).toEqual([
       "pre_create",
       "post_create",

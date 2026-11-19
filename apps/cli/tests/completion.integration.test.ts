@@ -4,16 +4,12 @@ import path from "node:path";
 import { stripVTControlCharacters } from "node:util";
 import { execa } from "execa";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { cliArguments, cliExecutable, projectRoot } from "./helpers/cli.js";
+import { cliArguments, cliExecutable, projectRoot, runCli } from "./helpers/cli.js";
 import {
   createRemoteBranch,
   createTestRepository,
   type TestRepository,
 } from "./helpers/git-repository.js";
-
-async function runCli(cwd: string, ...args: string[]) {
-  return await execa(cliExecutable, cliArguments(...args), { cwd, reject: false });
-}
 
 function suggestionValues(output: string): string[] {
   return output
@@ -146,17 +142,8 @@ tools:
       ]),
     );
     const plantOptions = await runCli(temporaryRoot, "complete", "--", "plant", "--");
-    expect(suggestionValues(plantOptions.stdout)).toEqual(
-      expect.arrayContaining([
-        "--from",
-        "--name",
-        "--carry",
-        "--skip-hooks",
-        "--tool",
-        "--json",
-        "--help",
-      ]),
-    );
+    expect(plantOptions.exitCode, plantOptions.stderr).toBe(0);
+    expect(suggestionValues(plantOptions.stdout)).toEqual(suggestionValues(options.stdout));
     const handoffOptions = await runCli(temporaryRoot, "complete", "--", "handoff", "--");
     expect(suggestionValues(handoffOptions.stdout)).toContain("--skip-hooks");
     expect(suggestionValues(doctorOptions.stdout)).toEqual(

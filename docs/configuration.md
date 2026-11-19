@@ -98,47 +98,15 @@ In an adopted workspace the local file physically lives at
 `<git-common-dir>/wald/project.yml`. It is mode `600`, is never committed, and is protected as local
 data during `wald uninit`. If only one source exists, it supplies the complete effective behavior.
 
-Run the setup wizard to create a local configuration from detected Node package conventions:
+Run `wald config init [worktree]` to generate a workspace-local overlay. Use `--scope project`
+to write a repository-owned `.wald.yml`. The wizard detects Node package managers, scripts, and
+environment examples. It can suggest installation, copying a sample file, a tool, and separate
+`verify` and `dev` tasks. Selecting no verification scripts omits `verify`.
 
-```sh
-wald config init [worktree]
-```
-
-To store project setup in the repository instead:
-
-```sh
-wald config init [worktree] --scope project
-git diff -- .wald.yml
-```
-
-The wizard detects npm, pnpm, Yarn, or Bun, package scripts, and files such as `.env.example`. It can
-add an install hook, an environment copy step, a `verify` task, a separate `dev` task for an exact
-`dev` package script, and a default tool. The long-running `dev` script is never added to the
-one-shot `verify` task. Interactive setup first summarizes the detected settings, including the
-destination file. **Use these settings** writes them, **Customize…** opens the individual questions,
-and **Show configuration** displays the generated YAML. **Cancel** writes nothing. Creating the
-configuration does not grant trust or run its commands.
-
-Customization asks whether to create the `verify` task before offering individual scripts;
-declining or selecting no scripts omits the task.
-
-For workspace scope, the generator writes a sparse overlay: hooks and tasks that were not selected
-are omitted, so existing repository behavior remains inherited. The explicit `--from-project` path
-is the only generator mode that intentionally copies the complete repository configuration.
-
-Within customization, `Esc` returns to the preceding step and restores the previous answer as its
-default. From the first customization question it returns to the settings summary. `Ctrl-C` exits
-wald. Reopening customization retains the last completed choices.
-
-For scripts, use `wald config init --yes`; use `--force` separately when existing configuration at
-the selected scope may be replaced. `--yes` keeps the detected recommended verify scripts.
-Interactive `wald init` offers the same wizard after retaining a checkout or creating the default
-worktree in a standalone workspace and recommends local storage. Automatic project detection
-currently covers Node package managers; other ecosystems use manually configured commands.
-
-During guided initialization, the wizard is a separate optional step after the workspace and, for
-standalone layouts, the first worktree are ready. Cancelling it does not roll back the initialized
-workspace.
+Review the YAML before saving. For unattended setup, `--yes` accepts the detected settings.
+Replacing an existing file also requires `--force`. Saving neither executes commands nor grants
+trust. The generated local overlay contains only selected settings and inherits the rest.
+See [Prepare new worktrees](project-setup.md) for a walkthrough.
 
 When `.wald.yml` already exists, copy its complete normalized behavior into the local workspace with:
 
@@ -156,7 +124,6 @@ The repository-owned `.wald.yml` supports this complete top-level schema:
 version: 1
 defaults:
   fetch: true
-  tool: code
 hooks:
   pre_create: []
   post_create: []
@@ -210,75 +177,23 @@ wald executes and trusts the merged result, not either source file on its own.
 
 ### Complete example
 
-The example below includes every lifecycle hook, argument-array commands, copy and symlink setup,
-named tasks, and a custom agent profile. Adjust its project-specific paths before using it:
+This `.wald.yml` installs dependencies after checkout creation and exposes a verification task:
 
 ```yaml
 version: 1
-
-defaults:
-  fetch: true
-  tool: codex
-
 hooks:
-  pre_create:
-    - type: command
-      argv: [node, -e, "process.exit(process.env.WALD_BRANCH ? 0 : 1)"]
-      cwd: workspace
-      timeout_seconds: 30
-
   post_create:
     - type: command
       argv: [pnpm, install, --frozen-lockfile]
-      cwd: target
-      timeout_seconds: 600
-    - type: copy
-      source: default
-      from: config/local.example.json
-      to: .local/config.json
-      optional: true
-    - type: symlink
-      source: shared
-      from: env
-      glob: "**/.env*"
-      to: .
-      optional: true
-
-  pre_remove:
-    - type: command
-      argv: [node, scripts/check-worktree-removal.mjs]
-      cwd: target
-
-  post_remove:
-    - type: command
-      argv: [node, -e, "console.log(process.env.WALD_BRANCH)"]
-      cwd: workspace
-      continue_on_error: true
-
 tasks:
   verify:
-    description: Run all checks before review
     steps:
       - type: command
-        argv: [pnpm, run, lint]
-      - type: command
-        argv: [pnpm, run, typecheck]
-      - type: command
-        argv: [pnpm, run, test]
-        timeout_seconds: 900
-
-  dev:
-    description: Start the local development process
-    steps:
-      - type: command
-        argv: [pnpm, run, dev]
-
-tools:
-  review-agent:
-    description: Start Codex with the repository review profile
-    command: [codex, --profile, review]
-    mode: foreground
+        argv: [pnpm, test]
 ```
+
+See [file steps](#file-steps) for copy and symlink rules and
+[named tasks and tool profiles](#named-tasks-and-tool-profiles) for editor and agent commands.
 
 ### Command steps
 

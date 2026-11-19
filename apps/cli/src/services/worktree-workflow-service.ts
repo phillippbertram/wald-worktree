@@ -225,19 +225,24 @@ export class WorktreeWorkflowService {
     );
   }
 
-  async planRemove(workspace: Workspace, identifier: string): Promise<RemovePlan> {
-    const [context, inspection] = await Promise.all([
-      this.readWorktreeContext(workspace),
-      this.worktrees.inspectRemoval(workspace, identifier),
-    ]);
-    const project = await this.configs.resolveProjectConfig(workspace, inspection.worktree.path);
-    return {
-      workspace,
-      inspection,
-      project,
-      trusted: this.configs.isTrusted(workspace, project),
-      ...context,
-    };
+  async planRemovals(workspace: Workspace, identifiers: string[]): Promise<RemovePlan[]> {
+    const listed = await this.worktrees.list(workspace);
+    const context = await this.readWorktreeContext(workspace, listed);
+    const plans = new Map<string, RemovePlan>();
+    for (const identifier of identifiers) {
+      const worktree = await this.worktrees.resolve(workspace, identifier, listed);
+      if (plans.has(worktree.path)) continue;
+      const inspection = await this.worktrees.inspectRemoval(workspace, worktree);
+      const project = await this.configs.resolveProjectConfig(workspace, worktree.path);
+      plans.set(worktree.path, {
+        workspace,
+        inspection,
+        project,
+        trusted: this.configs.isTrusted(workspace, project),
+        ...context,
+      });
+    }
+    return [...plans.values()];
   }
 
   async executeRemove(
@@ -362,11 +367,14 @@ export class WorktreeWorkflowService {
     await this.configs.trust(workspace, project);
   }
 
-  private async readWorktreeContext(workspace: Workspace): Promise<WorktreeContext> {
-    const all = await this.worktrees.list(workspace);
-    const currentPath = await this.worktrees.current(workspace);
+  private async readWorktreeContext(
+    workspace: Workspace,
+    listed?: Worktree[],
+  ): Promise<WorktreeContext> {
+    const all = listed ?? (await this.worktrees.list(workspace));
+    const current = await this.worktrees.currentFromList(all);
     return {
-      current: currentPath,
+      current,
       defaultWorktree:
         all.find((worktree) => worktree.branch === workspace.config.defaultBranch) ?? null,
       primary: all.find((worktree) => worktree.role === "primary") ?? null,

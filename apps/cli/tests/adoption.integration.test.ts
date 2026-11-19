@@ -83,7 +83,10 @@ describe("adopting existing Git repositories", () => {
       ]),
     );
 
-    const removal = await worktrees.inspectRemoval(workspace, repository.source);
+    const removal = await worktrees.inspectRemoval(
+      workspace,
+      await worktrees.resolve(workspace, repository.source),
+    );
     expect(removal.hardBlockers).toEqual(["the primary checkout cannot be removed by wald"]);
     await expect(worktrees.remove(workspace, removal.worktree, true)).rejects.toThrow(
       /primary checkout/u,

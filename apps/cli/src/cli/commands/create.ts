@@ -1,6 +1,5 @@
 import path from "node:path";
-import { type Command, Option } from "commander";
-import { z } from "zod";
+import type { Command } from "commander";
 import { toErrorMessage, WaldError } from "../../domain/errors.js";
 import type { Worktree } from "../../domain/types.js";
 import { builtInToolNames } from "../../services/tool-service.js";
@@ -13,112 +12,27 @@ import {
   chooseBranch,
   chooseNewBranch,
   ensureTrusted,
-  optionValueIfExplicit,
   shellQuote,
   success,
   writeJson,
   writeLine,
 } from "../helpers.js";
-import { nonEmptyCliString, parseCliInput } from "../input.js";
+import { type CreateInput, configureCreateCommand } from "./create-options.js";
 import { openSelectedWorktree } from "./open.js";
 
-const createInputSchema = z
-  .object({
-    branch: nonEmptyCliString.optional(),
-    from: nonEmptyCliString.optional(),
-    name: nonEmptyCliString.optional(),
-    fetch: z.boolean().optional(),
-    carry: z.boolean().default(false),
-    skipHooks: z.boolean().default(false),
-    cd: z.boolean().default(false),
-    open: z.boolean().default(false),
-    tool: nonEmptyCliString.optional(),
-    printPath: z.boolean().default(false),
-    json: z.boolean().default(false),
-  })
-  .strict()
-  .superRefine((input, context) => {
-    if (input.cd && (input.open || input.tool)) {
-      context.addIssue({
-        code: "custom",
-        path: ["cd"],
-        message: "Cannot be combined with --open or --tool; choose one destination.",
-      });
-    }
-    if (input.carry && input.from) {
-      context.addIssue({
-        code: "custom",
-        path: ["carry"],
-        message: "Cannot be combined with --from; carry always starts at the current HEAD.",
-      });
-    }
-    if (input.json && !input.branch) {
-      context.addIssue({
-        code: "custom",
-        path: ["branch"],
-        message: "JSON mode requires a branch.",
-      });
-    }
-    if (input.json && (input.cd || input.open || input.tool || input.printPath)) {
-      context.addIssue({
-        code: "custom",
-        path: ["json"],
-        message: "Cannot be combined with --cd, --open, --tool, or --print-path.",
-      });
-    }
-  });
-
-export type CreateInput = Omit<z.output<typeof createInputSchema>, "json" | "skipHooks"> & {
-  json?: boolean;
-  skipHooks?: boolean;
-};
-
 export function registerCreateCommand(program: Command, context: CliContext): void {
-  program
+  const command = program
     .command("create")
     .alias("plant")
     .description("Create and prepare a worktree for an existing or new branch")
     .argument("[branch]", "Branch to check out or create")
     .option("--from <commit-ish>", "Base commit for a new branch only")
-    .option("--name <directory>", "Override the worktree directory name")
-    .option("--fetch", "Fetch before resolving the branch")
-    .option("--no-fetch", "Do not fetch before resolving the branch")
     .option("--carry", "Carry staged, unstaged, and untracked changes from the current worktree")
-    .option("--skip-hooks", "Skip all pre_create and post_create steps, including copy and symlink")
-    .option("--cd", "Enter after creation; requires shell integration")
-    .option("--open", "Open after creation with the configured or selected tool")
-    .option("--tool <profile>", "Tool profile to open; implies --open")
-    .option("--json", "Emit machine-readable JSON without prompting")
-    .addOption(new Option("--print-path").hideHelp())
     .addHelpText(
       "after",
       `\nBuilt-in tools: ${builtInToolNames.join(", ")}\n\nExamples:\n  wald create feature/payment --cd\n  wald create hotfix/payment --from release/1.x --cd\n  wald create feature/review --tool codex\n`,
-    )
-    .action(
-      async (
-        branch: unknown,
-        options: {
-          from?: unknown;
-          name?: unknown;
-          fetch?: boolean;
-          carry?: unknown;
-          skipHooks?: unknown;
-          cd?: unknown;
-          open?: unknown;
-          tool?: unknown;
-          printPath?: unknown;
-          json?: unknown;
-        },
-        command: Command,
-      ) => {
-        const input = parseCliInput(createInputSchema, {
-          branch,
-          ...options,
-          fetch: optionValueIfExplicit(command, "fetch", options.fetch),
-        });
-        await createWorktree(input, context);
-      },
     );
+  configureCreateCommand(command, (input) => createWorktree(input, context));
 }
 
 export async function createWorktree(

@@ -277,8 +277,8 @@ export class WorktreeService {
     });
   }
 
-  async resolve(workspace: Workspace, identifier: string): Promise<Worktree> {
-    const worktrees = await this.list(workspace);
+  async resolve(workspace: Workspace, identifier: string, listed?: Worktree[]): Promise<Worktree> {
+    const worktrees = listed ?? (await this.list(workspace));
     const directMatches = worktrees.filter(
       (worktree) => worktree.name === identifier || worktree.branch === identifier,
     );
@@ -321,8 +321,7 @@ export class WorktreeService {
     return null;
   }
 
-  async inspectRemoval(workspace: Workspace, identifier: string): Promise<RemovalInspection> {
-    const worktree = await this.resolve(workspace, identifier);
+  async inspectRemoval(workspace: Workspace, worktree: Worktree): Promise<RemovalInspection> {
     const state = worktree.locked
       ? await this.readState(worktree, { ignoreLock: true })
       : worktree.state;

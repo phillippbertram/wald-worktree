@@ -457,7 +457,7 @@ describe("guided UX with real worktrees", () => {
       branch: "feature/second",
       fetch: false,
     });
-    vi.spyOn(context.worktrees, "current").mockResolvedValue(main);
+    vi.spyOn(context.worktrees, "currentFromList").mockResolvedValue(main);
     prompts.worktrees.push([feature.path, second.path]);
     prompts.selections.push("remove", "delete", "remove", "exit");
     await runMainMenu(createProgram(), context);
@@ -480,12 +480,7 @@ describe("guided UX with real worktrees", () => {
       branch: "feature/second",
       fetch: false,
     });
-    const plan = await context.workflow.planRemove(workspace, second.path);
-    plan.inspection.hardBlockers.push("the worktree state could not be read safely");
-    const planRemove = context.workflow.planRemove.bind(context.workflow);
-    vi.spyOn(context.workflow, "planRemove").mockImplementation(async (workspace, identifier) =>
-      identifier === second.path ? plan : await planRemove(workspace, identifier),
-    );
+    await fs.writeFile(path.join(second.path, ".git"), "gitdir: missing-metadata\n");
     await expect(
       removeWorktrees(
         { worktrees: [feature.path, second.path], force: true, deleteBranch: false, yes: false },

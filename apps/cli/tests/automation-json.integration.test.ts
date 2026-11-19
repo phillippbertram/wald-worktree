@@ -3,20 +3,62 @@ import os from "node:os";
 import path from "node:path";
 import { execa } from "execa";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { cliArguments, cliExecutable } from "./helpers/cli.js";
+import { runCli } from "./helpers/cli.js";
 import { createTestRepository, type TestRepository } from "./helpers/git-repository.js";
 
+let temporaryRoot: string;
+
+beforeEach(async () => {
+  temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "wald-json-test-"));
+});
+
+afterEach(async () => {
+  await fs.rm(temporaryRoot, { force: true, recursive: true });
+});
+
+describe("doctor JSON reports", () => {
+  it("reports doctor warnings outside a workspace as JSON with exit code zero", async () => {
+    const result = await runCli(temporaryRoot, "doctor", "--json");
+
+    expect(result.exitCode, result.stderr).toBe(0);
+    const report = JSON.parse(result.stdout);
+    expect(report.checks).not.toContainEqual(expect.objectContaining({ status: "fail" }));
+    expect(report).toMatchObject({
+      status: "warning",
+      checks: expect.arrayContaining([
+        expect.objectContaining({ id: "workspace.discovery", status: "warning" }),
+      ]),
+    });
+  });
+
+  it("returns a doctor failure report on stdout with exit code one", async () => {
+    const broken = path.join(temporaryRoot, "broken");
+    await fs.mkdir(path.join(broken, ".wald"), { recursive: true });
+    await fs.writeFile(
+      path.join(broken, ".wald", "workspace.yml"),
+      "remote: https://secret.example/repository.git\nversion: [\n",
+      "utf8",
+    );
+
+    const result = await runCli(broken, "doctor", "--json");
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toBe("");
+    expect(result.stdout).not.toContain("secret.example");
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      status: "fail",
+      checks: expect.arrayContaining([
+        expect.objectContaining({ id: "workspace.configuration", status: "fail" }),
+      ]),
+    });
+  });
+});
+
 describe("automation JSON contracts", { timeout: 20_000 }, () => {
-  let temporaryRoot: string;
   let repository: TestRepository;
 
   beforeEach(async () => {
-    temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "wald-json-test-"));
     repository = await createTestRepository(temporaryRoot);
-  });
-
-  afterEach(async () => {
-    await fs.rm(temporaryRoot, { force: true, recursive: true });
   });
 
   it("derives the clone destination in JSON mode and rejects a collision without changing it", async () => {
@@ -499,35 +541,6 @@ hooks:
     }
   });
 
-  it("reports doctor warnings outside a workspace as JSON with exit code zero", async () => {
-    const result = await runCli(temporaryRoot, "doctor", "--json");
-
-    expect(result.exitCode, result.stderr).toBe(0);
-    expect(JSON.parse(result.stdout)).toMatchObject({
-      status: "warning",
-      checks: expect.arrayContaining([
-        expect.objectContaining({ id: "workspace.discovery", status: "warning" }),
-      ]),
-    });
-  });
-
-  it("returns a doctor failure report on stdout with exit code one", async () => {
-    const broken = path.join(temporaryRoot, "broken");
-    await fs.mkdir(path.join(broken, ".wald"), { recursive: true });
-    await fs.writeFile(path.join(broken, ".wald", "workspace.yml"), "version: [\n", "utf8");
-
-    const result = await runCli(broken, "doctor", "--json");
-
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toBe("");
-    expect(JSON.parse(result.stdout)).toMatchObject({
-      status: "fail",
-      checks: expect.arrayContaining([
-        expect.objectContaining({ id: "workspace.configuration", status: "fail" }),
-      ]),
-    });
-  });
-
   it("distinguishes initialized and unchanged adoption results", async () => {
     const initialized = await runCli(
       temporaryRoot,
@@ -575,7 +588,3 @@ hooks:
     });
   });
 });
-
-async function runCli(cwd: string, ...args: string[]) {
-  return await execa(cliExecutable, cliArguments(...args), { cwd, reject: false });
-}

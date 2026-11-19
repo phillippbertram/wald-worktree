@@ -74,8 +74,9 @@ export async function removeWorktrees(input: RemoveInput, context: CliContext): 
       if (!canPrompt) {
         throw new WaldError("Specify the worktree names to inspect or remove.");
       }
-      const current = await context.worktrees.current(workspace);
-      const candidates = (await context.worktrees.list(workspace)).filter(
+      const listed = await context.worktrees.list(workspace);
+      const current = await context.worktrees.currentFromList(listed);
+      const candidates = listed.filter(
         (worktree) => worktree.role !== "primary" && worktree.path !== current?.path,
       );
       if (candidates.length === 0) {
@@ -95,13 +96,7 @@ export async function removeWorktrees(input: RemoveInput, context: CliContext): 
       return;
     }
 
-    const plansByPath = new Map<string, RemovePlan>();
-    for (const identifier of identifiers) {
-      const plan = await context.workflow.planRemove(workspace, identifier);
-      plansByPath.set(plan.inspection.worktree.path, plan);
-    }
-    const plans = [...plansByPath.values()];
-
+    const plans = await context.workflow.planRemovals(workspace, identifiers);
     const preview = previewRemoval(plans, input.deleteBranch, input.force);
     if (input.dryRun) {
       if (input.json) writeJson(context.output.stdout, preview);

@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest";
 import { GitClient } from "../src/infrastructure/git-client.js";
 import { ProcessRunner } from "../src/infrastructure/process-runner.js";
 import { AutomationService } from "../src/services/automation-service.js";
@@ -144,7 +144,8 @@ tasks:
     ]) {
       await fs.rm(path.join(created.path, generated), { force: true });
     }
-    const removal = await workflow.planRemove(workspace, created.name);
+    const [removal] = await workflow.planRemovals(workspace, [created.name]);
+    assert.isDefined(removal);
     await workflow.executeRemove(removal);
 
     expect(await fs.readFile(path.join(workspace.root, "pre-remove.log"), "utf8")).toBe("main");
@@ -152,6 +153,26 @@ tasks:
       "post_remove",
     );
     expect(await worktrees.list(workspace)).toEqual([]);
+  });
+
+  it("lists worktrees once per batch preview and picks up changes on the next preview", async () => {
+    const workspace = await workspaces.initialize(
+      repository.remote,
+      path.join(temporaryRoot, "workspace"),
+    );
+    const workflow = createWorkflow(git, worktrees, configs);
+    const one = await worktrees.add(workspace, { branch: "one", fetch: false });
+    const two = await worktrees.add(workspace, { branch: "two", fetch: false });
+    const list = vi.spyOn(worktrees, "list");
+    const targets = [two.path, one.name, two.name];
+    const preview = await workflow.planRemovals(workspace, targets);
+    expect(list).toHaveBeenCalledTimes(1);
+    expect(preview.map((plan) => plan.inspection.worktree.name)).toEqual([two.name, one.name]);
+    expect(preview.every((plan) => !plan.inspection.dirty)).toBe(true);
+    await fs.writeFile(path.join(two.path, "local.txt"), "unfinished");
+    const next = await workflow.planRemovals(workspace, targets);
+    expect(list).toHaveBeenCalledTimes(2);
+    expect(next.map((plan) => plan.inspection.dirty)).toEqual([true, false]);
   });
 
   it("deletes an explicitly selected merged local branch after its worktree", async () => {
@@ -167,7 +188,8 @@ tasks:
       await workflow.planCreate(workspace, { branch: "feature/cleanup", fetch: false }),
     );
 
-    const removal = await workflow.planRemove(workspace, feature.name);
+    const [removal] = await workflow.planRemovals(workspace, [feature.name]);
+    assert.isDefined(removal);
     expect(removal.inspection.branchDeletion).toMatchObject({
       eligible: true,
       branch: "feature/cleanup",
@@ -208,7 +230,8 @@ tasks:
     await git.run(["add", "feature.txt"], { cwd: feature.path });
     await git.run(["commit", "-m", "unmerged feature"], { cwd: feature.path });
 
-    const removal = await workflow.planRemove(workspace, feature.name);
+    const [removal] = await workflow.planRemovals(workspace, [feature.name]);
+    assert.isDefined(removal);
     expect(removal.inspection.branchDeletion).toMatchObject({
       eligible: true,
       branch: "feature/unmerged-cleanup",

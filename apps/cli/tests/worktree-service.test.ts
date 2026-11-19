@@ -118,7 +118,7 @@ describe("worktree domain", () => {
   it("treats an unavailable state as a non-bypassable removal blocker", async () => {
     const git = { succeeds: vi.fn().mockResolvedValue(false) } as unknown as GitClient;
     const service = new WorktreeService(git);
-    vi.spyOn(service, "resolve").mockResolvedValue({
+    const worktree = {
       name: "broken",
       role: "linked",
       path: "/workspace/broken",
@@ -129,12 +129,12 @@ describe("worktree domain", () => {
       lockReason: null,
       prunable: false,
       state: "unavailable",
-    });
+    } as const;
     const workspace = {
       config: { defaultBranch: "main", remote: null },
     } as Workspace;
 
-    await expect(service.inspectRemoval(workspace, "broken")).resolves.toMatchObject({
+    await expect(service.inspectRemoval(workspace, worktree)).resolves.toMatchObject({
       hardBlockers: ["the worktree state could not be read safely"],
     });
   });
@@ -147,7 +147,7 @@ describe("worktree domain", () => {
         succeeds: vi.fn().mockResolvedValue(false),
       } as unknown as GitClient;
       const service = new WorktreeService(git);
-      vi.spyOn(service, "resolve").mockResolvedValue({
+      const worktree = {
         name: "broken",
         role: "linked",
         path: root,
@@ -158,9 +158,9 @@ describe("worktree domain", () => {
         lockReason: "unfinished work",
         prunable: false,
         state: "locked",
-      });
+      } as const;
       const workspace = { config: { defaultBranch: "main", remote: null } } as Workspace;
-      await expect(service.inspectRemoval(workspace, "broken")).resolves.toMatchObject({
+      await expect(service.inspectRemoval(workspace, worktree)).resolves.toMatchObject({
         hardBlockers: ["the worktree state could not be read safely"],
         blockers: ["the branch is not merged into main", "the worktree is locked"],
       });
